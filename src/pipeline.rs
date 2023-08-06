@@ -4,18 +4,20 @@ use crate::{
     texture::Texture,
 };
 
-pub struct MaterialMeshGroup {
+pub struct MaterialMeshGroup<'a> {
     pub material: Material,
     pub meshes: Vec<Mesh>,
-    pipeline: Pipeline,
+    pub pipeline: Pipeline,
+    pub camera_bind_group: &'a wgpu::BindGroup,
 }
 
-impl MaterialMeshGroup {
+impl<'a> MaterialMeshGroup<'a> {
     pub fn new(
         material: Material,
         meshes: Vec<Mesh>,
         renderer: &Renderer,
-        camera_bind_group_layout: &wgpu::BindGroupLayout,
+        camera_bind_group_layout: &'a wgpu::BindGroupLayout,
+        camera_bind_group: &'a wgpu::BindGroup,
         vertex_shader: wgpu::ShaderModuleDescriptor,
         fragment_shader: wgpu::ShaderModuleDescriptor,
     ) -> Self {
@@ -40,6 +42,7 @@ impl MaterialMeshGroup {
             material,
             meshes,
             pipeline,
+            camera_bind_group,
         }
     }
 }

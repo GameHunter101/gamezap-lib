@@ -2,9 +2,9 @@ use std::rc::Rc;
 
 use sdl2::video::Window;
 
-use crate::texture::Texture;
+use crate::{camera::Camera, pipeline::MaterialMeshGroup, texture::Texture};
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -12,10 +12,11 @@ pub struct Renderer {
     pub size: (u32, u32),
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
+    pub material_mesh_groups: Vec<MaterialMeshGroup<'a>>,
 }
 
-impl Renderer {
-    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer {
+impl Renderer<'_> {
+    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer<'static> {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -75,6 +76,7 @@ impl Renderer {
             size,
             depth_texture,
             clear_color,
+            material_mesh_groups: vec![],
         }
     }
 
@@ -102,7 +104,7 @@ impl Renderer {
             });
 
         {
-            let mut _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
@@ -121,6 +123,16 @@ impl Renderer {
                     stencil_ops: None,
                 }),
             });
+
+            for material_mesh_group in self.material_mesh_groups.iter_mut() {
+                render_pass.set_pipeline(&material_mesh_group.pipeline.pipeline);
+
+                for (i, mesh) in material_mesh_group.meshes.iter().enumerate() {
+                    render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
+                }
+
+                render_pass.set_bind_group(0, material_mesh_group.camera_bind_group, &[]);
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

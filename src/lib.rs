@@ -4,19 +4,17 @@ use std::{
 };
 
 use camera::Camera;
-use sdl2::{
-    event::{Event, WindowEvent},
-    video::Window,
-};
+use sdl2::video::Window;
+use time::{Duration, Instant};
 
 use crate::renderer::Renderer;
 
-mod camera;
-mod light;
-mod model;
-mod pipeline;
-mod renderer;
-mod texture;
+pub mod camera;
+pub mod light;
+pub mod model;
+pub mod pipeline;
+pub mod renderer;
+pub mod texture;
 
 /// Main struct for the engine, manages all higher-level state
 ///
@@ -25,176 +23,147 @@ mod texture;
 /// ```
 /// env_logger::init();
 /// let engine = GameZap::builder().build();
+/// 'running: loop {
+///     for event in engine.event_pump.poll_iter() {
+///         match event {
+///             Event::Quit { .. } => break 'running,
+///
+///             Event::Window {
+///                 win_event: WindowEvent::Resized(width, height),
+///                 ..
+///             } => engine
+///                 .renderer
+///                 .lock()
+///                 .unwrap()
+///                 .resize((width as u32, height as u32)),
+///             _ => {}
+///         }
+///     }
+///     engine.renderer.lock().unwrap().render().unwrap();
+/// }
 /// ```
-pub struct GameZap<'a> {
-    sdl_context: sdl2::Sdl,
-    video_subsystem: sdl2::VideoSubsystem,
-    application_title: &'static str,
-    pub renderer: Arc<Mutex<Renderer>>,
-    camera: Camera,
-    event_loop: Box<dyn Fn(&'a mut sdl2::EventPump) -> ()>,
-    frame_number: u32,
-    window: Rc<Window>,
-    window_size: (u32, u32),
-    initialized_instant: time::Instant,
-    time_elapsed: time::Duration,
-    last_frame_time: time::Duration,
+pub struct GameZap {
+    pub sdl_context: sdl2::Sdl,
+    pub video_subsystem: sdl2::VideoSubsystem,
+    pub event_pump: sdl2::EventPump,
+    pub renderer: Arc<Mutex<Renderer<'static>>>,
+    pub clear_color: wgpu::Color,
+    pub camera: Camera,
+    pub frame_number: u32,
+    pub window: Rc<Window>,
+    pub window_size: (u32, u32),
+    pub initialized_instant: time::Instant,
+    pub time_elapsed: time::Duration,
+    pub last_frame_time: time::Duration,
 }
 
-impl<'a> GameZap<'a> {
-    /// Initialize certain fields, be sure to call [GameZapBuilde::build()] to build the struct
-    pub fn builder() -> GameZapBuilder<'a> {
-        GameZapBuilder::default()
-    }
-
-    /// The main game loop, handle events and render calls here
-    pub fn main_loop(&self) {
-        let sdl_context = sdl2::init().unwrap();
-        let mut event_pump = self.sdl_context.event_pump().unwrap();
-        // let event_pump_ref::EventPump = &mut event_pump;
-        // {
-        //     (self.event_loop)(event_pump_ref);
-        // }
+impl GameZap {
+    /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
+    pub fn builder() -> GameZapBuilder {
+        GameZapBuilder::init()
     }
 }
 
 /// Builder struct for main [GameZap] struct
-pub struct GameZapBuilder<'a> {
-    sdl_context: sdl2::Sdl,
-    video_subsystem: sdl2::VideoSubsystem,
-    application_title: &'static str,
-    renderer: Arc<Mutex<Renderer>>,
+pub struct GameZapBuilder {
+    sdl_context: Option<sdl2::Sdl>,
+    video_subsystem: Option<sdl2::VideoSubsystem>,
+    event_pump: Option<sdl2::EventPump>,
+    clear_color: wgpu::Color,
     camera: Camera,
-    event_loop: Box<dyn Fn(&'a mut sdl2::EventPump) -> ()>,
     frame_number: u32,
-    window: Rc<Window>,
-    window_size: (u32, u32),
+    window: Option<Rc<Window>>,
+    window_size: Option<(u32, u32)>,
     initialized_instant: time::Instant,
     time_elapsed: time::Duration,
     last_frame_time: time::Duration,
 }
 
-impl<'a> GameZapBuilder<'a> {
+impl GameZapBuilder {
+    pub fn init() -> Self {
+        GameZapBuilder {
+            sdl_context: None,
+            video_subsystem: None,
+            event_pump: None,
+            clear_color: wgpu::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+            camera: Camera::default(),
+            frame_number: 0,
+            window: None,
+            window_size: None,
+            initialized_instant: Instant::now(),
+            time_elapsed: Duration::ZERO,
+            last_frame_time: Duration::ZERO,
+        }
+    }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
     /// Also specify a [wgpu::Color] clear color (background color for render pass)
     pub fn window_and_renderer(
         mut self,
-        application_name: &'static str,
-        window: Window,
+        sdl_context: sdl2::Sdl,
+        video_subsystem: sdl2::VideoSubsystem,
+        event_pump: sdl2::EventPump,
+        window: Rc<Window>,
         clear_color: wgpu::Color,
-    ) -> GameZapBuilder<'a> {
-        let window_rc = Rc::new(window);
-        self.window = window_rc.clone();
-        self.renderer = Arc::new(Mutex::new(pollster::block_on(Renderer::new(
-            window_rc,
-            clear_color,
-        ))));
+    ) -> GameZapBuilder {
+        self.window = Some(window.clone());
+        self.clear_color = clear_color;
+        self.sdl_context = Some(sdl_context);
+        self.video_subsystem = Some(video_subsystem);
+        self.event_pump = Some(event_pump);
+        self.window_size = Some(window.size());
         self
     }
 
-    /// Pass in a function or closure that uses a [sdl2::EventPump]
-    /// This function should return false when you want to close the program
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// GameZap::builder().input_handler(|event_pump| {
-    ///     for event in event_pump.poll_iter() {
-    ///         match event {
-    ///             Event::Quit { .. } => return false,
-    ///             Event::Window {
-    ///                 win_event: WindowEvent::Resized(width, height),
-    ///                 ..
-    ///             } => renderer.resize((width as u32, height as u32)),
-    ///             _ => {}
-    ///         }
-    ///     }
-    ///     ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-    /// })
-    /// ```
-    pub fn event_loop(
-        mut self,
-        event_loop: Box<dyn Fn(&'a mut sdl2::EventPump) -> ()>,
-    ) -> GameZapBuilder<'a> {
-        self.event_loop = event_loop;
-        self
-    }
-
-    pub fn camera(mut self, camera: Camera) -> GameZapBuilder<'a> {
+    /// Pass in a customized [Camera] struct
+    /// Default camera uses a 45 degree field of view, starts at (0,0,0),
+    /// and points in the positive Z direction
+    pub fn camera(mut self, camera: Camera) -> GameZapBuilder {
         self.camera = camera;
         self
     }
 
-    pub fn build(self) -> GameZap<'a> {
+    /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
+    pub fn build(self) -> GameZap {
+        let sdl_context = if let Some(context) = self.sdl_context {
+            context
+        } else {
+            sdl2::init().unwrap()
+        };
+        let video_subsystem = if let Some(video) = self.video_subsystem {
+            video
+        } else {
+            sdl_context.video().unwrap()
+        };
+        let event_pump = if let Some(pump) = self.event_pump {
+            pump
+        } else {
+            sdl_context.event_pump().unwrap()
+        };
+
+        let window = self.window.unwrap();
+        let renderer = Arc::new(Mutex::new(pollster::block_on(Renderer::new(
+            window.clone(),
+            self.clear_color,
+        ))));
+
         GameZap {
-            sdl_context: self.sdl_context,
-            video_subsystem: self.video_subsystem,
-            application_title: self.application_title,
-            renderer: self.renderer,
+            sdl_context,
+            video_subsystem,
+            event_pump,
+            renderer,
+            clear_color: self.clear_color,
             camera: self.camera,
-            event_loop: self.event_loop,
             frame_number: self.frame_number,
-            window: self.window,
-            window_size: self.window_size,
+            window: window,
+            window_size: self.window_size.unwrap(),
             initialized_instant: self.initialized_instant,
             time_elapsed: self.time_elapsed,
             last_frame_time: self.last_frame_time,
-        }
-    }
-}
-
-impl<'a> std::default::Default for GameZapBuilder<'a> {
-    fn default() -> Self {
-        let sdl_context = sdl2::init().unwrap();
-        let video_subsystem = sdl_context.video().unwrap();
-        let application_title = "Application window";
-        let window_size = (800, 600);
-        let window = Rc::new(
-            video_subsystem
-                .window(application_title, window_size.0, window_size.1)
-                .resizable()
-                .build()
-                .unwrap(),
-        );
-        let renderer = Arc::new(Mutex::new(pollster::block_on(Renderer::new(
-            window.clone(),
-            wgpu::Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.0,
-            },
-        ))));
-        GameZapBuilder {
-            sdl_context,
-            video_subsystem,
-            application_title,
-            renderer: renderer.clone(),
-            camera: Camera::default(),
-            event_loop: Box::new(move |event_pump| {
-                let renderer = renderer.clone();
-                'running: loop {
-                    for event in event_pump.poll_iter() {
-                        match event {
-                            Event::Quit { .. } => break 'running,
-                            Event::Window {
-                                win_event: WindowEvent::Resized(width, height),
-                                ..
-                            } => renderer
-                                .lock()
-                                .unwrap()
-                                .resize((width as u32, height as u32)),
-                            _ => {}
-                        }
-                    }
-                }
-            }),
-            frame_number: 0,
-            window: window.clone(),
-            window_size,
-            initialized_instant: time::Instant::now(),
-            time_elapsed: time::Duration::ZERO,
-            last_frame_time: time::Duration::ZERO,
         }
     }
 }
