@@ -4,20 +4,21 @@ use crate::{
     texture::Texture,
 };
 
-pub struct MaterialMeshGroup<'a> {
+pub struct MaterialMeshGroup {
     pub material: Material,
     pub meshes: Vec<Mesh>,
     pub pipeline: Pipeline,
-    pub camera_bind_group: &'a wgpu::BindGroup,
+    pub camera_bind_group: wgpu::BindGroup,
+    pub num_indices: u32,
 }
 
-impl<'a> MaterialMeshGroup<'a> {
+impl MaterialMeshGroup {
     pub fn new(
         material: Material,
         meshes: Vec<Mesh>,
         renderer: &Renderer,
-        camera_bind_group_layout: &'a wgpu::BindGroupLayout,
-        camera_bind_group: &'a wgpu::BindGroup,
+        camera_bind_group_layout: wgpu::BindGroupLayout,
+        camera_bind_group: wgpu::BindGroup,
         vertex_shader: wgpu::ShaderModuleDescriptor,
         fragment_shader: wgpu::ShaderModuleDescriptor,
     ) -> Self {
@@ -26,7 +27,7 @@ impl<'a> MaterialMeshGroup<'a> {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some(&format!("{} pipeline layout", material.name)),
-                    bind_group_layouts: &[camera_bind_group_layout, &material.bind_group_layout],
+                    bind_group_layouts: &[&material.bind_group_layout, &camera_bind_group_layout],
                     push_constant_ranges: &[],
                 });
         let pipeline = Pipeline::new(
@@ -38,11 +39,16 @@ impl<'a> MaterialMeshGroup<'a> {
             vertex_shader,
             fragment_shader,
         );
+        let mut num_indices = 0;
+        for mesh in &meshes {
+            num_indices += mesh.num_indices;
+        }
         MaterialMeshGroup {
             material,
             meshes,
             pipeline,
             camera_bind_group,
+            num_indices,
         }
     }
 }
@@ -85,7 +91,7 @@ impl Pipeline {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,

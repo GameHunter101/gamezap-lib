@@ -77,7 +77,7 @@ where
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, camera_bind_group, &[]);
         self.set_bind_group(1, light_bind_group, &[]);
-        self.draw_indexed(0..mesh.num_elements, 0, instances);
+        self.draw_indexed(0..mesh.num_indices, 0, instances);
     }
 
     fn draw_light_model(

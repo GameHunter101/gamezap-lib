@@ -2,9 +2,9 @@ use std::rc::Rc;
 
 use sdl2::video::Window;
 
-use crate::{camera::Camera, pipeline::MaterialMeshGroup, texture::Texture};
+use crate::{pipeline::MaterialMeshGroup, texture::Texture};
 
-pub struct Renderer<'a> {
+pub struct Renderer {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -12,11 +12,11 @@ pub struct Renderer<'a> {
     pub size: (u32, u32),
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
-    pub material_mesh_groups: Vec<MaterialMeshGroup<'a>>,
+    pub material_mesh_groups: Vec<MaterialMeshGroup>,
 }
 
-impl Renderer<'_> {
-    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer<'static> {
+impl Renderer {
+    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -129,9 +129,13 @@ impl Renderer<'_> {
 
                 for (i, mesh) in material_mesh_group.meshes.iter().enumerate() {
                     render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
+                    render_pass
+                        .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 }
 
-                render_pass.set_bind_group(0, material_mesh_group.camera_bind_group, &[]);
+                render_pass.set_bind_group(0, &material_mesh_group.material.bind_group, &[]);
+                render_pass.set_bind_group(1, &material_mesh_group.camera_bind_group, &[]);
+                render_pass.draw_indexed(0..material_mesh_group.num_indices, 0, 0..1);
             }
         }
 

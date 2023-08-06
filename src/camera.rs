@@ -15,6 +15,9 @@ pub struct Camera {
     pub zfar: f32,
     pub distance: f32,
     pub sensitivity: f32,
+    pub buffer: Option<wgpu::Buffer>,
+    pub bind_group_layout: Option<wgpu::BindGroupLayout>,
+    pub bind_group: Option<wgpu::BindGroup>,
 }
 
 impl Camera {
@@ -128,11 +131,9 @@ impl Camera {
         // );
     }
 
-    pub fn create_descriptor_and_buffer(
-        &mut self,
-        device: &wgpu::Device,
-    ) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let camera_uniform = CameraUniform::new().update_view_proj(self);
+    pub fn create_descriptor_and_buffer(mut self, device: &wgpu::Device) -> Self {
+        let mut camera_uniform = CameraUniform::new();
+        camera_uniform.update_view_proj(&mut self);
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
@@ -160,7 +161,10 @@ impl Camera {
                 resource: camera_buffer.as_entire_binding(),
             }],
         });
-        (camera_buffer, camera_bind_group_layout, camera_bind_group)
+        self.buffer = Some(camera_buffer);
+        self.bind_group_layout = Some(camera_bind_group_layout);
+        self.bind_group = Some(camera_bind_group);
+        self
     }
 }
 
@@ -179,6 +183,9 @@ impl std::default::Default for Camera {
             zfar: 100.0,
             distance: 0.1,
             sensitivity: 0.007,
+            buffer: None,
+            bind_group_layout: None,
+            bind_group: None,
         }
     }
 }
