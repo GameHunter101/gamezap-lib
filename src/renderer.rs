@@ -2,7 +2,10 @@ use std::rc::Rc;
 
 use sdl2::video::Window;
 
-use crate::{camera::Camera, pipeline::MaterialMeshGroup, texture::Texture};
+use crate::{
+    camera::Camera, pipeline::MaterialMeshGroup, pipeline_manager::PipelineManager,
+    texture::Texture,
+};
 
 pub struct Renderer<'a> {
     pub surface: wgpu::Surface,
@@ -13,7 +16,7 @@ pub struct Renderer<'a> {
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
     pub camera: Option<&'a Camera>,
-    pub material_mesh_groups: Vec<MaterialMeshGroup<'a>>,
+    pub pipeline_manager: PipelineManager<'a>,
 }
 
 impl<'a> Renderer<'a> {
@@ -78,7 +81,7 @@ impl<'a> Renderer<'a> {
             depth_texture,
             clear_color,
             camera: None,
-            material_mesh_groups: vec![],
+            pipeline_manager: PipelineManager::new(),
         }
     }
 
@@ -130,7 +133,7 @@ impl<'a> Renderer<'a> {
                 }),
             });
 
-            for material_mesh_group in &self.material_mesh_groups {
+            for material_mesh_group in &self.pipeline_manager.material_mesh_groups {
                 render_pass.set_pipeline(&material_mesh_group.pipeline.pipeline);
 
                 for (i, mesh) in material_mesh_group.meshes.iter().enumerate() {

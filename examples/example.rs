@@ -118,7 +118,8 @@ fn main() {
 
     let material_mesh_group =
         MaterialMeshGroup::new(material, meshes, renderer, vertex_shader, fragment_shader);
-    renderer.material_mesh_groups.push(material_mesh_group);
+    renderer.pipeline_manager.material_mesh_groups.push(material_mesh_group);
+    // renderer.material_mesh_groups.push(material_mesh_group);
     'running: loop {
         for event in engine.event_pump.poll_iter() {
             match event {

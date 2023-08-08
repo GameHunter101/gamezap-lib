@@ -24,7 +24,7 @@ impl Camera {
     pub fn new(device: &wgpu::Device) -> Self {
         let position = na::Vector3::new(0.0, 0.0, 0.0);
         let uniform = CameraUniform::new(position);
-        let (buffer,bind_group_layout, bind_group) = uniform.create_descriptor_and_buffer(device);
+        let (buffer, bind_group_layout, bind_group) = uniform.create_descriptor_and_buffer(device);
         Camera {
             position,
             screen_right: na::Unit::new_normalize(na::Vector3::new(1.0, 0.0, 0.0)),
@@ -152,7 +152,6 @@ impl Camera {
         //         .transform_vector(&self.screen_right),
         // );
     }
-
 }
 
 #[repr(C)]
@@ -173,7 +172,10 @@ impl CameraUniform {
         self.view_proj = camera.build_view_projection_matrix().into();
     }
 
-    pub fn create_descriptor_and_buffer(mut self, device: &wgpu::Device) -> (wgpu::Buffer,wgpu::BindGroupLayout, wgpu::BindGroup){
+    pub fn create_descriptor_and_buffer(
+        self,
+        device: &wgpu::Device,
+    ) -> (wgpu::Buffer, wgpu::BindGroupLayout, wgpu::BindGroup) {
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera buffer"),
             contents: bytemuck::cast_slice(&[self]),

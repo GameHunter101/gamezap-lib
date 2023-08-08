@@ -1,9 +1,5 @@
-use std::{
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::rc::Rc;
 
-use camera::Camera;
 use sdl2::video::Window;
 use time::{Duration, Instant};
 
@@ -13,6 +9,7 @@ pub mod camera;
 pub mod light;
 pub mod model;
 pub mod pipeline;
+pub mod pipeline_manager;
 pub mod renderer;
 pub mod texture;
 
