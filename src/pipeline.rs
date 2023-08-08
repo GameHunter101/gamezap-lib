@@ -4,30 +4,29 @@ use crate::{
     texture::Texture,
 };
 
-pub struct MaterialMeshGroup {
+pub struct MaterialMeshGroup<'a> {
     pub material: Material,
     pub meshes: Vec<Mesh>,
     pub pipeline: Pipeline,
-    pub camera_bind_group: wgpu::BindGroup,
+    pub camera_bind_group: &'a wgpu::BindGroup,
     pub num_indices: u32,
 }
 
-impl MaterialMeshGroup {
+impl<'a> MaterialMeshGroup<'a> {
     pub fn new(
         material: Material,
         meshes: Vec<Mesh>,
-        renderer: &Renderer,
-        camera_bind_group_layout: wgpu::BindGroupLayout,
-        camera_bind_group: wgpu::BindGroup,
+        renderer: &'a Renderer,
         vertex_shader: wgpu::ShaderModuleDescriptor,
         fragment_shader: wgpu::ShaderModuleDescriptor,
     ) -> Self {
+        let camera = renderer.camera.unwrap();
         let pipeline_layout =
             renderer
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some(&format!("{} pipeline layout", material.name)),
-                    bind_group_layouts: &[&material.bind_group_layout, &camera_bind_group_layout],
+                    bind_group_layouts: &[&material.bind_group_layout, &camera.bind_group_layout],
                     push_constant_ranges: &[],
                 });
         let pipeline = Pipeline::new(
@@ -47,7 +46,7 @@ impl MaterialMeshGroup {
             material,
             meshes,
             pipeline,
-            camera_bind_group,
+            camera_bind_group: &camera.bind_group,
             num_indices,
         }
     }

@@ -2,9 +2,9 @@ use std::rc::Rc;
 
 use sdl2::video::Window;
 
-use crate::{pipeline::MaterialMeshGroup, texture::Texture};
+use crate::{camera::Camera, pipeline::MaterialMeshGroup, texture::Texture};
 
-pub struct Renderer {
+pub struct Renderer<'a> {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -12,11 +12,12 @@ pub struct Renderer {
     pub size: (u32, u32),
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
-    pub material_mesh_groups: Vec<MaterialMeshGroup>,
+    pub camera: Option<&'a Camera>,
+    pub material_mesh_groups: Vec<MaterialMeshGroup<'a>>,
 }
 
-impl Renderer {
-    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer {
+impl<'a> Renderer<'a> {
+    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer<'a> {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -76,8 +77,13 @@ impl Renderer {
             size,
             depth_texture,
             clear_color,
+            camera: None,
             material_mesh_groups: vec![],
         }
+    }
+
+    pub fn set_camera(&mut self, camera: &'a Camera) {
+        self.camera = Some(camera);
     }
 
     pub fn resize(&mut self, new_size: (u32, u32)) {
@@ -91,7 +97,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -124,7 +130,7 @@ impl Renderer {
                 }),
             });
 
-            for material_mesh_group in self.material_mesh_groups.iter_mut() {
+            for material_mesh_group in &self.material_mesh_groups {
                 render_pass.set_pipeline(&material_mesh_group.pipeline.pipeline);
 
                 for (i, mesh) in material_mesh_group.meshes.iter().enumerate() {

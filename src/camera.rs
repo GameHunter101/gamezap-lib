@@ -15,12 +15,34 @@ pub struct Camera {
     pub zfar: f32,
     pub distance: f32,
     pub sensitivity: f32,
-    pub buffer: Option<wgpu::Buffer>,
-    pub bind_group_layout: Option<wgpu::BindGroupLayout>,
-    pub bind_group: Option<wgpu::BindGroup>,
+    pub buffer: wgpu::Buffer,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub bind_group: wgpu::BindGroup,
 }
 
 impl Camera {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let position = na::Vector3::new(0.0, 0.0, 0.0);
+        let uniform = CameraUniform::new(position);
+        let (buffer,bind_group_layout, bind_group) = uniform.create_descriptor_and_buffer(device);
+        Camera {
+            position,
+            screen_right: na::Unit::new_normalize(na::Vector3::new(1.0, 0.0, 0.0)),
+            view_matrix: na::Matrix4::identity(),
+            rotation_matrix: na::Matrix4::identity(),
+            pitch: 0.0,
+            yaw: 0.0,
+            aspect: 800.0 / 600.0,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+            distance: 0.1,
+            sensitivity: 0.007,
+            buffer,
+            bind_group_layout,
+            bind_group,
+        }
+    }
     fn build_view_projection_matrix(&mut self) -> na::Matrix4<f32> {
         let perspective = na::Perspective3::new(self.aspect, self.fovy, self.znear, self.zfar);
         let perspective_matrix = perspective.as_matrix();
@@ -131,12 +153,30 @@ impl Camera {
         // );
     }
 
-    pub fn create_descriptor_and_buffer(mut self, device: &wgpu::Device) -> Self {
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&mut self);
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    pub view_pos: [f32; 4],
+    pub view_proj: [[f32; 4]; 4],
+}
+impl CameraUniform {
+    pub fn new(position: na::Vector3<f32>) -> Self {
+        CameraUniform {
+            view_pos: position.to_homogeneous().into(),
+            view_proj: na::Matrix4::identity().into(),
+        }
+    }
+    pub fn update_view_proj(&mut self, camera: &mut Camera) {
+        self.view_pos = camera.position.to_homogeneous().into();
+        self.view_proj = camera.build_view_projection_matrix().into();
+    }
+
+    pub fn create_descriptor_and_buffer(mut self, device: &wgpu::Device) -> (wgpu::Buffer,wgpu::BindGroupLayout, wgpu::BindGroup){
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
+            contents: bytemuck::cast_slice(&[self]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let camera_bind_group_layout =
@@ -161,52 +201,6 @@ impl Camera {
                 resource: camera_buffer.as_entire_binding(),
             }],
         });
-        self.buffer = Some(camera_buffer);
-        self.bind_group_layout = Some(camera_bind_group_layout);
-        self.bind_group = Some(camera_bind_group);
-        self
-    }
-}
-
-impl std::default::Default for Camera {
-    fn default() -> Self {
-        Camera {
-            position: na::Vector3::new(0.0, 0.0, 0.0),
-            screen_right: na::Unit::new_normalize(na::Vector3::new(1.0, 0.0, 0.0)),
-            view_matrix: na::Matrix4::identity(),
-            rotation_matrix: na::Matrix4::identity(),
-            pitch: 0.0,
-            yaw: 0.0,
-            aspect: 800.0 / 600.0,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-            distance: 0.1,
-            sensitivity: 0.007,
-            buffer: None,
-            bind_group_layout: None,
-            bind_group: None,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraUniform {
-    pub view_pos: [f32; 4],
-    pub view_proj: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    pub fn new() -> Self {
-        CameraUniform {
-            view_pos: [0.0; 4],
-            view_proj: na::Matrix4::identity().into(),
-        }
-    }
-
-    pub fn update_view_proj(&mut self, camera: &mut Camera) {
-        self.view_pos = camera.position.to_homogeneous().into();
-        self.view_proj = camera.build_view_projection_matrix().into();
+        (camera_buffer, camera_bind_group_layout, camera_bind_group)
     }
 }

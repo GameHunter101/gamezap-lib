@@ -42,13 +42,12 @@ pub mod texture;
 ///     engine.renderer.lock().unwrap().render().unwrap();
 /// }
 /// ```
-pub struct GameZap {
+pub struct GameZap<'a> {
     pub sdl_context: sdl2::Sdl,
     pub video_subsystem: sdl2::VideoSubsystem,
     pub event_pump: sdl2::EventPump,
-    pub renderer: Arc<Mutex<Renderer>>,
+    pub renderer: Renderer<'a>,
     pub clear_color: wgpu::Color,
-    pub camera: Camera,
     pub frame_number: u32,
     pub window: Rc<Window>,
     pub window_size: (u32, u32),
@@ -57,7 +56,7 @@ pub struct GameZap {
     pub last_frame_time: time::Duration,
 }
 
-impl GameZap {
+impl<'a> GameZap<'a> {
     /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
     pub fn builder() -> GameZapBuilder {
         GameZapBuilder::init()
@@ -70,7 +69,6 @@ pub struct GameZapBuilder {
     video_subsystem: Option<sdl2::VideoSubsystem>,
     event_pump: Option<sdl2::EventPump>,
     clear_color: wgpu::Color,
-    camera: Camera,
     frame_number: u32,
     window: Option<Rc<Window>>,
     window_size: Option<(u32, u32)>,
@@ -79,7 +77,7 @@ pub struct GameZapBuilder {
     last_frame_time: time::Duration,
 }
 
-impl GameZapBuilder {
+impl<'a> GameZapBuilder {
     pub fn init() -> Self {
         GameZapBuilder {
             sdl_context: None,
@@ -91,7 +89,6 @@ impl GameZapBuilder {
                 b: 0.0,
                 a: 1.0,
             },
-            camera: Camera::default(),
             frame_number: 0,
             window: None,
             window_size: None,
@@ -122,13 +119,9 @@ impl GameZapBuilder {
     /// Pass in a customized [Camera] struct
     /// Default camera uses a 45 degree field of view, starts at (0,0,0),
     /// and points in the positive Z direction
-    pub fn camera(mut self, camera: Camera) -> GameZapBuilder {
-        self.camera = camera;
-        self
-    }
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
-    pub fn build(self) -> GameZap {
+    pub fn build(self) -> GameZap<'a> {
         let sdl_context = if let Some(context) = self.sdl_context {
             context
         } else {
@@ -146,18 +139,15 @@ impl GameZapBuilder {
         };
 
         let window = self.window.unwrap();
-        let renderer = Arc::new(Mutex::new(pollster::block_on(Renderer::new(
-            window.clone(),
-            self.clear_color,
-        ))));
+        let renderer: Renderer<'a> =
+            pollster::block_on(Renderer::new(window.clone(), self.clear_color));
 
         GameZap {
             sdl_context,
             video_subsystem,
             event_pump,
-            renderer: renderer.clone(),
+            renderer,
             clear_color: self.clear_color,
-            camera: self.camera.create_descriptor_and_buffer(&renderer.clone().lock().unwrap().device),
             frame_number: self.frame_number,
             window: window,
             window_size: self.window_size.unwrap(),
