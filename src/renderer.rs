@@ -1,9 +1,14 @@
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use sdl2::video::Window;
 
 use crate::{
-    camera::Camera, pipeline::MaterialMeshGroup, pipeline_manager::PipelineManager,
+    camera::Camera,
+    materials::MaterialManager,
+    pipeline_manager::{self, PipelineManager},
     texture::Texture,
 };
 
@@ -16,7 +21,7 @@ pub struct Renderer<'a> {
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
     pub camera: Option<&'a Camera>,
-    pub pipeline_manager: PipelineManager<'a>,
+    pub pipeline_manager: Option<&'a mut PipelineManager<'a>>,
 }
 
 impl<'a> Renderer<'a> {
@@ -81,12 +86,16 @@ impl<'a> Renderer<'a> {
             depth_texture,
             clear_color,
             camera: None,
-            pipeline_manager: PipelineManager::new(),
+            pipeline_manager: None,
         }
     }
 
     pub fn set_camera(&mut self, camera: &'a Camera) {
         self.camera = Some(camera);
+    }
+
+    pub fn set_pipeline_manager(&mut self, pipeline_manager: &'a mut PipelineManager<'a>) {
+        self.pipeline_manager = Some(pipeline_manager)
     }
 
     pub fn resize(&mut self, new_size: (u32, u32)) {
@@ -97,6 +106,12 @@ impl<'a> Renderer<'a> {
             self.surface.configure(&self.device, &self.config);
             self.depth_texture =
                 Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+        }
+    }
+
+    pub fn create_pipelines(&mut self, material_manager: &MaterialManager) {
+        if let Some(pipeline_manager) = &mut self.pipeline_manager {
+            pipeline_manager.create_pipelines(material_manager, &self.device, self.config.format, &self.camera.unwrap())
         }
     }
 
@@ -133,18 +148,22 @@ impl<'a> Renderer<'a> {
                 }),
             });
 
-            for material_mesh_group in &self.pipeline_manager.material_mesh_groups {
-                render_pass.set_pipeline(&material_mesh_group.pipeline.pipeline);
+            if let Some(pipeline_manager) = &self.pipeline_manager {
+                for material_mesh_group in &pipeline_manager.material_mesh_groups {
+                    render_pass.set_pipeline(&material_mesh_group.pipeline.pipeline);
 
-                for (i, mesh) in material_mesh_group.meshes.iter().enumerate() {
-                    render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
-                    render_pass
-                        .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    for (i, mesh) in material_mesh_group.meshes.iter().enumerate() {
+                        render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
+                        render_pass.set_index_buffer(
+                            mesh.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint16,
+                        );
+                    }
+
+                    render_pass.set_bind_group(0, &material_mesh_group.material.bind_group, &[]);
+                    render_pass.set_bind_group(1, &material_mesh_group.camera_bind_group, &[]);
+                    render_pass.draw_indexed(0..material_mesh_group.num_indices, 0, 0..1);
                 }
-
-                render_pass.set_bind_group(0, &material_mesh_group.material.bind_group, &[]);
-                render_pass.set_bind_group(1, &material_mesh_group.camera_bind_group, &[]);
-                render_pass.draw_indexed(0..material_mesh_group.num_indices, 0, 0..1);
             }
         }
 

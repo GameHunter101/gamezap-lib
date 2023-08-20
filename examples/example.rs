@@ -4,8 +4,10 @@ use nalgebra as na;
 
 use gamezap::{
     camera::Camera,
-    model::{Material, Mesh, ModelVertex},
+    materials::{Material, MaterialManager},
+    model::{Mesh, ModelVertex},
     pipeline::MaterialMeshGroup,
+    pipeline_manager::PipelineManager,
     GameZap,
 };
 use sdl2::{
@@ -49,9 +51,12 @@ fn main() {
 
     let renderer = &mut engine.renderer;
 
+    let mut pipeline_manager = PipelineManager::init();
+    let material_manager = MaterialManager::init();
     let camera = Camera::new(&renderer.device);
 
     renderer.set_camera(&camera);
+    renderer.set_pipeline_manager(&mut pipeline_manager);
 
     let material_layout =
         renderer
@@ -118,8 +123,12 @@ fn main() {
 
     let material_mesh_group =
         MaterialMeshGroup::new(material, meshes, renderer, vertex_shader, fragment_shader);
-    renderer.pipeline_manager.material_mesh_groups.push(material_mesh_group);
+    // pipeline_manager
+    //     .material_mesh_groups
+    //     .push(material_mesh_group);
     // renderer.material_mesh_groups.push(material_mesh_group);
+
+
     'running: loop {
         for event in engine.event_pump.poll_iter() {
             match event {

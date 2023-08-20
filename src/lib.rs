@@ -12,6 +12,7 @@ pub mod pipeline;
 pub mod pipeline_manager;
 pub mod renderer;
 pub mod texture;
+pub mod materials;
 
 /// Main struct for the engine, manages all higher-level state
 ///

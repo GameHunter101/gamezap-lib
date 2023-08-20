@@ -1,5 +1,6 @@
 use crate::{
-    model::{Material, Mesh, ModelVertex, Vertex},
+    materials::Material,
+    model::{Mesh, ModelVertex, Vertex},
     renderer::Renderer,
     texture::Texture,
 };
