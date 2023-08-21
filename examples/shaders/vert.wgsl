@@ -21,7 +21,8 @@ var<uniform> camera: Camera;
 @vertex
 fn main(model: VertexInput) -> VertexOutput {
     var out:VertexOutput;
-    out.clip_position = vec4<f32>(model.position,1.0);
+    let world_position = vec4<f32>(model.position,1.0);
+    out.clip_position = camera.view_proj * world_position;
     out.color = vec4<f32>(0.0,1.0,0.0,1.0);
     return out;
 }

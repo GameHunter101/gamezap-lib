@@ -1,9 +1,8 @@
 use crate::{
     camera::Camera,
-    materials::{Material, MaterialManager},
-    model::{Mesh, ModelVertex, Vertex},
-    pipeline::{MaterialMeshGroup, Pipeline},
-    renderer::Renderer,
+    materials::MaterialManager,
+    model::{ModelVertex, Vertex},
+    pipeline::Pipeline,
     texture::Texture,
 };
 
@@ -57,22 +56,6 @@ impl PipelineManager {
             }
         }
     }
-
-    // pub fn new_group(
-    //     &mut self,
-    //     material: Material,
-    //     meshes: Vec<Mesh>,
-    //     vertex_shader: wgpu::ShaderModuleDescriptor,
-    //     fragment_shader: wgpu::ShaderModuleDescriptor,
-    // ) {
-    //     let group = MaterialMeshGroup::new(
-    //         material,
-    //         meshes,
-    //         self.renderer,
-    //         vertex_shader,
-    //         fragment_shader,
-    //     );
-    // }
 }
 
 pub enum PipelineType {

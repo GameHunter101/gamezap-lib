@@ -21,9 +21,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(device: &wgpu::Device) -> Self {
-        let position = na::Vector3::new(0.0, 0.0, 0.0);
-        let uniform = CameraUniform::new(position);
+    pub fn new(position: na::Vector3<f32>, uniform: CameraUniform,device: &wgpu::Device) -> Self {
         let (buffer, bind_group_layout, bind_group) = uniform.create_descriptor_and_buffer(device);
         Camera {
             position,
@@ -43,7 +41,7 @@ impl Camera {
             bind_group,
         }
     }
-    fn build_view_projection_matrix(&mut self) -> na::Matrix4<f32> {
+    fn build_view_projection_matrix(&self) -> na::Matrix4<f32> {
         let perspective = na::Perspective3::new(self.aspect, self.fovy, self.znear, self.zfar);
         let perspective_matrix = perspective.as_matrix();
 
@@ -167,7 +165,7 @@ impl CameraUniform {
             view_proj: na::Matrix4::identity().into(),
         }
     }
-    pub fn update_view_proj(&mut self, camera: &mut Camera) {
+    pub fn update_view_proj(&mut self, camera: &Camera) {
         self.view_pos = camera.position.to_homogeneous().into();
         self.view_proj = camera.build_view_projection_matrix().into();
     }

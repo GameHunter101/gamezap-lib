@@ -6,10 +6,9 @@ use std::{
 use nalgebra as na;
 
 use gamezap::{
-    camera::Camera,
-    materials::{Material, MaterialManager},
+    camera::{Camera, CameraUniform},
+    materials::{Material},
     model::{Mesh, ModelVertex},
-    pipeline::MaterialMeshGroup,
     pipeline_manager::PipelineManager,
     GameZap,
 };
@@ -54,10 +53,12 @@ fn main() {
 
     let renderer = &mut engine.renderer;
 
-    let mut pipeline_manager = Arc::new(Mutex::new(PipelineManager::init()));
-    let camera = Camera::new(&renderer.device);
+    let pipeline_manager = Arc::new(Mutex::new(PipelineManager::init()));
+    let camera_position = na::Vector3::new(0.0,0.0,0.0);
+    let camera_uniform = CameraUniform::new(camera_position);
+    let camera = Arc::new(Mutex::new(Camera::new(camera_position,camera_uniform,&renderer.device)));
 
-    renderer.set_camera(&camera);
+    renderer.set_camera(camera.clone(),camera_uniform);
     renderer.set_pipeline_manager(pipeline_manager.clone());
 
     let mut material = Material::new(&renderer.device, "Test", None, None);
@@ -124,10 +125,6 @@ fn main() {
     let vertex_shader = wgpu::include_wgsl!("shaders/vert.wgsl");
     let fragment_shader = wgpu::include_wgsl!("shaders/frag.wgsl");
 
-    // pipeline_manager
-    //     .material_mesh_groups
-    //     .push(material_mesh_group);
-    // renderer.material_mesh_groups.push(material_mesh_group);
     renderer.create_pipelines();
 
     'running: loop {
@@ -147,11 +144,14 @@ fn main() {
             .pressed_scancodes()
             .collect::<Vec<_>>();
         let mouse_state = engine.event_pump.relative_mouse_state();
+        input(camera.clone(), &scancodes, &mouse_state);
+        renderer.update_buffers();
         renderer.render().unwrap();
         ::std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
 
-fn input(camera: &mut Camera, scancodes: &Vec<Scancode>, mouse_state: &RelativeMouseState) {
+fn input(camera: Arc<Mutex<Camera>>, scancodes: &Vec<Scancode>, mouse_state: &RelativeMouseState) {
+    let mut camera = camera.lock().unwrap();
     camera.transform_camera(scancodes, mouse_state, true);
 }

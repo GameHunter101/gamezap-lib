@@ -7,12 +7,12 @@ use crate::renderer::Renderer;
 
 pub mod camera;
 pub mod light;
+pub mod materials;
 pub mod model;
 pub mod pipeline;
 pub mod pipeline_manager;
 pub mod renderer;
 pub mod texture;
-pub mod materials;
 
 /// Main struct for the engine, manages all higher-level state
 ///
@@ -40,11 +40,11 @@ pub mod materials;
 ///     engine.renderer.lock().unwrap().render().unwrap();
 /// }
 /// ```
-pub struct GameZap<'a> {
+pub struct GameZap {
     pub sdl_context: sdl2::Sdl,
     pub video_subsystem: sdl2::VideoSubsystem,
     pub event_pump: sdl2::EventPump,
-    pub renderer: Renderer<'a>,
+    pub renderer: Renderer,
     pub clear_color: wgpu::Color,
     pub frame_number: u32,
     pub window: Rc<Window>,
@@ -54,7 +54,7 @@ pub struct GameZap<'a> {
     pub last_frame_time: time::Duration,
 }
 
-impl<'a> GameZap<'a> {
+impl GameZap {
     /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
     pub fn builder() -> GameZapBuilder {
         GameZapBuilder::init()
@@ -119,7 +119,7 @@ impl<'a> GameZapBuilder {
     /// and points in the positive Z direction
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
-    pub fn build(self) -> GameZap<'a> {
+    pub fn build(self) -> GameZap {
         let sdl_context = if let Some(context) = self.sdl_context {
             context
         } else {
@@ -137,8 +137,7 @@ impl<'a> GameZapBuilder {
         };
 
         let window = self.window.unwrap();
-        let renderer: Renderer<'a> =
-            pollster::block_on(Renderer::new(window.clone(), self.clear_color));
+        let renderer = pollster::block_on(Renderer::new(window.clone(), self.clear_color));
 
         GameZap {
             sdl_context,

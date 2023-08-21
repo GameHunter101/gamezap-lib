@@ -6,13 +6,12 @@ use std::{
 use sdl2::video::Window;
 
 use crate::{
-    camera::Camera,
-    materials::MaterialManager,
-    pipeline_manager::{self, PipelineManager},
+    camera::{Camera, CameraUniform},
+    pipeline_manager::PipelineManager,
     texture::Texture,
 };
 
-pub struct Renderer<'a> {
+pub struct Renderer {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -20,12 +19,13 @@ pub struct Renderer<'a> {
     pub size: (u32, u32),
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
-    pub camera: Option<&'a Camera>,
+    pub camera: Option<Arc<Mutex<Camera>>>,
+    pub camera_uniform: Option<CameraUniform>,
     pub pipeline_manager: Option<Arc<Mutex<PipelineManager>>>,
 }
 
-impl<'a> Renderer<'a> {
-    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer<'a> {
+impl Renderer {
+    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -86,16 +86,28 @@ impl<'a> Renderer<'a> {
             depth_texture,
             clear_color,
             camera: None,
+            camera_uniform: None,
             pipeline_manager: None,
         }
     }
 
-    pub fn set_camera(&mut self, camera: &'a Camera) {
+    pub fn set_camera(&mut self, camera: Arc<Mutex<Camera>>, camera_uniform: CameraUniform) {
         self.camera = Some(camera);
+        self.camera_uniform = Some(camera_uniform);
     }
 
     pub fn set_pipeline_manager(&mut self, pipeline_manager: Arc<Mutex<PipelineManager>>) {
         self.pipeline_manager = Some(pipeline_manager)
+    }
+
+    pub fn update_buffers(&mut self) {
+        if let Some(camera_uniform) = &mut self.camera_uniform {
+            let camera_clone = self.camera.as_ref().unwrap().clone();
+            let camera = camera_clone.lock().unwrap();
+            camera_uniform.update_view_proj(&camera);
+            self.queue
+                .write_buffer(&camera.buffer, 0, bytemuck::cast_slice(&[*camera_uniform]));
+        }
     }
 
     pub fn resize(&mut self, new_size: (u32, u32)) {
@@ -114,7 +126,7 @@ impl<'a> Renderer<'a> {
             pipeline_manager.lock().unwrap().create_pipelines(
                 &self.device,
                 self.config.format,
-                &self.camera.unwrap(),
+                &self.camera.as_ref().unwrap().lock().unwrap(),
             )
         }
     }
@@ -131,7 +143,13 @@ impl<'a> Renderer<'a> {
                 label: Some("Render encoder"),
             });
 
-        
+        // TODO:
+        // Catch if camera is None
+        let camera_clone = self.camera.as_ref().unwrap().clone();
+        let camera = camera_clone.lock().unwrap();
+
+        // TODO:
+        // Catch if pipeline is None
         let pipeline_manager_clone = self.pipeline_manager.as_ref().unwrap().clone();
         let pipeline_manager = pipeline_manager_clone.lock().unwrap();
         {
@@ -169,7 +187,7 @@ impl<'a> Renderer<'a> {
                         index_count += mesh.num_indices;
                     }
                     render_pass.set_bind_group(0, &material.bind_group, &[]);
-                    render_pass.set_bind_group(1, &self.camera.unwrap().bind_group, &[]);
+                    render_pass.set_bind_group(1, &camera.bind_group, &[]);
                     render_pass.draw_indexed(0..index_count, 0, 0..1);
                 }
             }
