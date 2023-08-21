@@ -7,56 +7,53 @@ use crate::{
     texture::Texture,
 };
 
-pub struct PipelineManager<'a> {
-    pub material_mesh_groups: Vec<MaterialMeshGroup<'a>>,
+pub struct PipelineManager {
+    pub materials: MaterialManager,
     pub no_texture_pipeline: Option<Pipeline>,
+    pub diffuse_texture_pipeline: Option<Pipeline>,
+    pub diffuse_normal_texture_pipeline: Option<Pipeline>,
 }
 
-impl<'a> PipelineManager<'a> {
+impl PipelineManager {
     pub fn init() -> Self {
         PipelineManager {
-            material_mesh_groups: vec![],
+            materials: MaterialManager::init(),
             no_texture_pipeline: None,
+            diffuse_texture_pipeline: None,
+            diffuse_normal_texture_pipeline: None,
         }
     }
 
     pub fn create_pipelines(
         &mut self,
-        material_manager: &MaterialManager,
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         camera: &Camera,
     ) {
-        for material in &material_manager.materials {
-            match material.pipeline_type {
-                PipelineType::NoTextures => {
-                    if self.no_texture_pipeline.is_none() {
-                        let pipeline_layout = device.create_pipeline_layout(
-                            &wgpu::PipelineLayoutDescriptor {
-                                label: Some("NoTexturePipelineLayout"),
-                                bind_group_layouts: &[
-                                    &material.bind_group_layout,
-                                    &camera.bind_group_layout,
-                                ],
-                                push_constant_ranges: &[],
-                            },
-                        );
+        if self.materials.no_texture_materials.len() > 0 {
+            if self.no_texture_pipeline.is_none() {
+                let pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("NoTexturePipelineLayout"),
+                        bind_group_layouts: &[
+                            &self.materials.no_texture_materials[0].bind_group_layout,
+                            &camera.bind_group_layout,
+                        ],
+                        push_constant_ranges: &[],
+                    });
 
-                        let vertex_shader = wgpu::include_wgsl!("../examples/shaders/vert.wgsl");
-                        let fragment_shader = wgpu::include_wgsl!("../examples/shaders/frag.wgsl");
+                let vertex_shader = wgpu::include_wgsl!("../examples/shaders/vert.wgsl");
+                let fragment_shader = wgpu::include_wgsl!("../examples/shaders/frag.wgsl");
 
-                        self.no_texture_pipeline = Some(Pipeline::new(
-                            device,
-                            &pipeline_layout,
-                            format,
-                            Some(Texture::DEPTH_FORMAT),
-                            &[ModelVertex::desc()],
-                            vertex_shader,
-                            fragment_shader,
-                        ));
-                    }
-                }
-                _ => {}
+                self.no_texture_pipeline = Some(Pipeline::new(
+                    device,
+                    &pipeline_layout,
+                    format,
+                    Some(Texture::DEPTH_FORMAT),
+                    &[ModelVertex::desc()],
+                    vertex_shader,
+                    fragment_shader,
+                ));
             }
         }
     }

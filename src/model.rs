@@ -1,4 +1,4 @@
-use crate::{texture::Texture, materials::Material};
+use crate::materials::Material;
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -30,6 +30,7 @@ pub struct Model {
     pub materials: Vec<Material>,
 }
 
+#[derive(Debug)]
 pub struct Mesh {
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
@@ -37,4 +38,3 @@ pub struct Mesh {
     pub num_indices: u32,
     pub material: usize,
 }
-

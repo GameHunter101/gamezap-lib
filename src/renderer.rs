@@ -21,7 +21,7 @@ pub struct Renderer<'a> {
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
     pub camera: Option<&'a Camera>,
-    pub pipeline_manager: Option<&'a mut PipelineManager<'a>>,
+    pub pipeline_manager: Option<Arc<Mutex<PipelineManager>>>,
 }
 
 impl<'a> Renderer<'a> {
@@ -94,7 +94,7 @@ impl<'a> Renderer<'a> {
         self.camera = Some(camera);
     }
 
-    pub fn set_pipeline_manager(&mut self, pipeline_manager: &'a mut PipelineManager<'a>) {
+    pub fn set_pipeline_manager(&mut self, pipeline_manager: Arc<Mutex<PipelineManager>>) {
         self.pipeline_manager = Some(pipeline_manager)
     }
 
@@ -109,9 +109,13 @@ impl<'a> Renderer<'a> {
         }
     }
 
-    pub fn create_pipelines(&mut self, material_manager: &MaterialManager) {
+    pub fn create_pipelines(&mut self) {
         if let Some(pipeline_manager) = &mut self.pipeline_manager {
-            pipeline_manager.create_pipelines(material_manager, &self.device, self.config.format, &self.camera.unwrap())
+            pipeline_manager.lock().unwrap().create_pipelines(
+                &self.device,
+                self.config.format,
+                &self.camera.unwrap(),
+            )
         }
     }
 
@@ -127,6 +131,9 @@ impl<'a> Renderer<'a> {
                 label: Some("Render encoder"),
             });
 
+        
+        let pipeline_manager_clone = self.pipeline_manager.as_ref().unwrap().clone();
+        let pipeline_manager = pipeline_manager_clone.lock().unwrap();
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
@@ -148,23 +155,37 @@ impl<'a> Renderer<'a> {
                 }),
             });
 
-            if let Some(pipeline_manager) = &self.pipeline_manager {
-                for material_mesh_group in &pipeline_manager.material_mesh_groups {
-                    render_pass.set_pipeline(&material_mesh_group.pipeline.pipeline);
-
-                    for (i, mesh) in material_mesh_group.meshes.iter().enumerate() {
+            // if let Some(pipeline_manager) = &self.pipeline_manager {
+            if let Some(no_texture_pipeline) = &pipeline_manager.no_texture_pipeline {
+                render_pass.set_pipeline(&no_texture_pipeline.pipeline);
+                for material in &pipeline_manager.materials.no_texture_materials {
+                    let mut index_count = 0;
+                    for (i, mesh) in material.meshes.iter().enumerate() {
                         render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
                         render_pass.set_index_buffer(
                             mesh.index_buffer.slice(..),
                             wgpu::IndexFormat::Uint16,
                         );
+                        index_count += mesh.num_indices;
                     }
-
-                    render_pass.set_bind_group(0, &material_mesh_group.material.bind_group, &[]);
-                    render_pass.set_bind_group(1, &material_mesh_group.camera_bind_group, &[]);
-                    render_pass.draw_indexed(0..material_mesh_group.num_indices, 0, 0..1);
+                    render_pass.set_bind_group(0, &material.bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.camera.unwrap().bind_group, &[]);
+                    render_pass.draw_indexed(0..index_count, 0, 0..1);
                 }
             }
+
+            // for (i, mesh) in materials.meshes.iter().enumerate() {
+            //     render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
+            //     render_pass.set_index_buffer(
+            //         mesh.index_buffer.slice(..),
+            //         wgpu::IndexFormat::Uint16,
+            //     );
+            // }
+
+            // render_pass.set_bind_group(0, &materials.material.bind_group, &[]);
+            // render_pass.set_bind_group(1, &materials.camera_bind_group, &[]);
+            // render_pass.draw_indexed(0..materials.num_indices, 0, 0..1);
+            // }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

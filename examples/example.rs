@@ -1,4 +1,7 @@
-use std::rc::Rc;
+use std::{
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use nalgebra as na;
 
@@ -51,21 +54,13 @@ fn main() {
 
     let renderer = &mut engine.renderer;
 
-    let mut pipeline_manager = PipelineManager::init();
-    let material_manager = MaterialManager::init();
+    let mut pipeline_manager = Arc::new(Mutex::new(PipelineManager::init()));
     let camera = Camera::new(&renderer.device);
 
     renderer.set_camera(&camera);
-    renderer.set_pipeline_manager(&mut pipeline_manager);
+    renderer.set_pipeline_manager(pipeline_manager.clone());
 
-    let material_layout =
-        renderer
-            .device
-            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("test_material_bind_group_layout"),
-                entries: &[],
-            });
-    let material = Material::new(&renderer.device, "Test", None, None, material_layout);
+    let mut material = Material::new(&renderer.device, "Test", None, None);
 
     let model_vertices = vec![
         ModelVertex {
@@ -110,24 +105,30 @@ fn main() {
                 usage: wgpu::BufferUsages::INDEX,
             });
 
-    let meshes = vec![Mesh {
+    let mesh = Mesh {
         name: "Test model".to_string(),
         vertex_buffer: model_vert_buffer,
         index_buffer: model_index_buffer,
         num_indices: model_indices.len() as u32,
         material: 0,
-    }];
+    };
+    material.meshes.push(mesh);
+    let pipeline_manager_clone = pipeline_manager.clone();
+    pipeline_manager_clone
+        .lock()
+        .unwrap()
+        .materials
+        .no_texture_materials
+        .push(material);
 
     let vertex_shader = wgpu::include_wgsl!("shaders/vert.wgsl");
     let fragment_shader = wgpu::include_wgsl!("shaders/frag.wgsl");
 
-    let material_mesh_group =
-        MaterialMeshGroup::new(material, meshes, renderer, vertex_shader, fragment_shader);
     // pipeline_manager
     //     .material_mesh_groups
     //     .push(material_mesh_group);
     // renderer.material_mesh_groups.push(material_mesh_group);
-
+    renderer.create_pipelines();
 
     'running: loop {
         for event in engine.event_pump.poll_iter() {
