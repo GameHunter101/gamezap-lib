@@ -179,7 +179,8 @@ impl Renderer {
                 for material in &pipeline_manager.materials.no_texture_materials {
                     let mut index_count = 0;
                     for (i, mesh) in material.meshes.iter().enumerate() {
-                        render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
+                        render_pass.set_vertex_buffer((i as u32) * 2, mesh.vertex_buffer.slice(..));
+                        render_pass.set_vertex_buffer((i as u32) + 1, mesh.transform_buffer.slice(..));
                         render_pass.set_index_buffer(
                             mesh.index_buffer.slice(..),
                             wgpu::IndexFormat::Uint16,

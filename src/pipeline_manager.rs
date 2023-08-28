@@ -1,8 +1,5 @@
 use crate::{
-    camera::Camera,
-    materials::MaterialManager,
-    model::{ModelVertex, Vertex},
-    pipeline::Pipeline,
+    camera::Camera, materials::MaterialManager, model::{Vertex, VertexData, Mesh}, pipeline::Pipeline,
     texture::Texture,
 };
 
@@ -49,7 +46,7 @@ impl PipelineManager {
                     &pipeline_layout,
                     format,
                     Some(Texture::DEPTH_FORMAT),
-                    &[ModelVertex::desc()],
+                    &[Vertex::desc(), Mesh::desc()],
                     vertex_shader,
                     fragment_shader,
                 ));
@@ -58,6 +55,7 @@ impl PipelineManager {
     }
 }
 
+#[derive(Debug)]
 pub enum PipelineType {
     NoTextures,
     DiffuseTexture,

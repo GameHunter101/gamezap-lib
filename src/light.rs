@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::model::{Mesh, Model};
+use crate::model::{Mesh, Models};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -40,13 +40,13 @@ pub trait DrawLight<'a> {
 
     fn draw_light_model(
         &mut self,
-        model: &'a Model,
+        model: &'a Models,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
     );
     fn draw_light_model_instanced(
         &mut self,
-        model: &'a Model,
+        model: &'a Models,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
@@ -82,7 +82,7 @@ where
 
     fn draw_light_model(
         &mut self,
-        model: &'b Model,
+        model: &'b Models,
         camera_bind_group: &'b wgpu::BindGroup,
         light_bind_group: &'b wgpu::BindGroup,
     ) {
@@ -90,7 +90,7 @@ where
     }
     fn draw_light_model_instanced(
         &mut self,
-        model: &'b Model,
+        model: &'b Models,
         instances: Range<u32>,
         camera_bind_group: &'b wgpu::BindGroup,
         light_bind_group: &'b wgpu::BindGroup,

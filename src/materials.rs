@@ -16,6 +16,7 @@ impl MaterialManager {
     }
 }
 
+#[derive(Debug)]
 pub struct Material {
     pub name: String,
     pub diffuse_texture: Option<Texture>,

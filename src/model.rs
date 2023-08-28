@@ -1,12 +1,15 @@
+use nalgebra as na;
+use wgpu::util::DeviceExt;
+
 use crate::materials::Material;
 
-pub trait Vertex {
+pub trait VertexData {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ModelVertex {
+pub struct Vertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
@@ -14,18 +17,18 @@ pub struct ModelVertex {
     pub bitangent: [f32; 3],
 }
 
-impl Vertex for ModelVertex {
+impl VertexData for Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static> {
         const ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3, 3 => Float32x3, 4 => Float32x4];
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<ModelVertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &ATTRIBUTES,
         }
     }
 }
-
-pub struct Model {
+#[derive(Debug)]
+pub struct Models {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
 }
@@ -37,4 +40,61 @@ pub struct Mesh {
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
     pub material: usize,
+    pub transform: MeshTransform,
+    pub transform_buffer: wgpu::Buffer,
+}
+
+impl Mesh {
+    pub fn new(
+        device: &wgpu::Device,
+        name: String,
+        vertex_buffer: wgpu::Buffer,
+        index_buffer: wgpu::Buffer,
+        num_indices: u32,
+        material: usize,
+        transform: MeshTransform,
+    ) -> Self {
+        let transform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{} transform buffer", name)),
+            contents: bytemuck::cast_slice(&[transform]),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        Mesh {
+            name,
+            vertex_buffer,
+            index_buffer,
+            num_indices,
+            material,
+            transform,
+            transform_buffer,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MeshTransform {
+    _transform_matrix: [[f32; 4]; 4],
+}
+
+impl MeshTransform {
+    pub fn new(position: na::Vector3<f32>, rotation: na::UnitQuaternion<f32>) -> Self {
+        let translation_matrix = na::Matrix4::from(na::Translation3::from(position));
+        let rotation_matrix = na::Matrix4::from(rotation.to_rotation_matrix());
+        let transform_matrix = translation_matrix * rotation_matrix;
+        MeshTransform {
+            _transform_matrix: transform_matrix.into(),
+        }
+    }
+}
+
+impl VertexData for Mesh {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        const ATTRIBUTES: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4, 9 => Float32x3, 10 => Float32x3, 11 => Float32x3];
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<MeshTransform>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &ATTRIBUTES,
+        }
+    }
 }

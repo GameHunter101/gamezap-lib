@@ -7,8 +7,8 @@ use nalgebra as na;
 
 use gamezap::{
     camera::{Camera, CameraUniform},
-    materials::{Material},
-    model::{Mesh, ModelVertex},
+    materials::Material,
+    model::{Mesh, MeshTransform, Vertex},
     pipeline_manager::PipelineManager,
     GameZap,
 };
@@ -54,31 +54,35 @@ fn main() {
     let renderer = &mut engine.renderer;
 
     let pipeline_manager = Arc::new(Mutex::new(PipelineManager::init()));
-    let camera_position = na::Vector3::new(0.0,0.0,0.0);
+    let camera_position = na::Vector3::new(0.0, 0.0, 0.0);
     let camera_uniform = CameraUniform::new(camera_position);
-    let camera = Arc::new(Mutex::new(Camera::new(camera_position,camera_uniform,&renderer.device)));
+    let camera = Arc::new(Mutex::new(Camera::new(
+        camera_position,
+        camera_uniform,
+        &renderer.device,
+    )));
 
-    renderer.set_camera(camera.clone(),camera_uniform);
+    renderer.set_camera(camera.clone(), camera_uniform);
     renderer.set_pipeline_manager(pipeline_manager.clone());
 
-    let mut material = Material::new(&renderer.device, "Test", None, None);
+    let mut basic_material = Material::new(&renderer.device, "Test", None, None);
 
     let model_vertices = vec![
-        ModelVertex {
+        Vertex {
             position: [0.0, 1.0, 0.0],
             tex_coords: [0.0, 0.0],
             normal: [0.0, 0.0, 1.0],
             bitangent: [0.0, 0.0, 0.0],
             tangent: [0.0, 0.0, 0.0],
         },
-        ModelVertex {
+        Vertex {
             position: [0.0, 0.0, 0.0],
             tex_coords: [0.0, 0.0],
             normal: [0.0, 0.0, 1.0],
             bitangent: [0.0, 0.0, 0.0],
             tangent: [0.0, 0.0, 0.0],
         },
-        ModelVertex {
+        Vertex {
             position: [1.0, 0.0, 0.0],
             tex_coords: [0.0, 0.0],
             normal: [0.0, 0.0, 1.0],
@@ -106,24 +110,27 @@ fn main() {
                 usage: wgpu::BufferUsages::INDEX,
             });
 
-    let mesh = Mesh {
-        name: "Test model".to_string(),
-        vertex_buffer: model_vert_buffer,
-        index_buffer: model_index_buffer,
-        num_indices: model_indices.len() as u32,
-        material: 0,
-    };
-    material.meshes.push(mesh);
+    let mesh = Mesh::new(
+        &renderer.device,
+        "Test model".to_string(),
+        model_vert_buffer,
+        model_index_buffer,
+        model_indices.len() as u32,
+        0,
+        MeshTransform::new(
+            na::Vector3::new(1.0, 0.0, 0.0),
+            na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
+        ),
+    );
+    basic_material.meshes.push(mesh);
     let pipeline_manager_clone = pipeline_manager.clone();
     pipeline_manager_clone
         .lock()
         .unwrap()
         .materials
         .no_texture_materials
-        .push(material);
+        .push(basic_material);
 
-    let vertex_shader = wgpu::include_wgsl!("shaders/vert.wgsl");
-    let fragment_shader = wgpu::include_wgsl!("shaders/frag.wgsl");
 
     renderer.create_pipelines();
 
