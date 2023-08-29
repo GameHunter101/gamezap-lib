@@ -18,6 +18,7 @@ nalgebra = "0.32.3"
 tobj = { version = "4.0.0", features = ["async"] }
 cfg-if = "1.0.0"
 time = "0.3.24"
+smaa = "0.11.0"
 
 [dependencies.image]
 version = "0.24.6"

@@ -14,6 +14,21 @@ impl MaterialManager {
             diffuse_normal_texture_materials: vec![],
         }
     }
+
+    pub fn add_materials(&mut self, materials: Vec<Material>) {
+        for material in materials {
+            if material.diffuse_texture.is_some() {
+                if material.normal_texture.is_some() {
+                    self.diffuse_normal_texture_materials.push(material);
+                    continue;
+                }
+                self.diffuse_texture_materials.push(material);
+                continue;
+            }
+            self.no_texture_materials.push(material);
+            continue;
+        }
+    }
 }
 
 #[derive(Debug)]

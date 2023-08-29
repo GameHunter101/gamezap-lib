@@ -287,22 +287,7 @@ fn main() {
         .lock()
         .unwrap()
         .materials
-        .no_texture_materials
-        .push(basic_material);
-
-    pipeline_manager_clone
-        .lock()
-        .unwrap()
-        .materials
-        .diffuse_texture_materials
-        .push(second_material);
-
-    pipeline_manager_clone
-        .lock()
-        .unwrap()
-        .materials
-        .diffuse_texture_materials
-        .push(third_material);
+        .add_materials(vec![basic_material, second_material, third_material]);
 
     renderer.create_pipelines();
 
@@ -313,7 +298,7 @@ fn main() {
                 Event::Window {
                     win_event: WindowEvent::Resized(width, height),
                     ..
-                } => renderer.resize((width as u32, height as u32)),
+                } => renderer.resize((width as u32, height as u32), true),
                 _ => {}
             }
         }

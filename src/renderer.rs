@@ -4,6 +4,7 @@ use std::{
 };
 
 use sdl2::video::Window;
+use smaa::SmaaTarget;
 
 use crate::{
     camera::{Camera, CameraUniform},
@@ -22,10 +23,11 @@ pub struct Renderer {
     pub camera: Option<Arc<Mutex<Camera>>>,
     pub camera_uniform: Option<CameraUniform>,
     pub pipeline_manager: Option<Arc<Mutex<PipelineManager>>>,
+    pub smaa_target: SmaaTarget,
 }
 
 impl Renderer {
-    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color) -> Renderer {
+    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color, antialiasing: bool) -> Renderer {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -77,6 +79,19 @@ impl Renderer {
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
 
+        let smaa_target = SmaaTarget::new(
+            &device,
+            &queue,
+            size.0,
+            size.1,
+            config.format,
+            if antialiasing {
+                smaa::SmaaMode::Smaa1X
+            } else {
+                smaa::SmaaMode::Disabled
+            },
+        );
+
         Renderer {
             surface,
             device,
@@ -88,6 +103,7 @@ impl Renderer {
             camera: None,
             camera_uniform: None,
             pipeline_manager: None,
+            smaa_target,
         }
     }
 
@@ -110,7 +126,7 @@ impl Renderer {
         }
     }
 
-    pub fn resize(&mut self, new_size: (u32, u32)) {
+    pub fn resize(&mut self, new_size: (u32, u32), antialiasing: bool) {
         if new_size.0 > 0 && new_size.1 > 0 {
             self.size = new_size;
             self.config.width = new_size.0;
@@ -118,6 +134,18 @@ impl Renderer {
             self.surface.configure(&self.device, &self.config);
             self.depth_texture =
                 Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.smaa_target = SmaaTarget::new(
+                &self.device,
+                &self.queue,
+                self.size.0,
+                self.size.1,
+                self.config.format,
+                if antialiasing {
+                    smaa::SmaaMode::Smaa1X
+                } else {
+                    smaa::SmaaMode::Disabled
+                },
+            );
         }
     }
 
@@ -131,11 +159,14 @@ impl Renderer {
         }
     }
 
-    pub fn render(&self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let smaa_frame = self
+            .smaa_target
+            .start_frame(&self.device, &self.queue, &view);
 
         let mut encoder = self
             .device
@@ -156,7 +187,8 @@ impl Renderer {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    // view: &view,
+                    view: &(*smaa_frame),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(self.clear_color),
@@ -173,13 +205,12 @@ impl Renderer {
                 }),
             });
 
-            // if let Some(pipeline_manager) = &self.pipeline_manager {
             if let Some(no_texture_pipeline) = &pipeline_manager.no_texture_pipeline {
                 render_pass.set_pipeline(&no_texture_pipeline.pipeline);
                 for material in &pipeline_manager.materials.no_texture_materials {
                     render_pass.set_bind_group(0, &material.bind_group, &[]);
                     render_pass.set_bind_group(1, &camera.bind_group, &[]);
-                    for (i, mesh) in material.meshes.iter().enumerate() {
+                    for mesh in &material.meshes {
                         render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                         render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
                         render_pass.set_index_buffer(
@@ -195,7 +226,7 @@ impl Renderer {
                 render_pass.set_pipeline(&diffuse_texture_pipeline.pipeline);
                 for material in &pipeline_manager.materials.diffuse_texture_materials {
                     render_pass.set_bind_group(1, &camera.bind_group, &[]);
-                    for (i, mesh) in material.meshes.iter().enumerate() {
+                    for mesh in &material.meshes {
                         render_pass.set_bind_group(0, &material.bind_group, &[]);
                         render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                         render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
@@ -207,22 +238,10 @@ impl Renderer {
                     }
                 }
             }
-
-            // for (i, mesh) in materials.meshes.iter().enumerate() {
-            //     render_pass.set_vertex_buffer(i as u32, mesh.vertex_buffer.slice(..));
-            //     render_pass.set_index_buffer(
-            //         mesh.index_buffer.slice(..),
-            //         wgpu::IndexFormat::Uint16,
-            //     );
-            // }
-
-            // render_pass.set_bind_group(0, &materials.material.bind_group, &[]);
-            // render_pass.set_bind_group(1, &materials.camera_bind_group, &[]);
-            // render_pass.draw_indexed(0..materials.num_indices, 0, 0..1);
-            // }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
+        smaa_frame.resolve();
         output.present();
 
         Ok(())

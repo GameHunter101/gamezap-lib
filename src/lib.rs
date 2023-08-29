@@ -137,7 +137,7 @@ impl<'a> GameZapBuilder {
         };
 
         let window = self.window.unwrap();
-        let renderer = pollster::block_on(Renderer::new(window.clone(), self.clear_color));
+        let renderer = pollster::block_on(Renderer::new(window.clone(), self.clear_color, true));
 
         GameZap {
             sdl_context,
