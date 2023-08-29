@@ -20,7 +20,7 @@ pub struct Renderer {
     pub size: (u32, u32),
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
-    pub camera: Option<Arc<Mutex<Camera>>>,
+    pub camera: Arc<Option<Mutex<Camera>>>,
     pub camera_uniform: Option<CameraUniform>,
     pub pipeline_manager: Option<Arc<Mutex<PipelineManager>>>,
     pub smaa_target: SmaaTarget,
@@ -100,15 +100,19 @@ impl Renderer {
             size,
             depth_texture,
             clear_color,
-            camera: None,
+            camera: Arc::new(None),
             camera_uniform: None,
             pipeline_manager: None,
             smaa_target,
         }
     }
 
-    pub fn set_camera(&mut self, camera: Arc<Mutex<Camera>>, camera_uniform: CameraUniform) {
-        self.camera = Some(camera);
+    pub fn set_camera(
+        &mut self,
+        camera: Arc<Option<Mutex<Camera>>>,
+        camera_uniform: CameraUniform,
+    ) {
+        self.camera = camera;
         self.camera_uniform = Some(camera_uniform);
     }
 
@@ -118,15 +122,20 @@ impl Renderer {
 
     pub fn update_buffers(&mut self) {
         if let Some(camera_uniform) = &mut self.camera_uniform {
-            let camera_clone = self.camera.as_ref().unwrap().clone();
-            let camera = camera_clone.lock().unwrap();
-            camera_uniform.update_view_proj(&camera);
-            self.queue
-                .write_buffer(&camera.buffer, 0, bytemuck::cast_slice(&[*camera_uniform]));
+            let camera_clone = self.camera.as_ref().clone();
+            if let Some(camera) = camera_clone {
+                let camera = camera.lock().unwrap();
+                camera_uniform.update_view_proj(&camera);
+                self.queue.write_buffer(
+                    &camera.buffer,
+                    0,
+                    bytemuck::cast_slice(&[*camera_uniform]),
+                );
+            }
         }
     }
 
-    pub fn resize(&mut self, new_size: (u32, u32), antialiasing: bool) {
+    pub fn resize(&mut self, new_size: (u32, u32)) {
         if new_size.0 > 0 && new_size.1 > 0 {
             self.size = new_size;
             self.config.width = new_size.0;
@@ -134,27 +143,22 @@ impl Renderer {
             self.surface.configure(&self.device, &self.config);
             self.depth_texture =
                 Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
-            self.smaa_target = SmaaTarget::new(
-                &self.device,
-                &self.queue,
-                self.size.0,
-                self.size.1,
-                self.config.format,
-                if antialiasing {
-                    smaa::SmaaMode::Smaa1X
-                } else {
-                    smaa::SmaaMode::Disabled
-                },
-            );
+            self.smaa_target
+                .resize(&self.device, new_size.0, new_size.1);
         }
     }
 
     pub fn create_pipelines(&mut self) {
         if let Some(pipeline_manager) = &mut self.pipeline_manager {
+            let camera_clone = self.camera.clone();
+            let camera = match &*camera_clone {
+                Some(camera) => Some(camera.lock().unwrap()),
+                None => None,
+            };
             pipeline_manager.lock().unwrap().create_pipelines(
                 &self.device,
                 self.config.format,
-                &self.camera.as_ref().unwrap().lock().unwrap(),
+                camera,
             )
         }
     }
@@ -174,16 +178,21 @@ impl Renderer {
                 label: Some("Render encoder"),
             });
 
-        // TODO:
-        // Catch if camera is None
-        let camera_clone = self.camera.as_ref().unwrap().clone();
-        let camera = camera_clone.lock().unwrap();
+        let camera_clone = &*self.camera.clone();
+        let camera = if let Some(camera) = camera_clone {
+            Some(camera.lock().unwrap())
+        } else {
+            None
+        };
+        let camera_bind_group = if let Some(camera) = &camera {
+            Some(&camera.bind_group)
+        } else {
+            None
+        };
 
-        // TODO:
-        // Catch if pipeline is None
-        let pipeline_manager_clone = self.pipeline_manager.as_ref().unwrap().clone();
-        let pipeline_manager = pipeline_manager_clone.lock().unwrap();
-        {
+        if let Some(pipeline_manager) = self.pipeline_manager.as_ref() {
+            let pipeline_manager_clone = pipeline_manager.clone();
+            let pipeline_manager = pipeline_manager_clone.lock().unwrap();
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -209,7 +218,9 @@ impl Renderer {
                 render_pass.set_pipeline(&no_texture_pipeline.pipeline);
                 for material in &pipeline_manager.materials.no_texture_materials {
                     render_pass.set_bind_group(0, &material.bind_group, &[]);
-                    render_pass.set_bind_group(1, &camera.bind_group, &[]);
+                    if let Some(camera_bind_group) = &camera_bind_group {
+                        render_pass.set_bind_group(1, &camera_bind_group, &[]);
+                    }
                     for mesh in &material.meshes {
                         render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                         render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
@@ -225,7 +236,9 @@ impl Renderer {
             if let Some(diffuse_texture_pipeline) = &pipeline_manager.diffuse_texture_pipeline {
                 render_pass.set_pipeline(&diffuse_texture_pipeline.pipeline);
                 for material in &pipeline_manager.materials.diffuse_texture_materials {
-                    render_pass.set_bind_group(1, &camera.bind_group, &[]);
+                    if let Some(camera_bind_group) = &camera_bind_group {
+                        render_pass.set_bind_group(1, &camera_bind_group, &[]);
+                    }
                     for mesh in &material.meshes {
                         render_pass.set_bind_group(0, &material.bind_group, &[]);
                         render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));

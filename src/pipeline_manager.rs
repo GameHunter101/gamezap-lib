@@ -1,3 +1,5 @@
+use std::sync::MutexGuard;
+
 use crate::{
     camera::Camera,
     materials::MaterialManager,
@@ -27,17 +29,18 @@ impl PipelineManager {
         &mut self,
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-        camera: &Camera,
+        camera: Option<MutexGuard<Camera>>,
     ) {
         if self.materials.no_texture_materials.len() > 0 {
             if self.no_texture_pipeline.is_none() {
+                let mut layouts = vec![&self.materials.no_texture_materials[0].bind_group_layout];
+                if let Some(camera) = &camera {
+                    layouts.push(&camera.bind_group_layout);
+                }
                 let pipeline_layout =
                     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("NoTexturePipelineLayout"),
-                        bind_group_layouts: &[
-                            &self.materials.no_texture_materials[0].bind_group_layout,
-                            &camera.bind_group_layout,
-                        ],
+                        bind_group_layouts: &layouts,
                         push_constant_ranges: &[],
                     });
 
@@ -59,13 +62,15 @@ impl PipelineManager {
 
         if self.materials.diffuse_texture_materials.len() > 0 {
             if self.diffuse_texture_pipeline.is_none() {
+                let mut layouts =
+                    vec![&self.materials.diffuse_texture_materials[0].bind_group_layout];
+                if let Some(camera) = &camera {
+                    layouts.push(&camera.bind_group_layout);
+                }
                 let pipeline_layout =
                     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: Some("DiffuseTexturePipelineLayout"),
-                        bind_group_layouts: &[
-                            &self.materials.diffuse_texture_materials[0].bind_group_layout,
-                            &camera.bind_group_layout,
-                        ],
+                        bind_group_layouts: &layouts,
                         push_constant_ranges: &[],
                     });
 

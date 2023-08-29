@@ -1,5 +1,6 @@
 use crate::{model::Mesh, pipeline_manager::PipelineType, texture::Texture};
 
+#[derive(Debug)]
 pub struct MaterialManager {
     pub no_texture_materials: Vec<Material>,
     pub diffuse_texture_materials: Vec<Material>,

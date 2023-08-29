@@ -57,11 +57,11 @@ fn main() {
     let pipeline_manager = Arc::new(Mutex::new(PipelineManager::init()));
     let camera_position = na::Vector3::new(0.0, 0.0, 0.0);
     let camera_uniform = CameraUniform::new(camera_position);
-    let camera = Arc::new(Mutex::new(Camera::new(
+    let camera = Arc::new(Some(Mutex::new(Camera::new(
         camera_position,
         camera_uniform,
         &renderer.device,
-    )));
+    ))));
 
     renderer.set_camera(camera.clone(), camera_uniform);
     renderer.set_pipeline_manager(pipeline_manager.clone());
@@ -298,7 +298,7 @@ fn main() {
                 Event::Window {
                     win_event: WindowEvent::Resized(width, height),
                     ..
-                } => renderer.resize((width as u32, height as u32), true),
+                } => renderer.resize((width as u32, height as u32)),
                 _ => {}
             }
         }
@@ -315,7 +315,9 @@ fn main() {
     }
 }
 
-fn input(camera: Arc<Mutex<Camera>>, scancodes: &Vec<Scancode>, mouse_state: &RelativeMouseState) {
-    let mut camera = camera.lock().unwrap();
-    camera.transform_camera(scancodes, mouse_state, true);
+fn input(camera: Arc<Option<Mutex<Camera>>>, scancodes: &Vec<Scancode>, mouse_state: &RelativeMouseState) {
+    if let Some(camera) = &*camera.clone() {
+        let mut camera = camera.lock().unwrap();
+        camera.transform_camera(scancodes, mouse_state, true);
+    }
 }
