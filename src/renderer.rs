@@ -177,19 +177,34 @@ impl Renderer {
             if let Some(no_texture_pipeline) = &pipeline_manager.no_texture_pipeline {
                 render_pass.set_pipeline(&no_texture_pipeline.pipeline);
                 for material in &pipeline_manager.materials.no_texture_materials {
-                    let mut index_count = 0;
+                    render_pass.set_bind_group(0, &material.bind_group, &[]);
+                    render_pass.set_bind_group(1, &camera.bind_group, &[]);
                     for (i, mesh) in material.meshes.iter().enumerate() {
-                        render_pass.set_vertex_buffer((i as u32) * 2, mesh.vertex_buffer.slice(..));
-                        render_pass.set_vertex_buffer((i as u32) + 1, mesh.transform_buffer.slice(..));
+                        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                        render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
                         render_pass.set_index_buffer(
                             mesh.index_buffer.slice(..),
                             wgpu::IndexFormat::Uint16,
                         );
-                        index_count += mesh.num_indices;
+                        render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
                     }
-                    render_pass.set_bind_group(0, &material.bind_group, &[]);
+                }
+            }
+
+            if let Some(diffuse_texture_pipeline) = &pipeline_manager.diffuse_texture_pipeline {
+                render_pass.set_pipeline(&diffuse_texture_pipeline.pipeline);
+                for material in &pipeline_manager.materials.diffuse_texture_materials {
                     render_pass.set_bind_group(1, &camera.bind_group, &[]);
-                    render_pass.draw_indexed(0..index_count, 0, 0..1);
+                    for (i, mesh) in material.meshes.iter().enumerate() {
+                        render_pass.set_bind_group(0, &material.bind_group, &[]);
+                        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                        render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
+                        render_pass.set_index_buffer(
+                            mesh.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint16,
+                        );
+                        render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+                    }
                 }
             }
 

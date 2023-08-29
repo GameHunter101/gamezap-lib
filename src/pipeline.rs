@@ -4,6 +4,7 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new(
+        name: &str,
         device: &wgpu::Device,
         layout: &wgpu::PipelineLayout,
         color_format: wgpu::TextureFormat,
@@ -16,7 +17,7 @@ impl Pipeline {
         let fragment_shader = device.create_shader_module(fragment_shader);
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render pipeline"),
+            label: Some(name),
             layout: Some(layout),
             vertex: wgpu::VertexState {
                 module: &vertex_shader,

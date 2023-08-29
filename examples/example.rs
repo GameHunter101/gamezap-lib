@@ -10,6 +10,7 @@ use gamezap::{
     materials::Material,
     model::{Mesh, MeshTransform, Vertex},
     pipeline_manager::PipelineManager,
+    texture::Texture,
     GameZap,
 };
 use sdl2::{
@@ -65,9 +66,38 @@ fn main() {
     renderer.set_camera(camera.clone(), camera_uniform);
     renderer.set_pipeline_manager(pipeline_manager.clone());
 
-    let mut basic_material = Material::new(&renderer.device, "Test", None, None);
+    let mut basic_material = Material::new(&renderer.device, "Test material", None, None);
+    let mut second_material = Material::new(
+        &renderer.device,
+        "Second material",
+        Some(
+            pollster::block_on(Texture::load_texture(
+                "texture.png",
+                &renderer.device,
+                &renderer.queue,
+                false,
+            ))
+            .unwrap(),
+        ),
+        None,
+    );
 
-    let model_vertices = vec![
+    let mut third_material = Material::new(
+        &renderer.device,
+        "Second material",
+        Some(
+            pollster::block_on(Texture::load_texture(
+                "dude.png",
+                &renderer.device,
+                &renderer.queue,
+                false,
+            ))
+            .unwrap(),
+        ),
+        None,
+    );
+
+    let first_model_vertices = vec![
         Vertex {
             position: [0.0, 1.0, 0.0],
             tex_coords: [0.0, 0.0],
@@ -91,38 +121,167 @@ fn main() {
         },
     ];
 
-    let model_vert_buffer = renderer
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Test model vertex buffer"),
-            contents: &bytemuck::cast_slice(&model_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+    let first_model_indices: [u16; 3] = [0, 1, 2];
 
-    let model_indices: [u16; 3] = [0, 1, 2];
+    let first_model_vert_buffer =
+        renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Test model vertex buffer"),
+                contents: &bytemuck::cast_slice(&first_model_vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
-    let model_index_buffer =
+    let first_model_index_buffer =
         renderer
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Test model index buffer"),
-                contents: &bytemuck::cast_slice(&model_indices),
+                contents: &bytemuck::cast_slice(&first_model_indices),
                 usage: wgpu::BufferUsages::INDEX,
             });
 
     let mesh = Mesh::new(
         &renderer.device,
         "Test model".to_string(),
-        model_vert_buffer,
-        model_index_buffer,
-        model_indices.len() as u32,
-        0,
+        first_model_vert_buffer,
+        first_model_index_buffer,
+        first_model_indices.len() as u32,
         MeshTransform::new(
             na::Vector3::new(1.0, 0.0, 0.0),
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
     );
+
+    let second_model_vertices = vec![
+        Vertex {
+            position: [0.0, 1.0, 0.0],
+            tex_coords: [0.0, 0.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+            position: [0.0, 0.0, 0.0],
+            tex_coords: [0.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+            position: [1.778, 0.0, 0.0],
+            tex_coords: [1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+            position: [1.778, 1.0, 0.0],
+            tex_coords: [1.0, 0.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+    ];
+
+    let second_model_indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
+
+    let second_vert_buffer =
+        renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Second model vertex buffer"),
+                contents: &bytemuck::cast_slice(&second_model_vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+    let second_index_buffer =
+        renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Second model index buffer"),
+                contents: &bytemuck::cast_slice(&second_model_indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+    let second_mesh = Mesh::new(
+        &renderer.device,
+        "Second model".to_string(),
+        second_vert_buffer,
+        second_index_buffer,
+        second_model_indices.len() as u32,
+        MeshTransform::new(
+            na::Vector3::new(-1.0, 0.0, 0.0),
+            na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
+        ),
+    );
+
+    let third_model_vertices = vec![
+        Vertex {
+            position: [0.0, 1.041, 0.0],
+            tex_coords: [0.0, 0.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+            position: [0.0, 0.0, 0.0],
+            tex_coords: [0.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+            position: [1.0, 0.0, 0.0],
+            tex_coords: [1.0, 1.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+        Vertex {
+            position: [1.0, 1.041, 0.0],
+            tex_coords: [1.0, 0.0],
+            normal: [0.0, 0.0, 1.0],
+            bitangent: [0.0, 0.0, 0.0],
+            tangent: [0.0, 0.0, 0.0],
+        },
+    ];
+
+    let third_model_indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
+
+    let third_vert_buffer = renderer
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Second model vertex buffer"),
+            contents: &bytemuck::cast_slice(&third_model_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+    let third_index_buffer =
+        renderer
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Second model index buffer"),
+                contents: &bytemuck::cast_slice(&third_model_indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+    let third_mesh = Mesh::new(
+        &renderer.device,
+        "Second model".to_string(),
+        third_vert_buffer,
+        third_index_buffer,
+        third_model_indices.len() as u32,
+        MeshTransform::new(
+            na::Vector3::new(-3.0, 0.0, 0.0),
+            na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
+        ),
+    );
+
     basic_material.meshes.push(mesh);
+    second_material.meshes.push(second_mesh);
+    third_material.meshes.push(third_mesh);
+
     let pipeline_manager_clone = pipeline_manager.clone();
     pipeline_manager_clone
         .lock()
@@ -131,6 +290,19 @@ fn main() {
         .no_texture_materials
         .push(basic_material);
 
+    pipeline_manager_clone
+        .lock()
+        .unwrap()
+        .materials
+        .diffuse_texture_materials
+        .push(second_material);
+
+    pipeline_manager_clone
+        .lock()
+        .unwrap()
+        .materials
+        .diffuse_texture_materials
+        .push(third_material);
 
     renderer.create_pipelines();
 

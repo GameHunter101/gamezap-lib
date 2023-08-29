@@ -1,5 +1,8 @@
 use crate::{
-    camera::Camera, materials::MaterialManager, model::{Vertex, VertexData, Mesh}, pipeline::Pipeline,
+    camera::Camera,
+    materials::MaterialManager,
+    model::{Mesh, Vertex, VertexData},
+    pipeline::Pipeline,
     texture::Texture,
 };
 
@@ -42,6 +45,7 @@ impl PipelineManager {
                 let fragment_shader = wgpu::include_wgsl!("../examples/shaders/frag.wgsl");
 
                 self.no_texture_pipeline = Some(Pipeline::new(
+                    "Plain pipeline",
                     device,
                     &pipeline_layout,
                     format,
@@ -50,6 +54,34 @@ impl PipelineManager {
                     vertex_shader,
                     fragment_shader,
                 ));
+            }
+        }
+
+        if self.materials.diffuse_texture_materials.len() > 0 {
+            if self.diffuse_texture_pipeline.is_none() {
+                let pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("DiffuseTexturePipelineLayout"),
+                        bind_group_layouts: &[
+                            &self.materials.diffuse_texture_materials[0].bind_group_layout,
+                            &camera.bind_group_layout,
+                        ],
+                        push_constant_ranges: &[],
+                    });
+
+                let vertex_shader = wgpu::include_wgsl!("./default-shaders/texture_vert.wgsl");
+                let fragment_shader = wgpu::include_wgsl!("./default-shaders/texture_frag.wgsl");
+
+                self.diffuse_texture_pipeline = Some(Pipeline::new(
+                    "Diffuse pipeline",
+                    device,
+                    &pipeline_layout,
+                    format,
+                    Some(Texture::DEPTH_FORMAT),
+                    &[Vertex::desc(), Mesh::desc()],
+                    vertex_shader,
+                    fragment_shader,
+                ))
             }
         }
     }

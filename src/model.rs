@@ -39,7 +39,6 @@ pub struct Mesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
-    pub material: usize,
     pub transform: MeshTransform,
     pub transform_buffer: wgpu::Buffer,
 }
@@ -51,7 +50,6 @@ impl Mesh {
         vertex_buffer: wgpu::Buffer,
         index_buffer: wgpu::Buffer,
         num_indices: u32,
-        material: usize,
         transform: MeshTransform,
     ) -> Self {
         let transform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -64,7 +62,6 @@ impl Mesh {
             vertex_buffer,
             index_buffer,
             num_indices,
-            material,
             transform,
             transform_buffer,
         }

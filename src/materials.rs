@@ -35,10 +35,6 @@ impl Material {
         normal_texture: Option<Texture>,
     ) -> Self {
         let mut layout_entries = vec![];
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(&format!("{}_material_bind_group_layout", name)),
-            entries: &layout_entries,
-        });
         if diffuse_texture.is_some() {
             let diffuse_entry_texture = wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -80,6 +76,10 @@ impl Material {
                 layout_entries.push(normal_entry_sampler);
             }
         }
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(&format!("{}_material_bind_group_layout", name)),
+            entries: &layout_entries,
+        });
         let mut bind_group_entries: Vec<wgpu::BindGroupEntry> = vec![];
         if let Some(diffuse_texture) = &diffuse_texture {
             bind_group_entries.push(wgpu::BindGroupEntry {

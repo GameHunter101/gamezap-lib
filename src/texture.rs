@@ -10,7 +10,23 @@ pub struct Texture {
 
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
+        let path = std::path::Path::new(&std::env::current_dir().unwrap())
+            .join("textures")
+            .join(file_name);
+        let data = std::fs::read(path)?;
 
+        Ok(data)
+    }
+    pub async fn load_texture(
+        file_name: &str,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        is_normal_map: bool,
+    ) -> anyhow::Result<Texture> {
+        let data = Self::load_binary(file_name).await?;
+        Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
+    }
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
