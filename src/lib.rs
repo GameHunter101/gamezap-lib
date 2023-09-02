@@ -1,5 +1,6 @@
-use std::rc::Rc;
+use std::{rc::Rc, sync::{Mutex, Arc}};
 
+use materials::MaterialManager;
 use sdl2::video::Window;
 use time::{Duration, Instant};
 
@@ -10,7 +11,6 @@ pub mod light;
 pub mod materials;
 pub mod model;
 pub mod pipeline;
-pub mod pipeline_manager;
 pub mod renderer;
 pub mod texture;
 
@@ -73,10 +73,12 @@ pub struct GameZapBuilder {
     initialized_instant: time::Instant,
     time_elapsed: time::Duration,
     last_frame_time: time::Duration,
+
+    material_manager: Option<Arc<Mutex<MaterialManager>>>,
 }
 
 impl<'a> GameZapBuilder {
-    pub fn init() -> Self {
+    fn init() -> Self {
         GameZapBuilder {
             sdl_context: None,
             video_subsystem: None,
@@ -93,6 +95,7 @@ impl<'a> GameZapBuilder {
             initialized_instant: Instant::now(),
             time_elapsed: Duration::ZERO,
             last_frame_time: Duration::ZERO,
+            material_manager: None,
         }
     }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
@@ -111,6 +114,14 @@ impl<'a> GameZapBuilder {
         self.video_subsystem = Some(video_subsystem);
         self.event_pump = Some(event_pump);
         self.window_size = Some(window.size());
+        self
+    }
+
+    pub fn material_manager(
+        mut self,
+        material_manager: Arc<Mutex<MaterialManager>>,
+    ) -> GameZapBuilder {
+        self.material_manager = Some(material_manager);
         self
     }
 
@@ -137,7 +148,12 @@ impl<'a> GameZapBuilder {
         };
 
         let window = self.window.unwrap();
-        let renderer = pollster::block_on(Renderer::new(window.clone(), self.clear_color, true));
+        let renderer = pollster::block_on(Renderer::new(
+            window.clone(),
+            self.clear_color,
+            true,
+            self.material_manager,
+        ));
 
         GameZap {
             sdl_context,

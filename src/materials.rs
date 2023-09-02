@@ -1,8 +1,8 @@
-use crate::{model::Mesh, pipeline_manager::PipelineType, texture::Texture};
+use crate::{model::Mesh, texture::Texture, pipeline::PipelineType};
 
 #[derive(Debug)]
 pub struct MaterialManager {
-    pub no_texture_materials: Vec<Material>,
+    pub plain_materials: Vec<Material>,
     pub diffuse_texture_materials: Vec<Material>,
     pub diffuse_normal_texture_materials: Vec<Material>,
 }
@@ -10,10 +10,34 @@ pub struct MaterialManager {
 impl MaterialManager {
     pub fn init() -> Self {
         MaterialManager {
-            no_texture_materials: vec![],
+            plain_materials: vec![],
             diffuse_texture_materials: vec![],
             diffuse_normal_texture_materials: vec![],
         }
+    }
+
+    pub fn new_material(
+        &mut self,
+        name: &str,
+        device: &wgpu::Device,
+        diffuse_texture: Option<Texture>,
+        normal_texture: Option<Texture>,
+    ) -> Material {
+        let mut material_index = self.plain_materials.len() as u32;
+        if diffuse_texture.is_some() {
+            material_index = self.diffuse_texture_materials.len() as u32;
+            if normal_texture.is_some() {
+                material_index = self.diffuse_normal_texture_materials.len() as u32;
+            }
+        }
+        let material = Material::new(
+            name,
+            device,
+            diffuse_texture,
+            normal_texture,
+            material_index,
+        );
+        material
     }
 
     pub fn add_materials(&mut self, materials: Vec<Material>) {
@@ -26,7 +50,7 @@ impl MaterialManager {
                 self.diffuse_texture_materials.push(material);
                 continue;
             }
-            self.no_texture_materials.push(material);
+            self.plain_materials.push(material);
             continue;
         }
     }
@@ -41,14 +65,16 @@ pub struct Material {
     pub bind_group: wgpu::BindGroup,
     pub pipeline_type: PipelineType,
     pub meshes: Vec<Mesh>,
+    pub material_index: u32,
 }
 
 impl Material {
     pub fn new(
-        device: &wgpu::Device,
         name: &str,
+        device: &wgpu::Device,
         diffuse_texture: Option<Texture>,
         normal_texture: Option<Texture>,
+        material_index: u32,
     ) -> Self {
         let mut layout_entries = vec![];
         if diffuse_texture.is_some() {
@@ -125,7 +151,7 @@ impl Material {
             entries: &bind_group_entries,
         });
 
-        let mut pipeline_type = PipelineType::NoTextures;
+        let mut pipeline_type = PipelineType::Plain;
         if diffuse_texture.is_some() {
             if normal_texture.is_some() {
                 pipeline_type = PipelineType::NormalDiffuseTexture;
@@ -142,6 +168,7 @@ impl Material {
             bind_group,
             pipeline_type,
             meshes: vec![],
+            material_index,
         }
     }
 }

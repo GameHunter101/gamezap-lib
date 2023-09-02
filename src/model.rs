@@ -3,6 +3,22 @@ use wgpu::util::DeviceExt;
 
 use crate::materials::Material;
 
+pub struct MeshManager {
+    pub plain_pipeline_models: Vec<Mesh>,
+    pub diffuse_pipeline_models: Vec<Mesh>,
+    pub diffuse_normal_pipeline_models: Vec<Mesh>,
+}
+
+impl MeshManager {
+    pub fn init() -> Self {
+        MeshManager {
+            plain_pipeline_models: vec![],
+            diffuse_pipeline_models: vec![],
+            diffuse_normal_pipeline_models: vec![],
+        }
+    }
+}
+
 pub trait VertexData {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
 }
@@ -41,6 +57,7 @@ pub struct Mesh {
     pub num_indices: u32,
     pub transform: MeshTransform,
     pub transform_buffer: wgpu::Buffer,
+    pub material_index: u32,
 }
 
 impl Mesh {
@@ -51,6 +68,7 @@ impl Mesh {
         index_buffer: wgpu::Buffer,
         num_indices: u32,
         transform: MeshTransform,
+        material_index: u32,
     ) -> Self {
         let transform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{} transform buffer", name)),
@@ -64,6 +82,7 @@ impl Mesh {
             num_indices,
             transform,
             transform_buffer,
+            material_index,
         }
     }
 }

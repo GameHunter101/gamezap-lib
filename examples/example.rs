@@ -7,9 +7,8 @@ use nalgebra as na;
 
 use gamezap::{
     camera::{Camera, CameraUniform},
-    materials::Material,
+    materials::{Material, MaterialManager},
     model::{Mesh, MeshTransform, Vertex},
-    pipeline_manager::PipelineManager,
     texture::Texture,
     GameZap,
 };
@@ -37,6 +36,8 @@ fn main() {
             .unwrap(),
     );
 
+    let material_manager = Arc::new(Mutex::new(MaterialManager::init()));
+
     let mut engine = GameZap::builder()
         .window_and_renderer(
             sdl_context,
@@ -50,11 +51,11 @@ fn main() {
                 a: 1.0,
             },
         )
+        .material_manager(material_manager.clone())
         .build();
 
     let renderer = &mut engine.renderer;
 
-    let pipeline_manager = Arc::new(Mutex::new(PipelineManager::init()));
     let camera_position = na::Vector3::new(0.0, 0.0, 0.0);
     let camera_uniform = CameraUniform::new(camera_position);
     let camera = Arc::new(Some(Mutex::new(Camera::new(
@@ -64,12 +65,16 @@ fn main() {
     ))));
 
     renderer.set_camera(camera.clone(), camera_uniform);
-    renderer.set_pipeline_manager(pipeline_manager.clone());
 
-    let mut basic_material = Material::new(&renderer.device, "Test material", None, None);
-    let mut second_material = Material::new(
+    let first_material = material_manager.lock().unwrap().new_material(
+        "First material",
         &renderer.device,
+        None,
+        None,
+    );
+    let second_material = material_manager.lock().unwrap().new_material(
         "Second material",
+        &renderer.device,
         Some(
             pollster::block_on(Texture::load_texture(
                 "texture.png",
@@ -82,9 +87,9 @@ fn main() {
         None,
     );
 
-    let mut third_material = Material::new(
-        &renderer.device,
+    let third_material = material_manager.lock().unwrap().new_material(
         "Second material",
+        &renderer.device,
         Some(
             pollster::block_on(Texture::load_texture(
                 "dude.png",
@@ -143,7 +148,7 @@ fn main() {
 
     let mesh = Mesh::new(
         &renderer.device,
-        "Test model".to_string(),
+        "First model".to_string(),
         first_model_vert_buffer,
         first_model_index_buffer,
         first_model_indices.len() as u32,
@@ -151,6 +156,7 @@ fn main() {
             na::Vector3::new(1.0, 0.0, 0.0),
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
+        first_material.material_index,
     );
 
     let second_model_vertices = vec![
@@ -214,6 +220,7 @@ fn main() {
             na::Vector3::new(-1.0, 0.0, 0.0),
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
+        second_material.material_index,
     );
 
     let third_model_vertices = vec![
@@ -276,20 +283,10 @@ fn main() {
             na::Vector3::new(-3.0, 0.0, 0.0),
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
+        third_material.material_index,
     );
 
-    basic_material.meshes.push(mesh);
-    second_material.meshes.push(second_mesh);
-    third_material.meshes.push(third_mesh);
-
-    let pipeline_manager_clone = pipeline_manager.clone();
-    pipeline_manager_clone
-        .lock()
-        .unwrap()
-        .materials
-        .add_materials(vec![basic_material, second_material, third_material]);
-
-    renderer.create_pipelines();
+    renderer.prep_renderer();
 
     'running: loop {
         for event in engine.event_pump.poll_iter() {
@@ -315,7 +312,11 @@ fn main() {
     }
 }
 
-fn input(camera: Arc<Option<Mutex<Camera>>>, scancodes: &Vec<Scancode>, mouse_state: &RelativeMouseState) {
+fn input(
+    camera: Arc<Option<Mutex<Camera>>>,
+    scancodes: &Vec<Scancode>,
+    mouse_state: &RelativeMouseState,
+) {
     if let Some(camera) = &*camera.clone() {
         let mut camera = camera.lock().unwrap();
         camera.transform_camera(scancodes, mouse_state, true);

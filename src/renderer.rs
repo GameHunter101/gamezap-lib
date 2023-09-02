@@ -8,7 +8,9 @@ use smaa::SmaaTarget;
 
 use crate::{
     camera::{Camera, CameraUniform},
-    pipeline_manager::PipelineManager,
+    materials::MaterialManager,
+    model::{Mesh, MeshManager},
+    pipeline::{Pipeline, PipelineManager, PipelineType},
     texture::Texture,
 };
 
@@ -22,12 +24,19 @@ pub struct Renderer {
     pub clear_color: wgpu::Color,
     pub camera: Arc<Option<Mutex<Camera>>>,
     pub camera_uniform: Option<CameraUniform>,
-    pub pipeline_manager: Option<Arc<Mutex<PipelineManager>>>,
-    pub smaa_target: SmaaTarget,
+    pub pipeline_manager: PipelineManager,
+    pub mesh_manager: MeshManager,
+    pub material_manager: Arc<Mutex<MaterialManager>>,
+    pub smaa_target: Arc<Mutex<SmaaTarget>>,
 }
 
 impl Renderer {
-    pub async fn new(window: Rc<Window>, clear_color: wgpu::Color, antialiasing: bool) -> Renderer {
+    pub async fn new(
+        window: Rc<Window>,
+        clear_color: wgpu::Color,
+        antialiasing: bool,
+        material_manager: Option<Arc<Mutex<MaterialManager>>>,
+    ) -> Renderer {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -79,7 +88,7 @@ impl Renderer {
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
 
-        let smaa_target = SmaaTarget::new(
+        let smaa_target = Arc::new(Mutex::new(SmaaTarget::new(
             &device,
             &queue,
             size.0,
@@ -90,7 +99,7 @@ impl Renderer {
             } else {
                 smaa::SmaaMode::Disabled
             },
-        );
+        )));
 
         Renderer {
             surface,
@@ -102,7 +111,13 @@ impl Renderer {
             clear_color,
             camera: Arc::new(None),
             camera_uniform: None,
-            pipeline_manager: None,
+            pipeline_manager: PipelineManager::init(),
+            mesh_manager: MeshManager::init(),
+            material_manager: if let Some(material_manager) = material_manager {
+                material_manager
+            } else {
+                Arc::new(Mutex::new(MaterialManager::init()))
+            },
             smaa_target,
         }
     }
@@ -116,8 +131,8 @@ impl Renderer {
         self.camera_uniform = Some(camera_uniform);
     }
 
-    pub fn set_pipeline_manager(&mut self, pipeline_manager: Arc<Mutex<PipelineManager>>) {
-        self.pipeline_manager = Some(pipeline_manager)
+    pub fn set_pipeline_manager(&mut self, pipeline_manager: PipelineManager) {
+        self.pipeline_manager = pipeline_manager;
     }
 
     pub fn update_buffers(&mut self) {
@@ -144,22 +159,74 @@ impl Renderer {
             self.depth_texture =
                 Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
             self.smaa_target
+                .clone()
+                .lock()
+                .unwrap()
                 .resize(&self.device, new_size.0, new_size.1);
         }
     }
 
-    pub fn create_pipelines(&mut self) {
-        if let Some(pipeline_manager) = &mut self.pipeline_manager {
-            let camera_clone = self.camera.clone();
-            let camera = match &*camera_clone {
-                Some(camera) => Some(camera.lock().unwrap()),
-                None => None,
+    /// Initializes things the pipeline needs, such as pipelines
+    pub fn prep_renderer(&mut self) {
+        let camera_clone = self.camera.clone();
+        let camera = match &*camera_clone {
+            Some(camera) => Some(camera.lock().unwrap()),
+            None => None,
+        };
+        self.pipeline_manager.create_pipelines(
+            &self.device,
+            self.config.format,
+            camera,
+            &self.material_manager.lock().unwrap(),
+        );
+    }
+
+    fn bind_pipeline_and_resources<'a: 'b, 'b: 'c, 'c>(
+        &'a self,
+        pipeline_type: PipelineType,
+        render_pass: &mut wgpu::RenderPass<'c>,
+        camera_bind_group: Option<&'b wgpu::BindGroup>,
+    ) {
+        let material_manager = &self.material_manager.lock().unwrap();
+        let pipeline = match pipeline_type {
+            PipelineType::Plain => &self.pipeline_manager.plain_pipeline,
+            PipelineType::DiffuseTexture => &self.pipeline_manager.diffuse_texture_pipeline,
+            PipelineType::NormalDiffuseTexture => {
+                &self.pipeline_manager.diffuse_normal_texture_pipeline
+            }
+        };
+        if let Some(pipeline) = pipeline {
+            render_pass.set_pipeline(&pipeline.pipeline);
+            let mesh_array = match pipeline_type {
+                PipelineType::Plain => &self.mesh_manager.plain_pipeline_models,
+                PipelineType::DiffuseTexture => &self.mesh_manager.diffuse_pipeline_models,
+                PipelineType::NormalDiffuseTexture => {
+                    &self.mesh_manager.diffuse_normal_pipeline_models
+                }
             };
-            pipeline_manager.lock().unwrap().create_pipelines(
-                &self.device,
-                self.config.format,
-                camera,
-            )
+            let material_array = match pipeline_type {
+                PipelineType::Plain => &material_manager.plain_materials,
+                PipelineType::DiffuseTexture => &material_manager.diffuse_texture_materials,
+                PipelineType::NormalDiffuseTexture => {
+                    &material_manager.diffuse_normal_texture_materials
+                }
+            };
+            for material in material_array {
+                let meshes_with_material: Vec<&Mesh> = mesh_array
+                    .iter()
+                    .filter(|mesh| mesh.material_index == material.material_index)
+                    .collect();
+                if let Some(camera_bind_group) = &camera_bind_group {
+                    render_pass.set_bind_group(1, &camera_bind_group, &[]);
+                }
+                for mesh in meshes_with_material {
+                    render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
+                    render_pass
+                        .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+                }
+            }
         }
     }
 
@@ -168,9 +235,9 @@ impl Renderer {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let smaa_frame = self
-            .smaa_target
-            .start_frame(&self.device, &self.queue, &view);
+        let binding = self.smaa_target.clone();
+        let mut smaa_clone = binding.lock().unwrap();
+        let smaa_frame = smaa_clone.start_frame(&self.device, &self.queue, &view);
 
         let mut encoder = self
             .device
@@ -190,13 +257,10 @@ impl Renderer {
             None
         };
 
-        if let Some(pipeline_manager) = self.pipeline_manager.as_ref() {
-            let pipeline_manager_clone = pipeline_manager.clone();
-            let pipeline_manager = pipeline_manager_clone.lock().unwrap();
+        {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    // view: &view,
                     view: &(*smaa_frame),
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -214,9 +278,20 @@ impl Renderer {
                 }),
             });
 
-            if let Some(no_texture_pipeline) = &pipeline_manager.no_texture_pipeline {
+            self.bind_pipeline_and_resources(
+                PipelineType::Plain,
+                &mut render_pass,
+                camera_bind_group,
+            );
+            self.bind_pipeline_and_resources(
+                PipelineType::DiffuseTexture,
+                &mut render_pass,
+                camera_bind_group,
+            );
+
+            /*             if let Some(no_texture_pipeline) = &self.pipeline_manager.plain_pipeline {
                 render_pass.set_pipeline(&no_texture_pipeline.pipeline);
-                for material in &pipeline_manager.materials.no_texture_materials {
+                for material in &self.material_manager.plain_materials {
                     render_pass.set_bind_group(0, &material.bind_group, &[]);
                     if let Some(camera_bind_group) = &camera_bind_group {
                         render_pass.set_bind_group(1, &camera_bind_group, &[]);
@@ -233,9 +308,10 @@ impl Renderer {
                 }
             }
 
-            if let Some(diffuse_texture_pipeline) = &pipeline_manager.diffuse_texture_pipeline {
+            if let Some(diffuse_texture_pipeline) = &self.pipeline_manager.diffuse_texture_pipeline
+            {
                 render_pass.set_pipeline(&diffuse_texture_pipeline.pipeline);
-                for material in &pipeline_manager.materials.diffuse_texture_materials {
+                for material in &self.material_manager.diffuse_texture_materials {
                     if let Some(camera_bind_group) = &camera_bind_group {
                         render_pass.set_bind_group(1, &camera_bind_group, &[]);
                     }
@@ -251,6 +327,7 @@ impl Renderer {
                     }
                 }
             }
+            } */
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

@@ -1,3 +1,101 @@
+use std::sync::{MutexGuard};
+
+use crate::{
+    camera::Camera,
+    model::{Mesh, Vertex, VertexData},
+    texture::Texture, materials::MaterialManager,
+};
+
+pub struct PipelineManager {
+    pub plain_pipeline: Option<Pipeline>,
+    pub diffuse_texture_pipeline: Option<Pipeline>,
+    pub diffuse_normal_texture_pipeline: Option<Pipeline>,
+}
+
+impl PipelineManager {
+    pub fn init() -> Self {
+        PipelineManager {
+            plain_pipeline: None,
+            diffuse_texture_pipeline: None,
+            diffuse_normal_texture_pipeline: None,
+        }
+    }
+
+    pub fn create_pipelines(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        camera: Option<MutexGuard<Camera>>,
+        material_manager: &MaterialManager,
+    ) {
+        if material_manager.plain_materials.len() > 0 {
+            if self.plain_pipeline.is_none() {
+                let mut layouts = vec![&material_manager.plain_materials[0].bind_group_layout];
+                if let Some(camera) = &camera {
+                    layouts.push(&camera.bind_group_layout);
+                }
+                let pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("NoTexturePipelineLayout"),
+                        bind_group_layouts: &layouts,
+                        push_constant_ranges: &[],
+                    });
+
+                let vertex_shader = wgpu::include_wgsl!("../examples/shaders/vert.wgsl");
+                let fragment_shader = wgpu::include_wgsl!("../examples/shaders/frag.wgsl");
+
+                self.plain_pipeline = Some(Pipeline::new(
+                    "Plain pipeline",
+                    device,
+                    &pipeline_layout,
+                    format,
+                    Some(Texture::DEPTH_FORMAT),
+                    &[Vertex::desc(), Mesh::desc()],
+                    vertex_shader,
+                    fragment_shader,
+                ));
+            }
+        }
+
+        if material_manager.diffuse_texture_materials.len() > 0 {
+            if self.diffuse_texture_pipeline.is_none() {
+                let mut layouts =
+                    vec![&material_manager.diffuse_texture_materials[0].bind_group_layout];
+                if let Some(camera) = &camera {
+                    layouts.push(&camera.bind_group_layout);
+                }
+                let pipeline_layout =
+                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("DiffuseTexturePipelineLayout"),
+                        bind_group_layouts: &layouts,
+                        push_constant_ranges: &[],
+                    });
+
+                let vertex_shader = wgpu::include_wgsl!("./default-shaders/texture_vert.wgsl");
+                let fragment_shader = wgpu::include_wgsl!("./default-shaders/texture_frag.wgsl");
+
+                self.diffuse_texture_pipeline = Some(Pipeline::new(
+                    "Diffuse pipeline",
+                    device,
+                    &pipeline_layout,
+                    format,
+                    Some(Texture::DEPTH_FORMAT),
+                    &[Vertex::desc(), Mesh::desc()],
+                    vertex_shader,
+                    fragment_shader,
+                ))
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum PipelineType {
+    Plain,
+    DiffuseTexture,
+    NormalDiffuseTexture,
+}
+
 pub struct Pipeline {
     pub pipeline: wgpu::RenderPipeline,
 }
