@@ -1,6 +1,45 @@
+use std::cell::{Ref, RefCell};
+
 use nalgebra as na;
 use sdl2::{keyboard::Scancode, mouse::RelativeMouseState};
 use wgpu::util::DeviceExt;
+
+pub struct CameraManager {
+    pub camera: RefCell<Camera>,
+    pub camera_uniform: RefCell<CameraUniform>,
+    pub buffer: Option<wgpu::Buffer>,
+    pub bind_group_layout: Option<wgpu::BindGroupLayout>,
+    pub bind_group: Option<wgpu::BindGroup>,
+}
+
+impl CameraManager {
+    pub fn new(
+        camera_position: na::Vector3<f32>,
+        pitch: f32,
+        yaw: f32,
+        fovy: f32,
+        sensitivity: f32,
+    ) -> Self {
+        let camera = RefCell::new(Camera::new(camera_position, pitch, yaw, fovy, sensitivity));
+        let camera_uniform = RefCell::new(CameraUniform::new(camera_position));
+
+        CameraManager {
+            camera,
+            camera_uniform,
+            buffer: None,
+            bind_group_layout: None,
+            bind_group: None,
+        }
+    }
+
+    pub fn build_camera_resources(&mut self, device: &wgpu::Device) {
+        let (buffer, bind_group_layout, bind_group) =
+            self.camera_uniform.borrow_mut().create_descriptor_and_buffer(device);
+        self.buffer = Some(buffer);
+        self.bind_group_layout = Some(bind_group_layout);
+        self.bind_group = Some(bind_group);
+    }
+}
 
 pub struct Camera {
     pub position: na::Vector3<f32>,
@@ -15,30 +54,29 @@ pub struct Camera {
     pub zfar: f32,
     pub distance: f32,
     pub sensitivity: f32,
-    pub buffer: wgpu::Buffer,
-    pub bind_group_layout: wgpu::BindGroupLayout,
-    pub bind_group: wgpu::BindGroup,
 }
 
 impl Camera {
-    pub fn new(position: na::Vector3<f32>, uniform: CameraUniform,device: &wgpu::Device) -> Self {
-        let (buffer, bind_group_layout, bind_group) = uniform.create_descriptor_and_buffer(device);
+    pub fn new(
+        position: na::Vector3<f32>,
+        pitch: f32,
+        yaw: f32,
+        fovy: f32,
+        sensitivity: f32,
+    ) -> Self {
         Camera {
             position,
             screen_right: na::Unit::new_normalize(na::Vector3::new(1.0, 0.0, 0.0)),
             view_matrix: na::Matrix4::identity(),
             rotation_matrix: na::Matrix4::identity(),
-            pitch: 0.0,
-            yaw: 0.0,
+            pitch,
+            yaw,
             aspect: 800.0 / 600.0,
-            fovy: 45.0,
+            fovy,
             znear: 0.1,
             zfar: 100.0,
             distance: 0.1,
-            sensitivity: 0.007,
-            buffer,
-            bind_group_layout,
-            bind_group,
+            sensitivity,
         }
     }
     fn build_view_projection_matrix(&self) -> na::Matrix4<f32> {
@@ -165,7 +203,7 @@ impl CameraUniform {
             view_proj: na::Matrix4::identity().into(),
         }
     }
-    pub fn update_view_proj(&mut self, camera: &Camera) {
+    pub fn update_view_proj(&mut self, camera: Ref<Camera>) {
         self.view_pos = camera.position.to_homogeneous().into();
         self.view_proj = camera.build_view_projection_matrix().into();
     }

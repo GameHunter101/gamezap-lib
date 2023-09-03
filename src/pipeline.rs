@@ -1,9 +1,10 @@
-use std::sync::{MutexGuard};
+use std::cell::Ref;
 
 use crate::{
-    camera::Camera,
+    camera::CameraManager,
+    materials::MaterialManager,
     model::{Mesh, Vertex, VertexData},
-    texture::Texture, materials::MaterialManager,
+    texture::Texture,
 };
 
 pub struct PipelineManager {
@@ -25,14 +26,14 @@ impl PipelineManager {
         &mut self,
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
-        camera: Option<MutexGuard<Camera>>,
-        material_manager: &MaterialManager,
+        material_manager: Ref<MaterialManager>,
+        camera_manager: Option<Ref<CameraManager>>,
     ) {
         if material_manager.plain_materials.len() > 0 {
             if self.plain_pipeline.is_none() {
                 let mut layouts = vec![&material_manager.plain_materials[0].bind_group_layout];
-                if let Some(camera) = &camera {
-                    layouts.push(&camera.bind_group_layout);
+                if let Some(camera_manager) = &camera_manager {
+                    layouts.push(&camera_manager.bind_group_layout.as_ref().unwrap());
                 }
                 let pipeline_layout =
                     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -61,8 +62,8 @@ impl PipelineManager {
             if self.diffuse_texture_pipeline.is_none() {
                 let mut layouts =
                     vec![&material_manager.diffuse_texture_materials[0].bind_group_layout];
-                if let Some(camera) = &camera {
-                    layouts.push(&camera.bind_group_layout);
+                if let Some(camera_manager) = &camera_manager {
+                    layouts.push(&camera_manager.bind_group_layout.as_ref().unwrap());
                 }
                 let pipeline_layout =
                     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -96,6 +97,7 @@ pub enum PipelineType {
     NormalDiffuseTexture,
 }
 
+#[derive(Debug)]
 pub struct Pipeline {
     pub pipeline: wgpu::RenderPipeline,
 }

@@ -1,14 +1,11 @@
-use std::{
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::{cell::RefCell, rc::Rc};
 
 use nalgebra as na;
 
 use gamezap::{
-    camera::{Camera, CameraUniform},
-    materials::{Material, MaterialManager},
+    camera::CameraManager,
     model::{Mesh, MeshTransform, Vertex},
+    module_manager::ModuleManager,
     texture::Texture,
     GameZap,
 };
@@ -36,7 +33,11 @@ fn main() {
             .unwrap(),
     );
 
-    let material_manager = Arc::new(Mutex::new(MaterialManager::init()));
+    let camera_position = na::Vector3::new(0.0, 0.0, 0.0);
+    let module_manager = ModuleManager::builder()
+        .camera_manager(camera_position, 0.0, 0.0, 45.0, 0.07)
+        .mesh_manager()
+        .build();
 
     let mut engine = GameZap::builder()
         .window_and_renderer(
@@ -51,35 +52,27 @@ fn main() {
                 a: 1.0,
             },
         )
-        .material_manager(material_manager.clone())
+        .module_manager(module_manager)
         .build();
 
-    let renderer = &mut engine.renderer;
+    let renderer = RefCell::new(engine.renderer);
 
-    let camera_position = na::Vector3::new(0.0, 0.0, 0.0);
-    let camera_uniform = CameraUniform::new(camera_position);
-    let camera = Arc::new(Some(Mutex::new(Camera::new(
-        camera_position,
-        camera_uniform,
-        &renderer.device,
-    ))));
+    let renderer_borrow = renderer.borrow();
+    let mut material_manager = renderer_borrow.module_manager.material_manager.borrow_mut();
 
-    renderer.set_camera(camera.clone(), camera_uniform);
+    let renderer_device = &renderer.borrow().device;
+    let renderer_queue = &renderer.borrow().queue;
 
-    let first_material = material_manager.lock().unwrap().new_material(
-        "First material",
-        &renderer.device,
-        None,
-        None,
-    );
-    let second_material = material_manager.lock().unwrap().new_material(
+    let first_material =
+        material_manager.new_material("First material", renderer_device, None, None);
+    let second_material = material_manager.new_material(
         "Second material",
-        &renderer.device,
+        renderer_device,
         Some(
             pollster::block_on(Texture::load_texture(
                 "texture.png",
-                &renderer.device,
-                &renderer.queue,
+                renderer_device,
+                renderer_queue,
                 false,
             ))
             .unwrap(),
@@ -87,20 +80,21 @@ fn main() {
         None,
     );
 
-    let third_material = material_manager.lock().unwrap().new_material(
+    let third_material = material_manager.new_material(
         "Second material",
-        &renderer.device,
+        renderer_device,
         Some(
             pollster::block_on(Texture::load_texture(
                 "dude.png",
-                &renderer.device,
-                &renderer.queue,
+                renderer_device,
+                renderer_queue,
                 false,
             ))
             .unwrap(),
         ),
         None,
     );
+    drop(material_manager);
 
     let first_model_vertices = vec![
         Vertex {
@@ -129,25 +123,21 @@ fn main() {
     let first_model_indices: [u16; 3] = [0, 1, 2];
 
     let first_model_vert_buffer =
-        renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Test model vertex buffer"),
-                contents: &bytemuck::cast_slice(&first_model_vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+        renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Test model vertex buffer"),
+            contents: &bytemuck::cast_slice(&first_model_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
     let first_model_index_buffer =
-        renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Test model index buffer"),
-                contents: &bytemuck::cast_slice(&first_model_indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Test model index buffer"),
+            contents: &bytemuck::cast_slice(&first_model_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
 
     let mesh = Mesh::new(
-        &renderer.device,
+        renderer_device,
         "First model".to_string(),
         first_model_vert_buffer,
         first_model_index_buffer,
@@ -156,7 +146,7 @@ fn main() {
             na::Vector3::new(1.0, 0.0, 0.0),
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
-        first_material.material_index,
+        first_material.1,
     );
 
     let second_model_vertices = vec![
@@ -193,25 +183,21 @@ fn main() {
     let second_model_indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
 
     let second_vert_buffer =
-        renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Second model vertex buffer"),
-                contents: &bytemuck::cast_slice(&second_model_vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+        renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Second model vertex buffer"),
+            contents: &bytemuck::cast_slice(&second_model_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
     let second_index_buffer =
-        renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Second model index buffer"),
-                contents: &bytemuck::cast_slice(&second_model_indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Second model index buffer"),
+            contents: &bytemuck::cast_slice(&second_model_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
 
     let second_mesh = Mesh::new(
-        &renderer.device,
+        renderer_device,
         "Second model".to_string(),
         second_vert_buffer,
         second_index_buffer,
@@ -220,7 +206,7 @@ fn main() {
             na::Vector3::new(-1.0, 0.0, 0.0),
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
-        second_material.material_index,
+        second_material.1,
     );
 
     let third_model_vertices = vec![
@@ -256,25 +242,21 @@ fn main() {
 
     let third_model_indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
 
-    let third_vert_buffer = renderer
-        .device
-        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Second model vertex buffer"),
-            contents: &bytemuck::cast_slice(&third_model_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+    let third_vert_buffer = renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Second model vertex buffer"),
+        contents: &bytemuck::cast_slice(&third_model_vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
 
     let third_index_buffer =
-        renderer
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Second model index buffer"),
-                contents: &bytemuck::cast_slice(&third_model_indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Second model index buffer"),
+            contents: &bytemuck::cast_slice(&third_model_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
 
     let third_mesh = Mesh::new(
-        &renderer.device,
+        renderer_device,
         "Second model".to_string(),
         third_vert_buffer,
         third_index_buffer,
@@ -283,10 +265,23 @@ fn main() {
             na::Vector3::new(-3.0, 0.0, 0.0),
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
-        third_material.material_index,
+        third_material.1,
     );
 
-    renderer.prep_renderer();
+    {
+        let mut mesh_manager = renderer_borrow
+            .module_manager
+            .mesh_manager
+            .as_ref()
+            .unwrap()
+            .borrow_mut();
+
+        mesh_manager.plain_pipeline_models.push(mesh);
+        mesh_manager.diffuse_pipeline_models.push(second_mesh);
+        mesh_manager.diffuse_pipeline_models.push(third_mesh);
+    }
+
+    renderer.borrow().prep_renderer();
 
     'running: loop {
         for event in engine.event_pump.poll_iter() {
@@ -295,7 +290,7 @@ fn main() {
                 Event::Window {
                     win_event: WindowEvent::Resized(width, height),
                     ..
-                } => renderer.resize((width as u32, height as u32)),
+                } => renderer.borrow_mut().resize((width as u32, height as u32)),
                 _ => {}
             }
         }
@@ -305,20 +300,25 @@ fn main() {
             .pressed_scancodes()
             .collect::<Vec<_>>();
         let mouse_state = engine.event_pump.relative_mouse_state();
-        input(camera.clone(), &scancodes, &mouse_state);
-        renderer.update_buffers();
-        renderer.render().unwrap();
+        input(
+            renderer.borrow().module_manager.camera_manager.as_ref(),
+            &scancodes,
+            &mouse_state,
+        );
+        renderer.borrow().update_buffers();
+        renderer.borrow().render().unwrap();
         ::std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
 
 fn input(
-    camera: Arc<Option<Mutex<Camera>>>,
+    camera_manager: Option<&RefCell<CameraManager>>,
     scancodes: &Vec<Scancode>,
     mouse_state: &RelativeMouseState,
 ) {
-    if let Some(camera) = &*camera.clone() {
-        let mut camera = camera.lock().unwrap();
+    if let Some(camera_manager) = camera_manager {
+        let camera_manager = camera_manager.borrow();
+        let mut camera = camera_manager.camera.borrow_mut();
         camera.transform_camera(scancodes, mouse_state, true);
     }
 }

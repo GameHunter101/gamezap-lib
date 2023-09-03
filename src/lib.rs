@@ -1,6 +1,6 @@
-use std::{rc::Rc, sync::{Mutex, Arc}};
+use std::rc::Rc;
 
-use materials::MaterialManager;
+use module_manager::ModuleManager;
 use sdl2::video::Window;
 use time::{Duration, Instant};
 
@@ -10,6 +10,7 @@ pub mod camera;
 pub mod light;
 pub mod materials;
 pub mod model;
+pub mod module_manager;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
@@ -54,7 +55,7 @@ pub struct GameZap {
     pub last_frame_time: time::Duration,
 }
 
-impl GameZap {
+impl<'a> GameZap {
     /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
     pub fn builder() -> GameZapBuilder {
         GameZapBuilder::init()
@@ -74,7 +75,7 @@ pub struct GameZapBuilder {
     time_elapsed: time::Duration,
     last_frame_time: time::Duration,
 
-    material_manager: Option<Arc<Mutex<MaterialManager>>>,
+    module_manager: ModuleManager,
 }
 
 impl<'a> GameZapBuilder {
@@ -95,7 +96,8 @@ impl<'a> GameZapBuilder {
             initialized_instant: Instant::now(),
             time_elapsed: Duration::ZERO,
             last_frame_time: Duration::ZERO,
-            material_manager: None,
+
+            module_manager: ModuleManager::minimal(),
         }
     }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
@@ -117,11 +119,8 @@ impl<'a> GameZapBuilder {
         self
     }
 
-    pub fn material_manager(
-        mut self,
-        material_manager: Arc<Mutex<MaterialManager>>,
-    ) -> GameZapBuilder {
-        self.material_manager = Some(material_manager);
+    pub fn module_manager(mut self, module_manager: ModuleManager) -> GameZapBuilder {
+        self.module_manager = module_manager;
         self
     }
 
@@ -152,7 +151,7 @@ impl<'a> GameZapBuilder {
             window.clone(),
             self.clear_color,
             true,
-            self.material_manager,
+            self.module_manager,
         ));
 
         GameZap {

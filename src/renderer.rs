@@ -1,4 +1,5 @@
 use std::{
+    cell::Ref,
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -7,10 +8,11 @@ use sdl2::video::Window;
 use smaa::SmaaTarget;
 
 use crate::{
-    camera::{Camera, CameraUniform},
+    camera::CameraManager,
     materials::MaterialManager,
     model::{Mesh, MeshManager},
-    pipeline::{Pipeline, PipelineManager, PipelineType},
+    module_manager::ModuleManager,
+    pipeline::{PipelineManager, PipelineType},
     texture::Texture,
 };
 
@@ -22,12 +24,8 @@ pub struct Renderer {
     pub size: (u32, u32),
     pub depth_texture: Texture,
     pub clear_color: wgpu::Color,
-    pub camera: Arc<Option<Mutex<Camera>>>,
-    pub camera_uniform: Option<CameraUniform>,
-    pub pipeline_manager: PipelineManager,
-    pub mesh_manager: MeshManager,
-    pub material_manager: Arc<Mutex<MaterialManager>>,
     pub smaa_target: Arc<Mutex<SmaaTarget>>,
+    pub module_manager: ModuleManager,
 }
 
 impl Renderer {
@@ -35,7 +33,7 @@ impl Renderer {
         window: Rc<Window>,
         clear_color: wgpu::Color,
         antialiasing: bool,
-        material_manager: Option<Arc<Mutex<MaterialManager>>>,
+        module_manager: ModuleManager,
     ) -> Renderer {
         let size = window.size();
 
@@ -101,6 +99,8 @@ impl Renderer {
             },
         )));
 
+        module_manager.try_build_camera_resources(&device);
+
         Renderer {
             surface,
             device,
@@ -109,44 +109,23 @@ impl Renderer {
             size,
             depth_texture,
             clear_color,
-            camera: Arc::new(None),
-            camera_uniform: None,
-            pipeline_manager: PipelineManager::init(),
-            mesh_manager: MeshManager::init(),
-            material_manager: if let Some(material_manager) = material_manager {
-                material_manager
-            } else {
-                Arc::new(Mutex::new(MaterialManager::init()))
-            },
             smaa_target,
+            module_manager,
         }
     }
 
-    pub fn set_camera(
-        &mut self,
-        camera: Arc<Option<Mutex<Camera>>>,
-        camera_uniform: CameraUniform,
-    ) {
-        self.camera = camera;
-        self.camera_uniform = Some(camera_uniform);
-    }
-
-    pub fn set_pipeline_manager(&mut self, pipeline_manager: PipelineManager) {
-        self.pipeline_manager = pipeline_manager;
-    }
-
-    pub fn update_buffers(&mut self) {
-        if let Some(camera_uniform) = &mut self.camera_uniform {
-            let camera_clone = self.camera.as_ref().clone();
-            if let Some(camera) = camera_clone {
-                let camera = camera.lock().unwrap();
-                camera_uniform.update_view_proj(&camera);
-                self.queue.write_buffer(
-                    &camera.buffer,
-                    0,
-                    bytemuck::cast_slice(&[*camera_uniform]),
-                );
-            }
+    pub fn update_buffers(&self) {
+        if let Some(camera_manager) = &self.module_manager.camera_manager {
+            let camera_manager = camera_manager.borrow();
+            camera_manager
+                .camera_uniform
+                .borrow_mut()
+                .update_view_proj(camera_manager.camera.borrow());
+            self.queue.write_buffer(
+                &camera_manager.buffer.as_ref().unwrap(),
+                0,
+                bytemuck::cast_slice(&[camera_manager.camera_uniform.borrow().to_owned()]),
+            );
         }
     }
 
@@ -167,70 +146,80 @@ impl Renderer {
     }
 
     /// Initializes things the pipeline needs, such as pipelines
-    pub fn prep_renderer(&mut self) {
-        let camera_clone = self.camera.clone();
-        let camera = match &*camera_clone {
-            Some(camera) => Some(camera.lock().unwrap()),
-            None => None,
+    pub fn prep_renderer(&self) {
+        let camera_manager = if let Some(camera_manager) = &self.module_manager.camera_manager {
+            Some(camera_manager.borrow())
+        } else {
+            None
         };
-        self.pipeline_manager.create_pipelines(
-            &self.device,
-            self.config.format,
-            camera,
-            &self.material_manager.lock().unwrap(),
-        );
+
+        self.module_manager
+            .pipeline_manager
+            .borrow_mut()
+            .create_pipelines(
+                &self.device,
+                self.config.format,
+                self.module_manager.material_manager.borrow(),
+                camera_manager,
+            );
     }
 
     fn bind_pipeline_and_resources<'a: 'b, 'b: 'c, 'c>(
         &'a self,
         pipeline_type: PipelineType,
         render_pass: &mut wgpu::RenderPass<'c>,
-        camera_bind_group: Option<&'b wgpu::BindGroup>,
+        pipeline_manager: &'b Ref<PipelineManager>,
+        material_manager: &'b Ref<MaterialManager>,
+        mesh_manager: &'b Option<Ref<MeshManager>>,
+        camera_manager: &'b Option<Ref<CameraManager>>,
     ) {
-        let material_manager = &self.material_manager.lock().unwrap();
+        // let pipeline_manager = self.module_manager.pipeline_manager.borrow();
         let pipeline = match pipeline_type {
-            PipelineType::Plain => &self.pipeline_manager.plain_pipeline,
-            PipelineType::DiffuseTexture => &self.pipeline_manager.diffuse_texture_pipeline,
-            PipelineType::NormalDiffuseTexture => {
-                &self.pipeline_manager.diffuse_normal_texture_pipeline
-            }
+            PipelineType::Plain => &pipeline_manager.plain_pipeline,
+            PipelineType::DiffuseTexture => &pipeline_manager.diffuse_texture_pipeline,
+            PipelineType::NormalDiffuseTexture => &pipeline_manager.diffuse_normal_texture_pipeline,
         };
         if let Some(pipeline) = pipeline {
             render_pass.set_pipeline(&pipeline.pipeline);
-            let mesh_array = match pipeline_type {
-                PipelineType::Plain => &self.mesh_manager.plain_pipeline_models,
-                PipelineType::DiffuseTexture => &self.mesh_manager.diffuse_pipeline_models,
-                PipelineType::NormalDiffuseTexture => {
-                    &self.mesh_manager.diffuse_normal_pipeline_models
-                }
-            };
-            let material_array = match pipeline_type {
-                PipelineType::Plain => &material_manager.plain_materials,
-                PipelineType::DiffuseTexture => &material_manager.diffuse_texture_materials,
-                PipelineType::NormalDiffuseTexture => {
-                    &material_manager.diffuse_normal_texture_materials
-                }
-            };
-            for material in material_array {
-                let meshes_with_material: Vec<&Mesh> = mesh_array
-                    .iter()
-                    .filter(|mesh| mesh.material_index == material.material_index)
-                    .collect();
-                if let Some(camera_bind_group) = &camera_bind_group {
-                    render_pass.set_bind_group(1, &camera_bind_group, &[]);
-                }
-                for mesh in meshes_with_material {
-                    render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                    render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
-                    render_pass
-                        .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                    render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+            if let Some(mesh_manager) = mesh_manager {
+                // let material_manager = self.module_manager.material_manager.borrow();
+
+                let mesh_array = match pipeline_type {
+                    PipelineType::Plain => &mesh_manager.plain_pipeline_models,
+                    PipelineType::DiffuseTexture => &mesh_manager.diffuse_pipeline_models,
+                    PipelineType::NormalDiffuseTexture => {
+                        &mesh_manager.diffuse_normal_pipeline_models
+                    }
+                };
+
+                let material_array = material_manager.get_pipeline_materials(pipeline_type);
+                for material in material_array {
+                    let meshes_with_material: Vec<&Mesh> = mesh_array
+                        .iter()
+                        .filter(|mesh| mesh.material_index == material.material_index)
+                        .collect();
+
+                    render_pass.set_bind_group(0, &material.bind_group, &[]);
+                    if let Some(camera_manager) = camera_manager {
+                        let camera_bind_group = camera_manager.bind_group.as_ref().unwrap();
+                        render_pass.set_bind_group(1, &camera_bind_group, &[]);
+                    }
+
+                    for mesh in meshes_with_material {
+                        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                        render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
+                        render_pass.set_index_buffer(
+                            mesh.index_buffer.slice(..),
+                            wgpu::IndexFormat::Uint16,
+                        );
+                        render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+                    }
                 }
             }
         }
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -245,14 +234,15 @@ impl Renderer {
                 label: Some("Render encoder"),
             });
 
-        let camera_clone = &*self.camera.clone();
-        let camera = if let Some(camera) = camera_clone {
-            Some(camera.lock().unwrap())
+        let pipeline_manager = self.module_manager.pipeline_manager.borrow();
+        let material_manager = self.module_manager.material_manager.borrow();
+        let mesh_manager = if let Some(mesh_manager) = &self.module_manager.mesh_manager {
+            Some(mesh_manager.borrow())
         } else {
             None
         };
-        let camera_bind_group = if let Some(camera) = &camera {
-            Some(&camera.bind_group)
+        let camera_manager = if let Some(camera_manager) = &self.module_manager.camera_manager {
+            Some(camera_manager.borrow())
         } else {
             None
         };
@@ -281,12 +271,18 @@ impl Renderer {
             self.bind_pipeline_and_resources(
                 PipelineType::Plain,
                 &mut render_pass,
-                camera_bind_group,
+                &pipeline_manager,
+                &material_manager,
+                &mesh_manager,
+                &camera_manager,
             );
             self.bind_pipeline_and_resources(
                 PipelineType::DiffuseTexture,
                 &mut render_pass,
-                camera_bind_group,
+                &pipeline_manager,
+                &material_manager,
+                &mesh_manager,
+                &camera_manager,
             );
 
             /*             if let Some(no_texture_pipeline) = &self.pipeline_manager.plain_pipeline {

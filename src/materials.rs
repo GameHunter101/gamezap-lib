@@ -1,4 +1,4 @@
-use crate::{model::Mesh, texture::Texture, pipeline::PipelineType};
+use crate::{model::Mesh, pipeline::PipelineType, texture::Texture};
 
 #[derive(Debug)]
 pub struct MaterialManager {
@@ -22,7 +22,7 @@ impl MaterialManager {
         device: &wgpu::Device,
         diffuse_texture: Option<Texture>,
         normal_texture: Option<Texture>,
-    ) -> Material {
+    ) -> (String, u32) {
         let mut material_index = self.plain_materials.len() as u32;
         if diffuse_texture.is_some() {
             material_index = self.diffuse_texture_materials.len() as u32;
@@ -37,21 +37,28 @@ impl MaterialManager {
             normal_texture,
             material_index,
         );
-        material
+        self.add_material(material);
+        (name.to_string(),material_index)
     }
 
-    pub fn add_materials(&mut self, materials: Vec<Material>) {
-        for material in materials {
-            if material.diffuse_texture.is_some() {
-                if material.normal_texture.is_some() {
-                    self.diffuse_normal_texture_materials.push(material);
-                    continue;
-                }
-                self.diffuse_texture_materials.push(material);
-                continue;
+    pub fn add_material(&mut self, material: Material) {
+        if material.diffuse_texture.is_some() {
+            if material.normal_texture.is_some() {
+                self.diffuse_normal_texture_materials.push(material);
+                return;
             }
-            self.plain_materials.push(material);
-            continue;
+            self.diffuse_texture_materials.push(material);
+            return;
+        }
+        self.plain_materials.push(material);
+        return;
+    }
+
+    pub fn get_pipeline_materials<'a>(&'a self, pipeline_type:PipelineType) -> &'a Vec<Material> {
+        match pipeline_type {
+            PipelineType::Plain => &self.plain_materials,
+            PipelineType::DiffuseTexture => &self.diffuse_texture_materials,
+            PipelineType::NormalDiffuseTexture => &self.diffuse_normal_texture_materials,
         }
     }
 }
