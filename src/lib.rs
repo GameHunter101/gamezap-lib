@@ -76,6 +76,7 @@ pub struct GameZapBuilder {
     last_frame_time: time::Duration,
 
     module_manager: ModuleManager,
+    antialiasing: bool,
 }
 
 impl<'a> GameZapBuilder {
@@ -98,6 +99,7 @@ impl<'a> GameZapBuilder {
             last_frame_time: Duration::ZERO,
 
             module_manager: ModuleManager::minimal(),
+            antialiasing: false,
         }
     }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
@@ -121,6 +123,11 @@ impl<'a> GameZapBuilder {
 
     pub fn module_manager(mut self, module_manager: ModuleManager) -> GameZapBuilder {
         self.module_manager = module_manager;
+        self
+    }
+
+    pub fn antialiasing(mut self) -> GameZapBuilder {
+        self.antialiasing = true;
         self
     }
 
@@ -150,7 +157,7 @@ impl<'a> GameZapBuilder {
         let renderer = pollster::block_on(Renderer::new(
             window.clone(),
             self.clear_color,
-            true,
+            self.antialiasing,
             self.module_manager,
         ));
 

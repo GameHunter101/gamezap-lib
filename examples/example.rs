@@ -35,7 +35,7 @@ fn main() {
 
     let camera_position = na::Vector3::new(0.0, 0.0, 0.0);
     let module_manager = ModuleManager::builder()
-        .camera_manager(camera_position, 0.0, 0.0, 45.0, 0.07)
+        .camera_manager(camera_position, 0.0, 0.0, 45.0, 0.005)
         .mesh_manager()
         .build();
 
