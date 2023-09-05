@@ -210,7 +210,7 @@ impl Renderer {
                         render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
                         render_pass.set_index_buffer(
                             mesh.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint16,
+                            wgpu::IndexFormat::Uint32,
                         );
                         render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
                     }
@@ -284,46 +284,6 @@ impl Renderer {
                 &mesh_manager,
                 &camera_manager,
             );
-
-            /*             if let Some(no_texture_pipeline) = &self.pipeline_manager.plain_pipeline {
-                render_pass.set_pipeline(&no_texture_pipeline.pipeline);
-                for material in &self.material_manager.plain_materials {
-                    render_pass.set_bind_group(0, &material.bind_group, &[]);
-                    if let Some(camera_bind_group) = &camera_bind_group {
-                        render_pass.set_bind_group(1, &camera_bind_group, &[]);
-                    }
-                    for mesh in &material.meshes {
-                        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                        render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
-                        render_pass.set_index_buffer(
-                            mesh.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint16,
-                        );
-                        render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
-                    }
-                }
-            }
-
-            if let Some(diffuse_texture_pipeline) = &self.pipeline_manager.diffuse_texture_pipeline
-            {
-                render_pass.set_pipeline(&diffuse_texture_pipeline.pipeline);
-                for material in &self.material_manager.diffuse_texture_materials {
-                    if let Some(camera_bind_group) = &camera_bind_group {
-                        render_pass.set_bind_group(1, &camera_bind_group, &[]);
-                    }
-                    for mesh in &material.meshes {
-                        render_pass.set_bind_group(0, &material.bind_group, &[]);
-                        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                        render_pass.set_vertex_buffer(1, mesh.transform_buffer.slice(..));
-                        render_pass.set_index_buffer(
-                            mesh.index_buffer.slice(..),
-                            wgpu::IndexFormat::Uint16,
-                        );
-                        render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
-                    }
-                }
-            }
-            } */
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
