@@ -61,8 +61,8 @@ fn main() {
     let renderer_borrow = renderer.borrow();
     let mut material_manager = renderer_borrow.module_manager.material_manager.borrow_mut();
 
-    let renderer_device = &renderer.borrow().device;
-    let renderer_queue = &renderer.borrow().queue;
+    let renderer_device = &renderer_borrow.device;
+    let renderer_queue = &renderer_borrow.queue;
 
     let first_material =
         material_manager.new_material("First material", renderer_device, None, None);
@@ -284,14 +284,18 @@ fn main() {
 
     renderer.borrow().prep_renderer();
 
+    drop(renderer_queue);
+    drop(renderer_device);
+    drop(renderer_borrow);
     'running: loop {
+        let mut renderer_borrow = renderer.borrow_mut();
         for event in engine.event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'running,
                 Event::Window {
                     win_event: WindowEvent::Resized(width, height),
                     ..
-                } => renderer.borrow_mut().resize((width as u32, height as u32)),
+                } => renderer_borrow.resize((width as u32, height as u32)),
                 _ => {}
             }
         }
@@ -302,12 +306,12 @@ fn main() {
             .collect::<Vec<_>>();
         let mouse_state = engine.event_pump.relative_mouse_state();
         input(
-            renderer.borrow().module_manager.camera_manager.as_ref(),
+            renderer_borrow.module_manager.camera_manager.as_ref(),
             &scancodes,
             &mouse_state,
         );
-        renderer.borrow().update_buffers();
-        renderer.borrow().render().unwrap();
+        renderer_borrow.update_buffers();
+        renderer_borrow.render().unwrap();
         ::std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
