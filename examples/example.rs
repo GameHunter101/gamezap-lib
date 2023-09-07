@@ -33,7 +33,7 @@ fn main() {
             .unwrap(),
     );
 
-    let camera_position = na::Vector3::new(0.0, 0.0, 0.0);
+    let camera_position = na::Vector3::new(-2.0, 2.0, -5.0);
     let module_manager = ModuleManager::builder()
         .camera_manager(camera_position, 0.0, 0.0, 45.0, 0.005)
         .mesh_manager()
@@ -53,6 +53,7 @@ fn main() {
             },
         )
         .module_manager(module_manager)
+        .antialiasing()
         .build();
 
     let renderer = RefCell::new(engine.renderer);
@@ -85,7 +86,7 @@ fn main() {
         renderer_device,
         Some(
             pollster::block_on(Texture::load_texture(
-                "dude.png",
+                "atlas.png",
                 renderer_device,
                 renderer_queue,
                 false,
@@ -120,7 +121,7 @@ fn main() {
         },
     ];
 
-    let first_model_indices: [u16; 3] = [0, 1, 2];
+    let first_model_indices: [u32; 3] = [0, 1, 2];
 
     let first_model_vert_buffer =
         renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -180,7 +181,7 @@ fn main() {
         },
     ];
 
-    let second_model_indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
+    let second_model_indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
 
     let second_vert_buffer =
         renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -240,7 +241,7 @@ fn main() {
         },
     ];
 
-    let third_model_indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
+    let third_model_indices: [u32; 6] = [0, 1, 2, 0, 2, 3];
 
     let third_vert_buffer = renderer_device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Second model vertex buffer"),

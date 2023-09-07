@@ -4,6 +4,13 @@ use nalgebra as na;
 use sdl2::{keyboard::Scancode, mouse::RelativeMouseState};
 use wgpu::util::DeviceExt;
 
+#[rustfmt::skip]
+const TRANSFORM_VECTOR: na::Vector3<f32> = na::Vector3::new(
+    -1.0,
+    -1.0,
+    1.0
+);
+
 pub struct CameraManager {
     pub camera: RefCell<Camera>,
     pub camera_uniform: RefCell<CameraUniform>,
@@ -20,7 +27,13 @@ impl CameraManager {
         fovy: f32,
         sensitivity: f32,
     ) -> Self {
-        let camera = RefCell::new(Camera::new(camera_position, pitch, yaw, fovy, sensitivity));
+        let camera = RefCell::new(Camera::new(
+            camera_position.component_mul(&TRANSFORM_VECTOR),
+            pitch,
+            yaw,
+            fovy,
+            sensitivity,
+        ));
         let camera_uniform = RefCell::new(CameraUniform::new(camera_position));
 
         CameraManager {
@@ -33,8 +46,10 @@ impl CameraManager {
     }
 
     pub fn build_camera_resources(&mut self, device: &wgpu::Device) {
-        let (buffer, bind_group_layout, bind_group) =
-            self.camera_uniform.borrow_mut().create_descriptor_and_buffer(device);
+        let (buffer, bind_group_layout, bind_group) = self
+            .camera_uniform
+            .borrow_mut()
+            .create_descriptor_and_buffer(device);
         self.buffer = Some(buffer);
         self.bind_group_layout = Some(bind_group_layout);
         self.bind_group = Some(bind_group);
@@ -43,8 +58,7 @@ impl CameraManager {
 
 pub struct Camera {
     pub position: na::Vector3<f32>,
-    pub screen_right: na::Unit<na::Vector3<f32>>,
-    pub view_matrix: na::Matrix4<f32>,
+    pub affine_matrix: na::Matrix4<f32>,
     pub rotation_matrix: na::Matrix4<f32>,
     pub yaw: f32,
     pub pitch: f32,
@@ -66,8 +80,7 @@ impl Camera {
     ) -> Self {
         Camera {
             position,
-            screen_right: na::Unit::new_normalize(na::Vector3::new(1.0, 0.0, 0.0)),
-            view_matrix: na::Matrix4::identity(),
+            affine_matrix: na::Matrix4::identity(),
             rotation_matrix: na::Matrix4::identity(),
             pitch,
             yaw,
@@ -79,18 +92,19 @@ impl Camera {
             sensitivity,
         }
     }
+
     fn build_view_projection_matrix(&self) -> na::Matrix4<f32> {
         let perspective = na::Perspective3::new(self.aspect, self.fovy, self.znear, self.zfar);
         let perspective_matrix = perspective.as_matrix();
 
-        return perspective_matrix * self.view_matrix;
+        return perspective_matrix * self.affine_matrix;
     }
 
-    fn update_affine_matrix(&mut self) {
+    pub fn update_affine_matrix(&mut self) {
         let transform_matrix = na::Matrix4::from(na::Translation3::from(self.position));
 
         let affine_matrix = self.rotation_matrix * transform_matrix;
-        self.view_matrix = affine_matrix;
+        self.affine_matrix = affine_matrix;
     }
 
     fn update_rotation_matrix(&mut self) {
@@ -117,10 +131,10 @@ impl Camera {
             self.move_backward(self.distance);
         }
         if scancodes.contains(&Scancode::D) {
-            self.move_left(self.distance);
+            self.move_right(self.distance);
         }
         if scancodes.contains(&Scancode::A) {
-            self.move_right(self.distance);
+            self.move_left(self.distance);
         }
         if scancodes.contains(&Scancode::Space) {
             self.move_up(self.distance);
@@ -153,7 +167,8 @@ impl Camera {
         self.position += (distance
             * self.rotation_matrix.try_inverse().unwrap()
             * na::Vector3::new(1.0, 0.0, 0.0).to_homogeneous())
-        .xyz();
+        .xyz()
+        .component_mul(&TRANSFORM_VECTOR);
     }
 
     fn move_left(&mut self, distance: f32) {
@@ -173,20 +188,10 @@ impl Camera {
 
     fn rotate_pitch(&mut self, rotation: f32, sensitivity: f32) {
         self.pitch += rotation * sensitivity;
-
-        // self.screen_down = na::Unit::new_normalize(
-        //     na::UnitQuaternion::from_axis_angle(&self.screen_right, self.pitch)
-        //         .transform_vector(&self.screen_down),
-        // );
     }
 
     fn rotate_yaw(&mut self, rotation: f32, sensitivity: f32) {
         self.yaw += rotation * sensitivity;
-
-        // self.screen_right = na::Unit::new_normalize(
-        //     na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), self.yaw)
-        //         .transform_vector(&self.screen_right),
-        // );
     }
 }
 
