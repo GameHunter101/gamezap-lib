@@ -164,11 +164,10 @@ impl Camera {
     }
 
     fn move_right(&mut self, distance: f32) {
-        self.position += (distance
+        self.position += (-distance
             * self.rotation_matrix.try_inverse().unwrap()
             * na::Vector3::new(1.0, 0.0, 0.0).to_homogeneous())
-        .xyz()
-        .component_mul(&TRANSFORM_VECTOR);
+        .xyz();
     }
 
     fn move_left(&mut self, distance: f32) {
@@ -176,14 +175,11 @@ impl Camera {
     }
 
     fn move_up(&mut self, distance: f32) {
-        self.move_down(-distance);
+        self.position.y -= distance;
     }
 
     fn move_down(&mut self, distance: f32) {
-        self.position += (distance
-            * self.rotation_matrix.try_inverse().unwrap()
-            * na::Vector3::new(0.0, 1.0, 0.0).to_homogeneous())
-        .xyz();
+        self.move_up(-distance);
     }
 
     fn rotate_pitch(&mut self, rotation: f32, sensitivity: f32) {
