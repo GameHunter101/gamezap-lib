@@ -137,6 +137,10 @@ impl Renderer {
             self.surface.configure(&self.device, &self.config);
             self.depth_texture =
                 Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            if let Some(camera_manager) = &self.module_manager.camera_manager {
+                camera_manager.borrow().camera.borrow_mut().aspect =
+                    new_size.0 as f32 / new_size.1 as f32;
+            }
             self.smaa_target
                 .clone()
                 .lock()

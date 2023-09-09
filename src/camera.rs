@@ -22,17 +22,27 @@ pub struct CameraManager {
 impl CameraManager {
     pub fn new(
         camera_position: na::Vector3<f32>,
+        sensitivity: f32,
+        movement_speed: f32,
         pitch: f32,
         yaw: f32,
         fovy: f32,
-        sensitivity: f32,
+        near_plane: f32,
+        far_plane: f32,
+        window_w: f32,
+        window_h: f32,
     ) -> Self {
         let camera = RefCell::new(Camera::new(
             camera_position.component_mul(&TRANSFORM_VECTOR),
+            sensitivity,
+            movement_speed,
             pitch,
             yaw,
             fovy,
-            sensitivity,
+            near_plane,
+            far_plane,
+            window_w,
+            window_h,
         ));
         let camera_uniform = RefCell::new(CameraUniform::new(camera_position));
 
@@ -73,10 +83,15 @@ pub struct Camera {
 impl Camera {
     pub fn new(
         position: na::Vector3<f32>,
+        sensitivity: f32,
+        movement_speed: f32,
         pitch: f32,
         yaw: f32,
         fovy: f32,
-        sensitivity: f32,
+        znear: f32,
+        zfar: f32,
+        window_w: f32,
+        window_h: f32,
     ) -> Self {
         Camera {
             position,
@@ -84,11 +99,11 @@ impl Camera {
             rotation_matrix: na::Matrix4::identity(),
             pitch,
             yaw,
-            aspect: 800.0 / 600.0,
+            aspect: window_w / window_h,
             fovy,
-            znear: 0.1,
-            zfar: 100.0,
-            distance: 0.1,
+            znear,
+            zfar,
+            distance: movement_speed,
             sensitivity,
         }
     }
@@ -123,29 +138,32 @@ impl Camera {
         scancodes: &Vec<Scancode>,
         mouse_state: &RelativeMouseState,
         relative_mouse: bool,
+        delta_time: f32,
     ) {
+        let distance = self.distance * delta_time;
+        let sensitivity = self.sensitivity * delta_time;
         if scancodes.contains(&Scancode::W) {
-            self.move_forward(self.distance);
+            self.move_forward(distance);
         }
         if scancodes.contains(&Scancode::S) {
-            self.move_backward(self.distance);
+            self.move_backward(distance);
         }
         if scancodes.contains(&Scancode::D) {
-            self.move_right(self.distance);
+            self.move_right(distance);
         }
         if scancodes.contains(&Scancode::A) {
-            self.move_left(self.distance);
+            self.move_left(distance);
         }
         if scancodes.contains(&Scancode::Space) {
-            self.move_up(self.distance);
+            self.move_up(distance);
         }
         if scancodes.contains(&Scancode::LCtrl) {
-            self.move_down(self.distance);
+            self.move_down(distance);
         }
 
         if relative_mouse {
-            self.rotate_yaw(mouse_state.x() as f32, self.sensitivity);
-            self.rotate_pitch(mouse_state.y() as f32, self.sensitivity);
+            self.rotate_yaw(mouse_state.x() as f32, sensitivity);
+            self.rotate_pitch(mouse_state.y() as f32, sensitivity);
             self.update_rotation_matrix();
         }
 

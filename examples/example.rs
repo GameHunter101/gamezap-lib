@@ -1,18 +1,16 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
 
 use nalgebra as na;
 
 use gamezap::{
-    camera::CameraManager,
     model::{Mesh, MeshTransform, Vertex},
     module_manager::ModuleManager,
+    renderer::Renderer,
     texture::Texture,
-    GameZap,
-};
-use sdl2::{
-    event::{Event, WindowEvent},
-    keyboard::Scancode,
-    mouse::RelativeMouseState,
+    EngineDetails, GameZap,
 };
 use wgpu::util::DeviceExt;
 
@@ -35,34 +33,47 @@ fn main() {
 
     let camera_position = na::Vector3::new(-2.0, 0.0, -5.0);
     let module_manager = ModuleManager::builder()
-        .camera_manager(camera_position, 0.0, 0.0, 45.0, 0.005)
+        .camera_manager(
+            camera_position,
+            0.8,
+            2.0,
+            0.0,
+            0.0,
+            45.0,
+            0.1,
+            100.0,
+            window_size.0 as f32,
+            window_size.1 as f32,
+        )
         .mesh_manager()
         .build();
 
-    let mut engine = GameZap::builder()
-        .window_and_renderer(
-            sdl_context,
-            video_subsystem,
-            event_pump,
-            window,
-            wgpu::Color {
-                r: 0.2,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-        )
-        .module_manager(module_manager)
-        .antialiasing()
-        .build();
+    let engine = RefCell::new(
+        GameZap::builder()
+            .window_and_renderer(
+                sdl_context,
+                video_subsystem,
+                event_pump,
+                window,
+                wgpu::Color {
+                    r: 0.2,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                },
+            )
+            .module_manager(module_manager)
+            .antialiasing()
+            .build(),
+    );
 
-    let renderer = RefCell::new(engine.renderer);
+    let mut engine_borrow = engine.borrow_mut();
+    let renderer = engine_borrow.renderer.borrow();
 
-    let renderer_borrow = renderer.borrow();
-    let mut material_manager = renderer_borrow.module_manager.material_manager.borrow_mut();
+    let mut material_manager = renderer.module_manager.material_manager.borrow_mut();
 
-    let renderer_device = &renderer_borrow.device;
-    let renderer_queue = &renderer_borrow.queue;
+    let renderer_device = &renderer.device;
+    let renderer_queue = &renderer.queue;
 
     let first_material =
         material_manager.new_material("First material", renderer_device, None, None);
@@ -270,7 +281,7 @@ fn main() {
     );
 
     {
-        let mut mesh_manager = renderer_borrow
+        let mut mesh_manager = renderer
             .module_manager
             .mesh_manager
             .as_ref()
@@ -282,48 +293,26 @@ fn main() {
         mesh_manager.diffuse_pipeline_models.push(third_mesh);
     }
 
-    renderer.borrow().prep_renderer();
+    renderer.prep_renderer();
 
     drop(renderer_queue);
     drop(renderer_device);
-    drop(renderer_borrow);
-    'running: loop {
-        let mut renderer_borrow = renderer.borrow_mut();
-        for event in engine.event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. } => break 'running,
-                Event::Window {
-                    win_event: WindowEvent::Resized(width, height),
-                    ..
-                } => renderer_borrow.resize((width as u32, height as u32)),
-                _ => {}
-            }
-        }
-        let scancodes = engine
-            .event_pump
-            .keyboard_state()
-            .pressed_scancodes()
-            .collect::<Vec<_>>();
-        let mouse_state = engine.event_pump.relative_mouse_state();
-        input(
-            renderer_borrow.module_manager.camera_manager.as_ref(),
-            &scancodes,
-            &mouse_state,
-        );
-        renderer_borrow.update_buffers();
-        renderer_borrow.render().unwrap();
-        ::std::thread::sleep(std::time::Duration::new(0, 1_000_000_000u32 / 60));
-    }
+    drop(renderer);
+    engine_borrow.main_loop(vec![Box::new(input)]);
 }
 
-fn input(
-    camera_manager: Option<&RefCell<CameraManager>>,
-    scancodes: &Vec<Scancode>,
-    mouse_state: &RelativeMouseState,
-) {
+fn input(engine_details: RefMut<EngineDetails>, renderer: RefMut<Renderer>) {
+    let camera_manager = &renderer.module_manager.camera_manager;
     if let Some(camera_manager) = camera_manager {
         let camera_manager = camera_manager.borrow();
         let mut camera = camera_manager.camera.borrow_mut();
-        camera.transform_camera(scancodes, mouse_state, true);
+        if let Some(mouse_state) = engine_details.mouse_state.0 {
+            camera.transform_camera(
+                &engine_details.pressed_scancodes,
+                &mouse_state,
+                true,
+                engine_details.last_frame_duration.as_seconds_f32(),
+            );
+        }
     }
 }

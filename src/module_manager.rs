@@ -50,17 +50,27 @@ impl ModuleManagerBuilder {
     pub fn camera_manager(
         mut self,
         camera_position: na::Vector3<f32>,
+        sensitivity: f32,
+        movement_speed: f32,
         pitch: f32,
         yaw: f32,
         fovy: f32,
-        sensitivity: f32,
+        near_plane: f32,
+        far_plane: f32,
+        window_w: f32,
+        window_h: f32,
     ) -> Self {
         let camera_manager = RefCell::new(CameraManager::new(
             camera_position,
+            sensitivity,
+            movement_speed,
             pitch,
             yaw,
             fovy,
-            sensitivity,
+            near_plane,
+            far_plane,
+            window_w,
+            window_h,
         ));
         self.camera_manager = Some(camera_manager);
         self
