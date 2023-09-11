@@ -298,17 +298,18 @@ fn main() {
     drop(renderer_queue);
     drop(renderer_device);
     drop(renderer);
+    let empty_vec = vec![];
     engine
         .keybinds
-        .insert(Keycode::Escape, Box::new(toggle_cursor));
-    engine.main_loop(vec![Box::new(input)]);
+        .insert(Keycode::Escape, (Box::new(toggle_cursor), &empty_vec));
+    engine.main_loop(vec![(Box::new(input), vec![])]);
 }
 
 fn input(
     engine_details: RefMut<EngineDetails>,
     renderer: RefMut<Renderer>,
     engine_systems: Ref<EngineSystems>,
-    _frame_dependancies: Vec<Box<dyn FrameDependancy>>,
+    _frame_dependancies: &Vec<Box<dyn FrameDependancy>>,
 ) {
     let camera_manager = &renderer.module_manager.camera_manager;
     if let Some(camera_manager) = camera_manager {
@@ -333,7 +334,7 @@ fn toggle_cursor(
     mut engine_details: RefMut<EngineDetails>,
     _renderer: RefMut<Renderer>,
     engine_systems: Ref<EngineSystems>,
-    _frame_dependancies: Vec<Box<dyn FrameDependancy>>,
+    _frame_dependancies: &Vec<Box<dyn FrameDependancy>>,
 ) {
     let old_mouse = engine_details.mouse_state.1;
     engine_details.mouse_state.1 = !old_mouse;

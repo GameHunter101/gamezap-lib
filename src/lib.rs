@@ -51,14 +51,14 @@ pub mod texture;
 ///     engine.renderer.lock().unwrap().render().unwrap();
 /// }
 /// ```
-pub struct GameZap {
+pub struct GameZap<'a> {
     pub systems: RefCell<EngineSystems>,
     pub renderer: RefCell<Renderer>,
     pub clear_color: wgpu::Color,
     pub window: Rc<Window>,
     pub window_size: (u32, u32),
     pub details: RefCell<EngineDetails>,
-    pub keybinds: HashMap<Keycode, ExtensionFunction>,
+    pub keybinds: HashMap<Keycode, (ExtensionFunction, &'a Vec<Box<dyn FrameDependancy>>)>,
 }
 
 pub struct EngineDetails {
@@ -83,7 +83,7 @@ pub type ExtensionFunction = Box<
         RefMut<EngineDetails>,
         RefMut<Renderer>,
         Ref<EngineSystems>,
-        Vec<Box<dyn FrameDependancy>>,
+        &Vec<Box<dyn FrameDependancy>>,
     ),
 >;
 
@@ -114,7 +114,7 @@ impl EngineDetails {
     }
 }
 
-impl GameZap {
+impl<'a> GameZap<'a> {
     /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
     pub fn builder() -> GameZapBuilder {
         GameZapBuilder::init()
@@ -133,7 +133,10 @@ impl GameZap {
         renderer
     }
 
-    pub fn main_loop(&mut self, extensions: Vec<ExtensionFunction>) {
+    pub fn main_loop(
+        &mut self,
+        extensions: Vec<(ExtensionFunction, Vec<Box<dyn FrameDependancy>>)>,
+    ) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
                 match event {
@@ -148,24 +151,24 @@ impl GameZap {
                     Event::KeyDown {
                         keycode: Some(key), ..
                     } => {
-                        if let Some(func) = self.keybinds.get(&key) {
+                        if let Some((func, deps)) = self.keybinds.get(&key) {
                             (func)(
                                 self.details.borrow_mut(),
                                 self.renderer.borrow_mut(),
                                 self.systems.borrow(),
-                                vec![],
+                                deps,
                             );
                         }
                     }
                     _ => {}
                 }
             }
-            for func in &extensions {
+            for (func, deps) in &extensions {
                 (func)(
                     self.details.borrow_mut(),
                     self.renderer.borrow_mut(),
                     self.systems.borrow(),
-                    vec![],
+                    deps,
                 );
             }
             self.update_renderer();
@@ -262,7 +265,7 @@ impl<'a> GameZapBuilder {
     /// and points in the positive Z direction
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
-    pub fn build(self) -> GameZap {
+    pub fn build(self) -> GameZap<'a> {
         let sdl_context = RefCell::new(if let Some(context) = self.sdl_context {
             context
         } else {
