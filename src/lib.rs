@@ -1,12 +1,13 @@
 use std::{
-    cell::{RefCell, RefMut},
+    cell::{Ref, RefCell, RefMut},
+    collections::HashMap,
     rc::Rc,
 };
 
 use module_manager::ModuleManager;
 use sdl2::{
     event::{Event, WindowEvent},
-    keyboard::Scancode,
+    keyboard::{Keycode, Scancode},
     mouse::RelativeMouseState,
     video::Window,
     EventPump, Sdl,
@@ -51,14 +52,13 @@ pub mod texture;
 /// }
 /// ```
 pub struct GameZap {
-    pub sdl_context: Sdl,
-    pub video_subsystem: sdl2::VideoSubsystem,
-    pub event_pump: sdl2::EventPump,
+    pub systems: RefCell<EngineSystems>,
     pub renderer: RefCell<Renderer>,
     pub clear_color: wgpu::Color,
     pub window: Rc<Window>,
     pub window_size: (u32, u32),
     pub details: RefCell<EngineDetails>,
+    pub keybinds: HashMap<Keycode, ExtensionFunction>,
 }
 
 pub struct EngineDetails {
@@ -72,8 +72,34 @@ pub struct EngineDetails {
     pub pressed_scancodes: Vec<Scancode>,
 }
 
+pub struct EngineSystems {
+    pub sdl_context: RefCell<Sdl>,
+    pub video_subsystem: RefCell<sdl2::VideoSubsystem>,
+    pub event_pump: RefCell<sdl2::EventPump>,
+}
+
+pub type ExtensionFunction = Box<
+    dyn Fn(
+        RefMut<EngineDetails>,
+        RefMut<Renderer>,
+        Ref<EngineSystems>,
+        Vec<Box<dyn FrameDependancy>>,
+    ),
+>;
+
+pub trait EngineSettings {
+    fn update_cursor_mode(&mut self, cursor_visible: bool);
+}
+
+impl EngineSettings for Sdl {
+    fn update_cursor_mode(&mut self, cursor_visible: bool) {
+        self.mouse().show_cursor(cursor_visible);
+        self.mouse().set_relative_mouse_mode(!cursor_visible);
+    }
+}
+
 impl EngineDetails {
-    pub fn update_details(&mut self, event_pump: &EventPump, sdl_context: &Sdl) {
+    pub fn update_details(&mut self, event_pump: Ref<EventPump>, sdl_context: Ref<Sdl>) {
         let now = time::Instant::now();
         self.frame_number += 1;
         self.time_elapsed = now - self.initialized_instant;
@@ -96,7 +122,8 @@ impl GameZap {
 
     pub fn update_details(&self) {
         let mut engine_details = self.details.borrow_mut();
-        engine_details.update_details(&self.event_pump, &self.sdl_context);
+        let systems = self.systems.borrow_mut();
+        engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
     }
 
     pub fn update_renderer(&self) -> RefMut<'_, Renderer> {
@@ -106,12 +133,9 @@ impl GameZap {
         renderer
     }
 
-    pub fn main_loop(
-        &mut self,
-        extensions: Vec<Box<dyn Fn(RefMut<EngineDetails>, RefMut<Renderer>)>>,
-    ) {
+    pub fn main_loop(&mut self, extensions: Vec<ExtensionFunction>) {
         'running: loop {
-            for event in self.event_pump.poll_iter() {
+            for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
                 match event {
                     Event::Quit { .. } => break 'running,
                     Event::Window {
@@ -121,16 +145,37 @@ impl GameZap {
                         .renderer
                         .borrow_mut()
                         .resize((width as u32, height as u32)),
+                    Event::KeyDown {
+                        keycode: Some(key), ..
+                    } => {
+                        if let Some(func) = self.keybinds.get(&key) {
+                            (func)(
+                                self.details.borrow_mut(),
+                                self.renderer.borrow_mut(),
+                                self.systems.borrow(),
+                                vec![],
+                            );
+                        }
+                    }
                     _ => {}
                 }
             }
             for func in &extensions {
-                (func)(self.details.borrow_mut(), self.renderer.borrow_mut());
+                (func)(
+                    self.details.borrow_mut(),
+                    self.renderer.borrow_mut(),
+                    self.systems.borrow(),
+                    vec![],
+                );
             }
             self.update_renderer();
             self.update_details();
         }
     }
+}
+
+pub trait FrameDependancy {
+    fn frame_update(&mut self, renderer: RefMut<Renderer>);
 }
 
 /// Builder struct for main [GameZap] struct
@@ -204,27 +249,35 @@ impl<'a> GameZapBuilder {
         self
     }
 
+    pub fn hide_cursor(mut self) -> GameZapBuilder {
+        if let Some(sdl_context) = &mut self.sdl_context {
+            sdl_context.mouse().show_cursor(false);
+            sdl_context.mouse().set_relative_mouse_mode(true);
+        }
+        self
+    }
+
     /// Pass in a customized [Camera] struct
     /// Default camera uses a 45 degree field of view, starts at (0,0,0),
     /// and points in the positive Z direction
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
     pub fn build(self) -> GameZap {
-        let sdl_context = if let Some(context) = self.sdl_context {
+        let sdl_context = RefCell::new(if let Some(context) = self.sdl_context {
             context
         } else {
             sdl2::init().unwrap()
-        };
-        let video_subsystem = if let Some(video) = self.video_subsystem {
+        });
+        let video_subsystem = RefCell::new(if let Some(video) = self.video_subsystem {
             video
         } else {
-            sdl_context.video().unwrap()
-        };
-        let event_pump = if let Some(pump) = self.event_pump {
+            sdl_context.borrow().video().unwrap()
+        });
+        let event_pump = RefCell::new(if let Some(pump) = self.event_pump {
             pump
         } else {
-            sdl_context.event_pump().unwrap()
-        };
+            sdl_context.borrow().event_pump().unwrap()
+        });
 
         let window = self.window.unwrap();
         let renderer = RefCell::new(pollster::block_on(Renderer::new(
@@ -235,9 +288,11 @@ impl<'a> GameZapBuilder {
         )));
 
         GameZap {
-            sdl_context,
-            video_subsystem,
-            event_pump,
+            systems: RefCell::new(EngineSystems {
+                sdl_context,
+                video_subsystem,
+                event_pump,
+            }),
             renderer,
             clear_color: self.clear_color,
             window: window,
@@ -251,6 +306,7 @@ impl<'a> GameZapBuilder {
                 mouse_state: (None, true),
                 pressed_scancodes: vec![],
             }),
+            keybinds: HashMap::new(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use std::{
-    cell::{RefCell, RefMut},
+    cell::{Ref, RefMut},
     rc::Rc,
 };
 
@@ -10,8 +10,9 @@ use gamezap::{
     module_manager::ModuleManager,
     renderer::Renderer,
     texture::Texture,
-    EngineDetails, GameZap,
+    EngineDetails, EngineSettings, EngineSystems, FrameDependancy, GameZap,
 };
+use sdl2::keyboard::Keycode;
 use wgpu::util::DeviceExt;
 
 extern crate gamezap;
@@ -48,27 +49,26 @@ fn main() {
         .mesh_manager()
         .build();
 
-    let engine = RefCell::new(
-        GameZap::builder()
-            .window_and_renderer(
-                sdl_context,
-                video_subsystem,
-                event_pump,
-                window,
-                wgpu::Color {
-                    r: 0.2,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 1.0,
-                },
-            )
-            .module_manager(module_manager)
-            .antialiasing()
-            .build(),
-    );
+    let mut engine = GameZap::builder()
+        .window_and_renderer(
+            sdl_context,
+            video_subsystem,
+            event_pump,
+            window,
+            wgpu::Color {
+                r: 0.2,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            },
+        )
+        .module_manager(module_manager)
+        .antialiasing()
+        .hide_cursor()
+        .build();
 
-    let mut engine_borrow = engine.borrow_mut();
-    let renderer = engine_borrow.renderer.borrow();
+    // let mut engine_borrow = engine.borrow_mut();
+    let renderer = engine.renderer.borrow();
 
     let mut material_manager = renderer.module_manager.material_manager.borrow_mut();
 
@@ -298,10 +298,18 @@ fn main() {
     drop(renderer_queue);
     drop(renderer_device);
     drop(renderer);
-    engine_borrow.main_loop(vec![Box::new(input)]);
+    engine
+        .keybinds
+        .insert(Keycode::Escape, Box::new(toggle_cursor));
+    engine.main_loop(vec![Box::new(input)]);
 }
 
-fn input(engine_details: RefMut<EngineDetails>, renderer: RefMut<Renderer>) {
+fn input(
+    engine_details: RefMut<EngineDetails>,
+    renderer: RefMut<Renderer>,
+    engine_systems: Ref<EngineSystems>,
+    _frame_dependancies: Vec<Box<dyn FrameDependancy>>,
+) {
     let camera_manager = &renderer.module_manager.camera_manager;
     if let Some(camera_manager) = camera_manager {
         let camera_manager = camera_manager.borrow();
@@ -310,9 +318,27 @@ fn input(engine_details: RefMut<EngineDetails>, renderer: RefMut<Renderer>) {
             camera.transform_camera(
                 &engine_details.pressed_scancodes,
                 &mouse_state,
-                true,
+                engine_systems
+                    .sdl_context
+                    .borrow()
+                    .mouse()
+                    .relative_mouse_mode(),
                 engine_details.last_frame_duration.as_seconds_f32(),
             );
         }
     }
+}
+
+fn toggle_cursor(
+    mut engine_details: RefMut<EngineDetails>,
+    _renderer: RefMut<Renderer>,
+    engine_systems: Ref<EngineSystems>,
+    _frame_dependancies: Vec<Box<dyn FrameDependancy>>,
+) {
+    let old_mouse = engine_details.mouse_state.1;
+    engine_details.mouse_state.1 = !old_mouse;
+    engine_systems
+        .sdl_context
+        .borrow_mut()
+        .update_cursor_mode(!old_mouse);
 }
