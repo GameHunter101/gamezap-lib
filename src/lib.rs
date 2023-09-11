@@ -58,7 +58,7 @@ pub struct GameZap<'a> {
     pub window: Rc<Window>,
     pub window_size: (u32, u32),
     pub details: RefCell<EngineDetails>,
-    pub keybinds: HashMap<Keycode, (ExtensionFunction, &'a Vec<Box<dyn FrameDependancy>>)>,
+    pub keybinds: HashMap<Keycode, (ExtensionFunction, Vec<RefMut<'a, Box<dyn FrameDependancy>>>)>,
 }
 
 pub struct EngineDetails {
@@ -83,7 +83,7 @@ pub type ExtensionFunction = Box<
         RefMut<EngineDetails>,
         RefMut<Renderer>,
         Ref<EngineSystems>,
-        &Vec<Box<dyn FrameDependancy>>,
+        &Vec<RefMut<Box<dyn FrameDependancy>>>,
     ),
 >;
 
@@ -135,7 +135,7 @@ impl<'a> GameZap<'a> {
 
     pub fn main_loop(
         &mut self,
-        extensions: Vec<(ExtensionFunction, Vec<Box<dyn FrameDependancy>>)>,
+        extensions: Vec<(ExtensionFunction, Vec<RefMut<Box<dyn FrameDependancy>>>)>,
     ) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
