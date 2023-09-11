@@ -1,5 +1,5 @@
 use std::{
-    cell::{Ref, RefMut},
+    cell::{Ref, RefCell, RefMut},
     rc::Rc,
 };
 
@@ -298,17 +298,25 @@ fn main() {
     drop(renderer_queue);
     drop(renderer_device);
     drop(renderer);
-    engine
-        .keybinds
-        .insert(Keycode::Escape, (Box::new(toggle_cursor), vec![]));
-    engine.main_loop(vec![(Box::new(input), vec![])]);
+    let toggle_cursor_deps = vec![];
+    let test_dep: RefCell<Box<dyn FrameDependancy>> = RefCell::new(Box::new(TestFrameDep {
+        name: "hi".to_string(),
+    }));
+    engine.keybinds.insert(
+        Keycode::Escape,
+        (Box::new(toggle_cursor), toggle_cursor_deps),
+    );
+    engine.main_loop(vec![
+        (Box::new(input), vec![]),
+        (Box::new(test_frame_deps), vec![test_dep.borrow_mut()]),
+    ]);
 }
 
 fn input(
     engine_details: RefMut<EngineDetails>,
     renderer: RefMut<Renderer>,
     engine_systems: Ref<EngineSystems>,
-    _frame_dependancies: &Vec<RefMut<Box<dyn FrameDependancy>>>,
+    _frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
 ) {
     let camera_manager = &renderer.module_manager.camera_manager;
     if let Some(camera_manager) = camera_manager {
@@ -333,7 +341,7 @@ fn toggle_cursor(
     mut engine_details: RefMut<EngineDetails>,
     _renderer: RefMut<Renderer>,
     engine_systems: Ref<EngineSystems>,
-    _frame_dependancies: &Vec<RefMut<Box<dyn FrameDependancy>>>,
+    _frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
 ) {
     let old_mouse = engine_details.mouse_state.1;
     engine_details.mouse_state.1 = !old_mouse;
@@ -341,4 +349,28 @@ fn toggle_cursor(
         .sdl_context
         .borrow_mut()
         .update_cursor_mode(!old_mouse);
+}
+
+fn test_frame_deps(
+    engine_details: RefMut<EngineDetails>,
+    renderer: RefMut<Renderer>,
+    engine_systems: Ref<EngineSystems>,
+    frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
+) {
+    frame_dependancies[0].frame_update(engine_details, renderer, engine_systems);
+}
+
+struct TestFrameDep {
+    name: String,
+}
+
+impl FrameDependancy for TestFrameDep {
+    fn frame_update(
+        &mut self,
+        _engine_details: RefMut<EngineDetails>,
+        _renderer: RefMut<Renderer>,
+        _engine_systems: Ref<EngineSystems>,
+    ) {
+        println!("{}", self.name);
+    }
 }

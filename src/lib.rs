@@ -83,7 +83,7 @@ pub type ExtensionFunction = Box<
         RefMut<EngineDetails>,
         RefMut<Renderer>,
         Ref<EngineSystems>,
-        &Vec<RefMut<Box<dyn FrameDependancy>>>,
+        &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
     ),
 >;
 
@@ -135,7 +135,7 @@ impl<'a> GameZap<'a> {
 
     pub fn main_loop(
         &mut self,
-        extensions: Vec<(ExtensionFunction, Vec<RefMut<Box<dyn FrameDependancy>>>)>,
+        mut extensions: Vec<(ExtensionFunction, Vec<RefMut<Box<dyn FrameDependancy>>>)>,
     ) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
@@ -151,7 +151,7 @@ impl<'a> GameZap<'a> {
                     Event::KeyDown {
                         keycode: Some(key), ..
                     } => {
-                        if let Some((func, deps)) = self.keybinds.get(&key) {
+                        if let Some((func, deps)) = self.keybinds.get_mut(&key) {
                             (func)(
                                 self.details.borrow_mut(),
                                 self.renderer.borrow_mut(),
@@ -163,7 +163,7 @@ impl<'a> GameZap<'a> {
                     _ => {}
                 }
             }
-            for (func, deps) in &extensions {
+            for (func, deps) in extensions.iter_mut() {
                 (func)(
                     self.details.borrow_mut(),
                     self.renderer.borrow_mut(),
@@ -178,7 +178,12 @@ impl<'a> GameZap<'a> {
 }
 
 pub trait FrameDependancy {
-    fn frame_update(&mut self, renderer: RefMut<Renderer>);
+    fn frame_update(
+        &mut self,
+        engine_details: RefMut<EngineDetails>,
+        renderer: RefMut<Renderer>,
+        engine_systems: Ref<EngineSystems>,
+    );
 }
 
 /// Builder struct for main [GameZap] struct
