@@ -81,7 +81,7 @@ pub struct EngineSystems {
 pub type ExtensionFunction = Box<
     dyn Fn(
         RefMut<EngineDetails>,
-        RefMut<Renderer>,
+        &RefCell<Renderer>,
         Ref<EngineSystems>,
         &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
     ),
@@ -154,7 +154,7 @@ impl<'a> GameZap<'a> {
                         if let Some((func, deps)) = self.keybinds.get_mut(&key) {
                             (func)(
                                 self.details.borrow_mut(),
-                                self.renderer.borrow_mut(),
+                                &self.renderer,
                                 self.systems.borrow(),
                                 deps,
                             );
@@ -166,7 +166,7 @@ impl<'a> GameZap<'a> {
             for (func, deps) in extensions.iter_mut() {
                 (func)(
                     self.details.borrow_mut(),
-                    self.renderer.borrow_mut(),
+                    &self.renderer,
                     self.systems.borrow(),
                     deps,
                 );
@@ -181,7 +181,7 @@ pub trait FrameDependancy {
     fn frame_update(
         &mut self,
         engine_details: RefMut<EngineDetails>,
-        renderer: RefMut<Renderer>,
+        renderer: &RefCell<Renderer>,
         engine_systems: Ref<EngineSystems>,
     );
 }

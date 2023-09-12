@@ -314,11 +314,11 @@ fn main() {
 
 fn input(
     engine_details: RefMut<EngineDetails>,
-    renderer: RefMut<Renderer>,
+    renderer: &RefCell<Renderer>,
     engine_systems: Ref<EngineSystems>,
     _frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
 ) {
-    let camera_manager = &renderer.module_manager.camera_manager;
+    let camera_manager = &renderer.borrow().module_manager.camera_manager;
     if let Some(camera_manager) = camera_manager {
         let camera_manager = camera_manager.borrow();
         let mut camera = camera_manager.camera.borrow_mut();
@@ -339,7 +339,7 @@ fn input(
 
 fn toggle_cursor(
     mut engine_details: RefMut<EngineDetails>,
-    _renderer: RefMut<Renderer>,
+    _renderer: &RefCell<Renderer>,
     engine_systems: Ref<EngineSystems>,
     _frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
 ) {
@@ -353,11 +353,16 @@ fn toggle_cursor(
 
 fn test_frame_deps(
     engine_details: RefMut<EngineDetails>,
-    renderer: RefMut<Renderer>,
+    renderer: &RefCell<Renderer>,
     engine_systems: Ref<EngineSystems>,
     frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
 ) {
-    frame_dependancies[0].frame_update(engine_details, renderer, engine_systems);
+    let camera_manager = &renderer.borrow().module_manager.camera_manager;
+    if let Some(camera_manager) = camera_manager {
+        let position = camera_manager.borrow().camera.borrow().position;
+        dbg!(position);
+        frame_dependancies[0].frame_update(engine_details, &renderer, engine_systems);
+    }
 }
 
 struct TestFrameDep {
@@ -368,7 +373,7 @@ impl FrameDependancy for TestFrameDep {
     fn frame_update(
         &mut self,
         _engine_details: RefMut<EngineDetails>,
-        _renderer: RefMut<Renderer>,
+        _renderer: &RefCell<Renderer>,
         _engine_systems: Ref<EngineSystems>,
     ) {
         println!("{}", self.name);
