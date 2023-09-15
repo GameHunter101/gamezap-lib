@@ -286,7 +286,8 @@ fn main() {
             .mesh_manager
             .as_ref()
             .unwrap()
-            .borrow_mut();
+            .lock()
+            .unwrap();
 
         mesh_manager.plain_pipeline_models.push(mesh);
         mesh_manager.diffuse_pipeline_models.push(second_mesh);
@@ -376,6 +377,6 @@ impl FrameDependancy for TestFrameDep {
         _renderer: &RefCell<Renderer>,
         _engine_systems: Ref<EngineSystems>,
     ) {
-        println!("{}", self.name);
+        // println!("{}", self.name);
     }
 }

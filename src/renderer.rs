@@ -1,7 +1,7 @@
 use std::{
     cell::Ref,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use sdl2::video::Window;
@@ -174,7 +174,7 @@ impl Renderer {
         render_pass: &mut wgpu::RenderPass<'c>,
         pipeline_manager: &'b Ref<PipelineManager>,
         material_manager: &'b Ref<MaterialManager>,
-        mesh_manager: &'b Option<Ref<MeshManager>>,
+        mesh_manager: &'b Option<MutexGuard<MeshManager>>,
         camera_manager: &'b Option<Ref<CameraManager>>,
     ) {
         // let pipeline_manager = self.module_manager.pipeline_manager.borrow();
@@ -241,7 +241,7 @@ impl Renderer {
         let pipeline_manager = self.module_manager.pipeline_manager.borrow();
         let material_manager = self.module_manager.material_manager.borrow();
         let mesh_manager = if let Some(mesh_manager) = &self.module_manager.mesh_manager {
-            Some(mesh_manager.borrow())
+            Some(mesh_manager.lock().unwrap())
         } else {
             None
         };

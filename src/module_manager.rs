@@ -1,4 +1,7 @@
-use std::cell::RefCell;
+use std::{
+    cell::RefCell,
+    sync::{Arc, Mutex},
+};
 
 use nalgebra as na;
 
@@ -10,7 +13,7 @@ use crate::{
 pub struct ModuleManager {
     pub pipeline_manager: RefCell<PipelineManager>,
     pub material_manager: RefCell<MaterialManager>,
-    pub mesh_manager: Option<RefCell<MeshManager>>,
+    pub mesh_manager: Option<Arc<Mutex<MeshManager>>>,
     pub camera_manager: Option<RefCell<CameraManager>>,
 }
 
@@ -36,13 +39,13 @@ impl ModuleManager {
 }
 
 pub struct ModuleManagerBuilder {
-    pub mesh_manager: Option<RefCell<MeshManager>>,
+    pub mesh_manager: Option<Arc<Mutex<MeshManager>>>,
     pub camera_manager: Option<RefCell<CameraManager>>,
 }
 
 impl ModuleManagerBuilder {
     pub fn mesh_manager(mut self) -> Self {
-        let mesh_manager = RefCell::new(MeshManager::init());
+        let mesh_manager = Arc::new(Mutex::new(MeshManager::init()));
         self.mesh_manager = Some(mesh_manager);
         self
     }
