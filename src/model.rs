@@ -24,13 +24,25 @@ pub trait VertexData {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, PartialEq)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
     pub tangent: [f32; 3],
     pub bitangent: [f32; 3],
+}
+
+impl Vertex {
+    pub fn blank() -> Self {
+        Vertex {
+            position: [f32::MAX; 3],
+            tex_coords: [f32::MAX; 2],
+            normal: [f32::MAX; 3],
+            bitangent: [f32::MAX; 3],
+            tangent: [f32::MAX; 3],
+        }
+    }
 }
 
 impl VertexData for Vertex {
