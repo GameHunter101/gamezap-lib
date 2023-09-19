@@ -53,7 +53,7 @@ pub mod texture;
 /// ```
 pub struct GameZap<'a> {
     pub systems: RefCell<EngineSystems>,
-    pub renderer: RefCell<Renderer>,
+    pub renderer: Renderer,
     pub clear_color: wgpu::Color,
     pub window: Rc<Window>,
     pub window_size: (u32, u32),
@@ -81,7 +81,7 @@ pub struct EngineSystems {
 pub type ExtensionFunction = Box<
     dyn Fn(
         RefMut<EngineDetails>,
-        &RefCell<Renderer>,
+        &Renderer,
         Ref<EngineSystems>,
         &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
     ),
@@ -126,11 +126,9 @@ impl<'a> GameZap<'a> {
         engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
     }
 
-    pub fn update_renderer(&self) -> RefMut<'_, Renderer> {
-        let renderer = self.renderer.borrow_mut();
-        renderer.update_buffers();
-        renderer.render().unwrap();
-        renderer
+    pub fn update_renderer(&mut self) {
+        self.renderer.update_buffers();
+        self.renderer.render().unwrap();
     }
 
     pub fn main_loop(
@@ -144,10 +142,7 @@ impl<'a> GameZap<'a> {
                     Event::Window {
                         win_event: WindowEvent::Resized(width, height),
                         ..
-                    } => self
-                        .renderer
-                        .borrow_mut()
-                        .resize((width as u32, height as u32)),
+                    } => self.renderer.resize((width as u32, height as u32)),
                     Event::KeyDown {
                         keycode: Some(key), ..
                     } => {
@@ -181,7 +176,7 @@ pub trait FrameDependancy {
     fn frame_update(
         &mut self,
         engine_details: RefMut<EngineDetails>,
-        renderer: &RefCell<Renderer>,
+        renderer: &Renderer,
         engine_systems: Ref<EngineSystems>,
     );
 }
@@ -288,12 +283,12 @@ impl<'a> GameZapBuilder {
         });
 
         let window = self.window.unwrap();
-        let renderer = RefCell::new(pollster::block_on(Renderer::new(
+        let renderer = pollster::block_on(Renderer::new(
             window.clone(),
             self.clear_color,
             self.antialiasing,
             self.module_manager,
-        )));
+        ));
 
         GameZap {
             systems: RefCell::new(EngineSystems {
