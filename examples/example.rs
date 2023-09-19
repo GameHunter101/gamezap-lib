@@ -148,7 +148,7 @@ fn main() {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-    let mesh = Mesh::new(
+    let mesh = Rc::new(Mesh::new(
         renderer_device,
         "First model".to_string(),
         first_model_vert_buffer,
@@ -159,7 +159,7 @@ fn main() {
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
         first_material.1,
-    );
+    ));
 
     let second_model_vertices = vec![
         Vertex {
@@ -208,7 +208,7 @@ fn main() {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-    let second_mesh = Mesh::new(
+    let second_mesh = Rc::new(Mesh::new(
         renderer_device,
         "Second model".to_string(),
         second_vert_buffer,
@@ -219,7 +219,7 @@ fn main() {
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
         second_material.1,
-    );
+    ));
 
     let third_model_vertices = vec![
         Vertex {
@@ -267,7 +267,7 @@ fn main() {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-    let third_mesh = Mesh::new(
+    let third_mesh = Rc::new(Mesh::new(
         renderer_device,
         "Second model".to_string(),
         third_vert_buffer,
@@ -278,7 +278,7 @@ fn main() {
             na::UnitQuaternion::from_axis_angle(&na::Vector3::y_axis(), 0.0),
         ),
         third_material.1,
-    );
+    ));
 
     {
         let mut mesh_manager = renderer

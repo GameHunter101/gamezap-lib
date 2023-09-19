@@ -1,12 +1,14 @@
+use std::rc::Rc;
+
 use nalgebra as na;
 use wgpu::util::DeviceExt;
 
 use crate::materials::Material;
 
 pub struct MeshManager {
-    pub plain_pipeline_models: Vec<Mesh>,
-    pub diffuse_pipeline_models: Vec<Mesh>,
-    pub diffuse_normal_pipeline_models: Vec<Mesh>,
+    pub plain_pipeline_models: Vec<Rc<Mesh>>,
+    pub diffuse_pipeline_models: Vec<Rc<Mesh>>,
+    pub diffuse_normal_pipeline_models: Vec<Rc<Mesh>>,
 }
 
 impl MeshManager {

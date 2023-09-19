@@ -198,7 +198,7 @@ impl Renderer {
 
                 let material_array = material_manager.get_pipeline_materials(pipeline_type);
                 for material in material_array {
-                    let meshes_with_material: Vec<&Mesh> = mesh_array
+                    let meshes_with_material: Vec<&Rc<Mesh>> = mesh_array
                         .iter()
                         .filter(|mesh| mesh.material_index == material.material_index)
                         .collect();
