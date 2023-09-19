@@ -1,6 +1,6 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    rc::Rc,
+    rc::Rc, sync::Arc,
 };
 
 use nalgebra as na;
@@ -148,7 +148,7 @@ fn main() {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-    let mesh = Rc::new(Mesh::new(
+    let mesh = Arc::new(Mesh::new(
         renderer_device,
         "First model".to_string(),
         first_model_vert_buffer,
@@ -208,7 +208,7 @@ fn main() {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-    let second_mesh = Rc::new(Mesh::new(
+    let second_mesh = Arc::new(Mesh::new(
         renderer_device,
         "Second model".to_string(),
         second_vert_buffer,
@@ -267,7 +267,7 @@ fn main() {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-    let third_mesh = Rc::new(Mesh::new(
+    let third_mesh = Arc::new(Mesh::new(
         renderer_device,
         "Second model".to_string(),
         third_vert_buffer,

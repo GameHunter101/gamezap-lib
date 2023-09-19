@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use nalgebra as na;
 use wgpu::util::DeviceExt;
@@ -6,9 +6,9 @@ use wgpu::util::DeviceExt;
 use crate::materials::Material;
 
 pub struct MeshManager {
-    pub plain_pipeline_models: Vec<Rc<Mesh>>,
-    pub diffuse_pipeline_models: Vec<Rc<Mesh>>,
-    pub diffuse_normal_pipeline_models: Vec<Rc<Mesh>>,
+    pub plain_pipeline_models: Vec<Arc<Mesh>>,
+    pub diffuse_pipeline_models: Vec<Arc<Mesh>>,
+    pub diffuse_normal_pipeline_models: Vec<Arc<Mesh>>,
 }
 
 impl MeshManager {
