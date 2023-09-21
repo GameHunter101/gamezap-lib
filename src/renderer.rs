@@ -18,8 +18,8 @@ use crate::{
 
 pub struct Renderer {
     pub surface: wgpu::Surface,
-    pub device: wgpu::Device,
-    pub queue: wgpu::Queue,
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
     pub config: wgpu::SurfaceConfiguration,
     pub size: (u32, u32),
     pub depth_texture: Texture,
@@ -64,6 +64,9 @@ impl Renderer {
             )
             .await
             .unwrap();
+
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
 
         let surface_caps = surface.get_capabilities(&adapter);
 
