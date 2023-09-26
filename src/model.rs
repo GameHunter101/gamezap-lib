@@ -104,7 +104,7 @@ impl Mesh {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshTransform {
-    _transform_matrix: [[f32; 4]; 4],
+    pub transform_matrix: [[f32; 4]; 4],
 }
 
 impl MeshTransform {
@@ -113,7 +113,7 @@ impl MeshTransform {
         let rotation_matrix = na::Matrix4::from(rotation.to_rotation_matrix());
         let transform_matrix = translation_matrix * rotation_matrix;
         MeshTransform {
-            _transform_matrix: transform_matrix.into(),
+            transform_matrix: transform_matrix.into(),
         }
     }
 }
