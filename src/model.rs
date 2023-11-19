@@ -45,6 +45,13 @@ impl Vertex {
             tangent: [f32::MAX; 3],
         }
     }
+
+    pub fn translate(mut self, other: na::Vector3<f32>) -> Self {
+        self.position[0] += other.x;
+        self.position[1] += other.y;
+        self.position[2] += other.z;
+        self
+    }
 }
 
 impl VertexData for Vertex {
