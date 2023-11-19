@@ -46,10 +46,16 @@ impl Vertex {
         }
     }
 
-    pub fn translate(mut self, other: na::Vector3<f32>) -> Self {
-        self.position[0] += other.x;
-        self.position[1] += other.y;
-        self.position[2] += other.z;
+    pub fn translate(mut self, vector: na::Vector3<f32>) -> Self {
+        self.position[0] += vector.x;
+        self.position[1] += vector.y;
+        self.position[2] += vector.z;
+        self
+    }
+
+    pub fn matrix_mult(mut self, matrix: na::Matrix3<f32>) -> Self {
+        let mut vector = matrix * na::Vector3::from(self.position);
+        self.position = vector.into();
         self
     }
 }
