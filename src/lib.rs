@@ -126,9 +126,9 @@ impl<'a> GameZap<'a> {
         engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
     }
 
-    pub fn update_renderer(&mut self) {
+    pub async fn update_renderer(&mut self) {
         self.renderer.update_buffers();
-        self.renderer.render().unwrap();
+        self.renderer.render().await.unwrap();
     }
 
     pub fn main_loop(
@@ -166,7 +166,9 @@ impl<'a> GameZap<'a> {
                     deps,
                 );
             }
-            self.update_renderer();
+            // TODO: Make this not block
+            // TODO: Make update_renderer and update_details happen on different threads
+            pollster::block_on(self.update_renderer());
             self.update_details();
         }
     }

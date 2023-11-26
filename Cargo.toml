@@ -1,6 +1,6 @@
 [package]
 name = "gamezap"
-version = "0.2.12"
+version = "0.3.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -19,6 +19,7 @@ tobj = { version = "4.0.0", features = ["async"] }
 cfg-if = "1.0.0"
 time = "0.3.24"
 smaa = "0.11.0"
+flume = "0.11.0"
 
 [dependencies.image]
 version = "0.24.6"

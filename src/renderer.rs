@@ -226,7 +226,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&self) -> Result<(), wgpu::SurfaceError> {
+    pub async fn render(&self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -235,11 +235,11 @@ impl Renderer {
         let mut smaa_clone = binding.lock().unwrap();
         let smaa_frame = smaa_clone.start_frame(&self.device, &self.queue, &view);
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render encoder"),
-            });
+        let mut render_encoder =
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render encoder"),
+                });
 
         let pipeline_manager = self.module_manager.pipeline_manager.borrow();
         let material_manager = self.module_manager.material_manager.borrow();
@@ -255,7 +255,7 @@ impl Renderer {
         };
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = render_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &(*smaa_frame),
@@ -292,8 +292,57 @@ impl Renderer {
                 &camera_manager,
             );
         }
+        self.queue.submit(std::iter::once(render_encoder.finish()));
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        for (i, compute_shader) in pipeline_manager.compute_shaders.iter().enumerate() {
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some(&format!("Compute shader #{} encoder", i)),
+                });
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Compute pass"),
+                });
+
+                compute_pass.set_pipeline(&compute_shader.pipeline);
+                compute_pass.set_bind_group(i as u32, &compute_shader.bind_group, &[]);
+                compute_pass.dispatch_workgroups(
+                    compute_shader.workgroup_counts.0,
+                    compute_shader.workgroup_counts.1,
+                    compute_shader.workgroup_counts.2,
+                );
+            }
+
+            encoder.copy_buffer_to_buffer(
+                &compute_shader.input_buffer,
+                0,
+                &compute_shader.output_buffer,
+                0,
+                compute_shader.data_size,
+            );
+
+            self.queue.submit(Some(encoder.finish()));
+
+            let buffer_slice = compute_shader.output_buffer.slice(..);
+
+            let (sender, receiver) = flume::bounded(1);
+            buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+            // TODO: Make this not block
+            self.device.poll(wgpu::Maintain::Wait);
+
+            if let Ok(Ok(())) = receiver.recv_async().await {
+                let data = buffer_slice.get_mapped_range();
+
+                let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+                println!("Compute #{i} result: {result:?}");
+
+                drop(data);
+                compute_shader.output_buffer.unmap();
+            }
+        }
+
         smaa_frame.resolve();
         output.present();
 

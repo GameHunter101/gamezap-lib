@@ -1,4 +1,5 @@
 use std::cell::Ref;
+use wgpu::util::DeviceExt;
 
 use crate::{
     camera::CameraManager,
@@ -11,6 +12,7 @@ pub struct PipelineManager {
     pub plain_pipeline: Option<Pipeline>,
     pub diffuse_texture_pipeline: Option<Pipeline>,
     pub diffuse_normal_texture_pipeline: Option<Pipeline>,
+    pub compute_shaders: Vec<ComputePipeline>,
 }
 
 impl PipelineManager {
@@ -19,6 +21,7 @@ impl PipelineManager {
             plain_pipeline: None,
             diffuse_texture_pipeline: None,
             diffuse_normal_texture_pipeline: None,
+            compute_shaders: vec![],
         }
     }
 
@@ -86,6 +89,33 @@ impl PipelineManager {
                     fragment_shader,
                 ))
             }
+        }
+    }
+
+    pub fn create_compute_shader<T: bytemuck::Pod + bytemuck::Zeroable>(
+        &mut self,
+        device: &wgpu::Device,
+        shader_name: &str,
+        data: T,
+        workgroup_counts: (u32, u32, u32),
+    ) {
+        let shader_module_descriptor = PipelineManager::load_shader_module_descriptor(shader_name);
+        self.compute_shaders.push(ComputePipeline::new(
+            device,
+            shader_module_descriptor,
+            data,
+            self.compute_shaders.len(),
+            workgroup_counts,
+        ));
+    }
+
+    pub fn load_shader_module_descriptor(shader_path: &str) -> wgpu::ShaderModuleDescriptor {
+        let shader_string =
+            std::fs::read_to_string(shader_path).expect("Failed to read shader file");
+
+        wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader_string)),
         }
     }
 }
@@ -159,6 +189,70 @@ impl Pipeline {
 
         Pipeline {
             pipeline: render_pipeline,
+        }
+    }
+}
+
+pub struct ComputePipeline {
+    pub pipeline: wgpu::ComputePipeline,
+    pub bind_group: wgpu::BindGroup,
+    pub input_buffer: wgpu::Buffer,
+    pub output_buffer: wgpu::Buffer,
+    pub workgroup_counts: (u32, u32, u32),
+    pub data_size: u64,
+}
+
+impl ComputePipeline {
+    pub fn new<T: bytemuck::Pod + bytemuck::Zeroable>(
+        device: &wgpu::Device,
+        shader_module_descriptor: wgpu::ShaderModuleDescriptor,
+        data: T,
+        compute_shader_index: usize,
+        workgroup_counts: (u32, u32, u32),
+    ) -> Self {
+        let shader_module = device.create_shader_module(shader_module_descriptor);
+
+        let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(format!("Compute shader #{} input buffer", compute_shader_index).as_str()),
+            contents: bytemuck::cast_slice(&[data]),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
+        });
+
+        let data_size = std::mem::size_of_val(&data) as u64;
+
+        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(format!("Compute shader #{} output buffer", compute_shader_index).as_str()),
+            size: data_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some(format!("Compute shader #{} pipeline", compute_shader_index).as_str()),
+            layout: None,
+            module: &shader_module,
+            entry_point: "main",
+        });
+
+        let bind_group_layout = pipeline.get_bind_group_layout(0);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(format!("Compute shader #{} bind group", compute_shader_index).as_str()),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: input_buffer.as_entire_binding(),
+            }],
+        });
+
+        ComputePipeline {
+            pipeline,
+            bind_group,
+            input_buffer,
+            output_buffer,
+            workgroup_counts,
+            data_size,
         }
     }
 }
