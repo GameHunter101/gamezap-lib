@@ -6,7 +6,7 @@ use std::{
 use nalgebra as na;
 
 use crate::{
-    camera::CameraManager, materials::MaterialManager, model::MeshManager,
+    camera::CameraManager, compute::ComputeManager, materials::MaterialManager, model::MeshManager,
     pipeline::PipelineManager,
 };
 
@@ -15,6 +15,7 @@ pub struct ModuleManager {
     pub material_manager: RefCell<MaterialManager>,
     pub mesh_manager: Option<Arc<Mutex<MeshManager>>>,
     pub camera_manager: Option<RefCell<CameraManager>>,
+    pub compute_manager: RefCell<ComputeManager>,
 }
 
 impl ModuleManager {
@@ -27,6 +28,7 @@ impl ModuleManager {
             material_manager: RefCell::new(MaterialManager::init()),
             mesh_manager: None,
             camera_manager: None,
+            compute_manager: RefCell::new(ComputeManager::init()),
         }
     }
 
@@ -85,6 +87,7 @@ impl ModuleManagerBuilder {
             material_manager: RefCell::new(MaterialManager::init()),
             mesh_manager: self.mesh_manager,
             camera_manager: self.camera_manager,
+            compute_manager: RefCell::new(ComputeManager::init()),
         }
     }
 }

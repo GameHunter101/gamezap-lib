@@ -294,7 +294,11 @@ impl Renderer {
         }
         self.queue.submit(std::iter::once(render_encoder.finish()));
 
-        for (i, compute_shader) in pipeline_manager.compute_shaders.iter().enumerate() {
+        let compute_manager = self.module_manager.compute_manager.borrow();
+
+        compute_manager.run_shaders(&self.device, &self.queue).await;
+
+        /* for (i, compute_shader) in pipeline_manager.compute_shaders.iter().enumerate() {
             let mut encoder = self
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -341,7 +345,7 @@ impl Renderer {
                 drop(data);
                 compute_shader.output_buffer.unmap();
             }
-        }
+        } */
 
         smaa_frame.resolve();
         output.present();

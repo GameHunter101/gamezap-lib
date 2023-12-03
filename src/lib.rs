@@ -24,6 +24,7 @@ pub mod module_manager;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
+pub mod compute;
 
 /// Main struct for the engine, manages all higher-level state
 ///

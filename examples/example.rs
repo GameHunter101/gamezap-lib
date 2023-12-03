@@ -1,6 +1,7 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    rc::Rc, sync::Arc,
+    rc::Rc,
+    sync::Arc,
 };
 
 use nalgebra as na;
@@ -293,6 +294,22 @@ fn main() {
         mesh_manager.diffuse_pipeline_models.push(second_mesh);
         mesh_manager.diffuse_pipeline_models.push(third_mesh);
     }
+
+    let compute_manager = &renderer.module_manager.compute_manager;
+
+    let _compute_shader = compute_manager.borrow_mut().create_shader(
+        &renderer_device,
+        "./examples/shaders/compute.wgsl",
+        (10, 1, 1),
+        [0_u32, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    );
+
+    let _compute_shader_2 = compute_manager.borrow_mut().create_shader(
+        &renderer_device,
+        "./examples/shaders/compute_2.wgsl",
+        (4, 1, 1),
+        [10_u32, 12, 14, 20],
+    );
 
     renderer.prep_renderer();
 
