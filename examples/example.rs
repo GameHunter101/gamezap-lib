@@ -324,6 +324,10 @@ fn main() {
         Keycode::Escape,
         (Box::new(toggle_cursor), toggle_cursor_deps),
     );
+    engine.keybinds.insert(
+        Keycode::C,
+        (Box::new(run_compute_shaders), vec![]),
+    );
     engine.main_loop(vec![
         (Box::new(input), vec![]),
         (Box::new(test_frame_deps), vec![test_dep.borrow_mut()]),
@@ -353,6 +357,21 @@ fn input(
             );
         }
     }
+}
+
+fn run_compute_shaders(
+    mut _engine_details: RefMut<EngineDetails>,
+    renderer: &Renderer,
+    _engine_systems: Ref<EngineSystems>,
+    _frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
+) {
+    pollster::block_on(
+        renderer
+            .module_manager
+            .compute_manager
+            .borrow()
+            .run_shaders(&renderer.device, &renderer.queue),
+    );
 }
 
 fn toggle_cursor(

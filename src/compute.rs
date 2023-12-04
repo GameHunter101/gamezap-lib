@@ -131,7 +131,7 @@ impl ComputeManager {
                 });
 
                 compute_pass.set_pipeline(&compute_shader.pipeline);
-                compute_pass.set_bind_group(i as u32, &compute_shader.bind_group, &[]);
+                compute_pass.set_bind_group(0, &compute_shader.bind_group, &[]);
                 compute_pass.dispatch_workgroups(
                     compute_shader.workgroup_counts.0,
                     compute_shader.workgroup_counts.1,

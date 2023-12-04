@@ -1,7 +1,7 @@
 @group(0) @binding(0) var<storage, read_write> data: array<u32>;
 
 fn work(num: u32) -> u32 {
-    var output:u32 = num * 2u;
+    var output:u32 = num*100u;
     return output;
 }
 
