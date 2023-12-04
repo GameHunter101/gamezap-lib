@@ -9,6 +9,8 @@ pub struct ComputeShader {
     pub bind_group: wgpu::BindGroup,
     pub workgroup_counts: (u32, u32, u32),
     pub data_size: u64,
+    pub passive_shader: bool,
+    compute_shader_index: u32,
 }
 
 impl ComputeShader {
@@ -18,6 +20,7 @@ impl ComputeShader {
         workgroup_counts: (u32, u32, u32),
         data: T,
         compute_shader_index: u32,
+        passive_shader: bool,
     ) -> Self {
         let shader_module_descriptor = PipelineManager::load_shader_module_descriptor(shader_path);
         let shader_module = device.create_shader_module(shader_module_descriptor);
@@ -85,7 +88,63 @@ impl ComputeShader {
             bind_group,
             workgroup_counts,
             data_size,
+            passive_shader,
+            compute_shader_index,
         }
+    }
+
+    pub async fn run(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some(&format!(
+                "Compute shader #{} encoder",
+                self.compute_shader_index
+            )),
+        });
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Compute pass"),
+            });
+
+            compute_pass.set_pipeline(&self.pipeline);
+            compute_pass.set_bind_group(0, &self.bind_group, &[]);
+            compute_pass.dispatch_workgroups(
+                self.workgroup_counts.0,
+                self.workgroup_counts.1,
+                self.workgroup_counts.2,
+            );
+        }
+        encoder.copy_buffer_to_buffer(
+            &self.input_buffer,
+            0,
+            &self.output_buffer,
+            0,
+            self.data_size,
+        );
+
+        queue.submit(Some(encoder.finish()));
+
+        let buffer_slice = self.output_buffer.slice(..);
+        let index = self.compute_shader_index;
+        tokio::task::spawn_blocking(move || {
+            let (sender, receiver) = flume::bounded(1);
+            buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+            // TODO: Make this not block
+
+            device.poll(wgpu::Maintain::Wait);
+
+            if let Ok(Ok(())) = receiver.recv() {
+                let data = buffer_slice.get_mapped_range();
+
+                let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+                println!("Compute #{} result: {result:?}", index);
+
+                drop(data);
+                self.output_buffer.unmap();
+            }
+        })
+        .await
+        .unwrap();
     }
 }
 
@@ -108,62 +167,30 @@ impl ComputeManager {
         shader_path: &str,
         workgroup_counts: (u32, u32, u32),
         data: T,
+        passive_shader: bool,
     ) -> Option<&'a ComputeShader> {
-        let test = ComputeShader::new(
+        let shader = ComputeShader::new(
             device,
             shader_path,
             workgroup_counts,
             data,
             self.shaders.len() as u32,
+            passive_shader,
         );
-        self.shaders.push(test);
+        self.shaders.push(shader);
         self.shaders.last()
     }
 
-    pub async fn run_shaders(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        for (i, compute_shader) in self.shaders.iter().enumerate() {
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some(&format!("Compute shader #{i} encoder")),
-            });
-            {
-                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("Compute pass"),
-                });
+    pub async fn run_all_shaders(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        for shader in &self.shaders {
+            shader.run(device, queue).await;
+        }
+    }
 
-                compute_pass.set_pipeline(&compute_shader.pipeline);
-                compute_pass.set_bind_group(0, &compute_shader.bind_group, &[]);
-                compute_pass.dispatch_workgroups(
-                    compute_shader.workgroup_counts.0,
-                    compute_shader.workgroup_counts.1,
-                    compute_shader.workgroup_counts.2,
-                );
-            }
-            encoder.copy_buffer_to_buffer(
-                &compute_shader.input_buffer,
-                0,
-                &compute_shader.output_buffer,
-                0,
-                compute_shader.data_size,
-            );
-
-            queue.submit(Some(encoder.finish()));
-
-            let buffer_slice = compute_shader.output_buffer.slice(..);
-
-            let (sender, receiver) = flume::bounded(1);
-            buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
-
-            // TODO: Make this not block
-            device.poll(wgpu::Maintain::Wait);
-
-            if let Ok(Ok(())) = receiver.recv_async().await {
-                let data = buffer_slice.get_mapped_range();
-
-                let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
-                println!("Compute #{i} result: {result:?}");
-
-                drop(data);
-                compute_shader.output_buffer.unmap();
+    pub async fn run_passive_shaders(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        for shader in &self.shaders {
+            if shader.passive_shader {
+                shader.run(device, queue).await;
             }
         }
     }

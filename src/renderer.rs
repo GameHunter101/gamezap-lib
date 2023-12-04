@@ -296,7 +296,7 @@ impl Renderer {
 
         let compute_manager = self.module_manager.compute_manager.borrow();
 
-        // compute_manager.run_shaders(&self.device, &self.queue).await;
+        compute_manager.run_passive_shaders(&self.device, &self.queue).await;
 
         smaa_frame.resolve();
         output.present();

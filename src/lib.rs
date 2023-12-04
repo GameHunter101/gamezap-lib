@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     rc::Rc,
 };
+use futures::prelude::*;
 
 use module_manager::ModuleManager;
 use sdl2::{

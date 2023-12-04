@@ -302,6 +302,7 @@ fn main() {
         "./examples/shaders/compute.wgsl",
         (10, 1, 1),
         [0_u32, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        true,
     );
 
     let _compute_shader_2 = compute_manager.borrow_mut().create_shader(
@@ -309,6 +310,7 @@ fn main() {
         "./examples/shaders/compute_2.wgsl",
         (4, 1, 1),
         [10_u32, 12, 14, 20],
+        false,
     );
 
     renderer.prep_renderer();
@@ -324,10 +326,9 @@ fn main() {
         Keycode::Escape,
         (Box::new(toggle_cursor), toggle_cursor_deps),
     );
-    engine.keybinds.insert(
-        Keycode::C,
-        (Box::new(run_compute_shaders), vec![]),
-    );
+    engine
+        .keybinds
+        .insert(Keycode::C, (Box::new(run_compute_shaders), vec![]));
     engine.main_loop(vec![
         (Box::new(input), vec![]),
         (Box::new(test_frame_deps), vec![test_dep.borrow_mut()]),
@@ -366,11 +367,8 @@ fn run_compute_shaders(
     _frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
 ) {
     pollster::block_on(
-        renderer
-            .module_manager
-            .compute_manager
-            .borrow()
-            .run_shaders(&renderer.device, &renderer.queue),
+        renderer.module_manager.compute_manager.borrow().shaders[1]
+            .run(&renderer.device, &renderer.queue),
     );
 }
 
