@@ -1,6 +1,5 @@
 use std::{
     cell::Ref,
-    rc::Rc,
     sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -30,7 +29,7 @@ pub struct Renderer {
 
 impl Renderer {
     pub async fn new(
-        window: Rc<Window>,
+        window: Arc<Window>,
         clear_color: wgpu::Color,
         antialiasing: bool,
         module_manager: ModuleManager,
@@ -296,7 +295,9 @@ impl Renderer {
 
         let compute_manager = self.module_manager.compute_manager.borrow();
 
-        compute_manager.run_passive_shaders(&self.device, &self.queue).await;
+        compute_manager
+            .run_passive_shaders(self.device.clone(), self.queue.clone())
+            .await;
 
         smaa_frame.resolve();
         output.present();

@@ -1,9 +1,8 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
-    rc::Rc,
+    sync::Arc,
 };
-use futures::prelude::*;
 
 use module_manager::ModuleManager;
 use sdl2::{
@@ -18,6 +17,7 @@ use time::{Duration, Instant};
 use crate::renderer::Renderer;
 
 pub mod camera;
+pub mod compute;
 pub mod light;
 pub mod materials;
 pub mod model;
@@ -25,7 +25,6 @@ pub mod module_manager;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
-pub mod compute;
 
 /// Main struct for the engine, manages all higher-level state
 ///
@@ -57,7 +56,7 @@ pub struct GameZap<'a> {
     pub systems: RefCell<EngineSystems>,
     pub renderer: Renderer,
     pub clear_color: wgpu::Color,
-    pub window: Rc<Window>,
+    pub window: Arc<Window>,
     pub window_size: (u32, u32),
     pub details: RefCell<EngineDetails>,
     pub keybinds: HashMap<Keycode, (ExtensionFunction, Vec<RefMut<'a, Box<dyn FrameDependancy>>>)>,
@@ -128,14 +127,14 @@ impl<'a> GameZap<'a> {
         engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
     }
 
-    pub async fn update_renderer(&mut self) {
+    pub async fn update_renderer(&self) {
         self.renderer.update_buffers();
         self.renderer.render().await.unwrap();
     }
 
-    pub fn main_loop(
+    pub async fn main_loop<'b>(
         &mut self,
-        mut extensions: Vec<(ExtensionFunction, Vec<RefMut<Box<dyn FrameDependancy>>>)>,
+        mut extensions: Vec<(ExtensionFunction, Vec<RefMut<'b, Box<dyn FrameDependancy>>>)>,
     ) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
@@ -168,9 +167,8 @@ impl<'a> GameZap<'a> {
                     deps,
                 );
             }
-            // TODO: Make this not block
-            // TODO: Make update_renderer and update_details happen on different threads
-            pollster::block_on(self.update_renderer());
+
+            self.update_renderer().await;
             self.update_details();
         }
     }
@@ -192,7 +190,7 @@ pub struct GameZapBuilder {
     event_pump: Option<sdl2::EventPump>,
     clear_color: wgpu::Color,
     frame_number: u32,
-    window: Option<Rc<Window>>,
+    window: Option<Arc<Window>>,
     window_size: Option<(u32, u32)>,
     initialized_instant: time::Instant,
     time_elapsed: time::Duration,
@@ -234,7 +232,7 @@ impl<'a> GameZapBuilder {
         sdl_context: sdl2::Sdl,
         video_subsystem: sdl2::VideoSubsystem,
         event_pump: sdl2::EventPump,
-        window: Rc<Window>,
+        window: Arc<Window>,
         clear_color: wgpu::Color,
     ) -> GameZapBuilder {
         self.window = Some(window.clone());
@@ -302,7 +300,7 @@ impl<'a> GameZapBuilder {
             }),
             renderer,
             clear_color: self.clear_color,
-            window: window,
+            window,
             window_size: self.window_size.unwrap(),
             details: RefCell::new(EngineDetails {
                 frame_number: self.frame_number,

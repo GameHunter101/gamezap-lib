@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use wgpu::util::DeviceExt;
 
 use crate::pipeline::PipelineManager;
@@ -5,7 +7,7 @@ use crate::pipeline::PipelineManager;
 pub struct ComputeShader {
     pub pipeline: wgpu::ComputePipeline,
     pub input_buffer: wgpu::Buffer,
-    pub output_buffer: wgpu::Buffer,
+    pub output_buffer: Arc<wgpu::Buffer>,
     pub bind_group: wgpu::BindGroup,
     pub workgroup_counts: (u32, u32, u32),
     pub data_size: u64,
@@ -35,12 +37,12 @@ impl ComputeShader {
 
         let data_size = std::mem::size_of_val(&data) as u64;
 
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        let output_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(format!("Compute shader #{compute_shader_index} output buffer").as_str()),
             size: data_size,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }));
 
         let bind_group_layout =
             &device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -93,7 +95,7 @@ impl ComputeShader {
         }
     }
 
-    pub async fn run(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub async fn run(&self, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some(&format!(
                 "Compute shader #{} encoder",
@@ -123,13 +125,13 @@ impl ComputeShader {
 
         queue.submit(Some(encoder.finish()));
 
-        let buffer_slice = self.output_buffer.slice(..);
+        let buf = self.output_buffer.clone();
         let index = self.compute_shader_index;
-        tokio::task::spawn_blocking(move || {
+        let device = device.clone();
+        tokio::task::spawn(async move {
+            let buffer_slice = buf.slice(..);
             let (sender, receiver) = flume::bounded(1);
             buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
-
-            // TODO: Make this not block
 
             device.poll(wgpu::Maintain::Wait);
 
@@ -140,11 +142,9 @@ impl ComputeShader {
                 println!("Compute #{} result: {result:?}", index);
 
                 drop(data);
-                self.output_buffer.unmap();
+                buf.unmap();
             }
-        })
-        .await
-        .unwrap();
+        });
     }
 }
 
@@ -181,16 +181,16 @@ impl ComputeManager {
         self.shaders.last()
     }
 
-    pub async fn run_all_shaders(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub async fn run_all_shaders(&self, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) {
         for shader in &self.shaders {
-            shader.run(device, queue).await;
+            shader.run(device.clone(), queue.clone()).await;
         }
     }
 
-    pub async fn run_passive_shaders(&self, device: &wgpu::Device, queue: &wgpu::Queue) {
+    pub async fn run_passive_shaders(&self, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) {
         for shader in &self.shaders {
             if shader.passive_shader {
-                shader.run(device, queue).await;
+                shader.run(device.clone(), queue.clone()).await;
             }
         }
     }

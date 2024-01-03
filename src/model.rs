@@ -133,7 +133,7 @@ impl MeshTransform {
 
 impl VertexData for Mesh {
     fn desc() -> wgpu::VertexBufferLayout<'static> {
-        const ATTRIBUTES: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4, 9 => Float32x3, 10 => Float32x3, 11 => Float32x3];
+        const ATTRIBUTES: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4];
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<MeshTransform>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,

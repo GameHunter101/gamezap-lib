@@ -1,6 +1,5 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -17,7 +16,9 @@ use sdl2::keyboard::Keycode;
 use wgpu::util::DeviceExt;
 
 extern crate gamezap;
-fn main() {
+
+#[tokio::main]
+async fn main() {
     env_logger::init();
 
     let sdl_context = sdl2::init().unwrap();
@@ -25,7 +26,7 @@ fn main() {
     let event_pump = sdl_context.event_pump().unwrap();
     let application_title = "Test";
     let window_size = (800, 600);
-    let window = Rc::new(
+    let window = Arc::new(
         video_subsystem
             .window(application_title, window_size.0, window_size.1)
             .resizable()
@@ -332,7 +333,7 @@ fn main() {
     engine.main_loop(vec![
         (Box::new(input), vec![]),
         (Box::new(test_frame_deps), vec![test_dep.borrow_mut()]),
-    ]);
+    ]).await;
 }
 
 fn input(
@@ -368,7 +369,7 @@ fn run_compute_shaders(
 ) {
     pollster::block_on(
         renderer.module_manager.compute_manager.borrow().shaders[1]
-            .run(&renderer.device, &renderer.queue),
+            .run(renderer.device.clone(), renderer.queue.clone()),
     );
 }
 
