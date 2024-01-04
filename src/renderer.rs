@@ -55,7 +55,7 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::empty(),
+                    features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
                     limits: wgpu::Limits::default(),
                     label: None,
                 },

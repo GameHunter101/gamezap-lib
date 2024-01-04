@@ -23,6 +23,7 @@ impl ComputeShader {
         data: T,
         compute_shader_index: u32,
         passive_shader: bool,
+        output_buffer_size: u64,
     ) -> Self {
         let shader_module_descriptor = PipelineManager::load_shader_module_descriptor(shader_path);
         let shader_module = device.create_shader_module(shader_module_descriptor);
@@ -39,8 +40,9 @@ impl ComputeShader {
 
         let output_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(format!("Compute shader #{compute_shader_index} output buffer").as_str()),
-            size: data_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            size: output_buffer_size,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         }));
 
@@ -49,16 +51,28 @@ impl ComputeShader {
                 label: Some(
                     format!("Compute shader #{compute_shader_index} bind group layout").as_str(),
                 ),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -77,10 +91,16 @@ impl ComputeShader {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(format!("Compute shader #{compute_shader_index} bind group").as_str()),
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: input_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         Self {
@@ -115,13 +135,6 @@ impl ComputeShader {
                 self.workgroup_counts.2,
             );
         }
-        encoder.copy_buffer_to_buffer(
-            &self.input_buffer,
-            0,
-            &self.output_buffer,
-            0,
-            self.data_size,
-        );
 
         queue.submit(Some(encoder.finish()));
 
@@ -176,6 +189,7 @@ impl ComputeManager {
             data,
             self.shaders.len() as u32,
             passive_shader,
+            std::mem::size_of_val(&data) as u64,
         );
         self.shaders.push(shader);
         self.shaders.last()
