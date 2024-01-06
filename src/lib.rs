@@ -1,9 +1,11 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
+    fmt::Debug,
     sync::Arc,
 };
 
+use futures::Future;
 use module_manager::ModuleManager;
 use sdl2::{
     event::{Event, WindowEvent},

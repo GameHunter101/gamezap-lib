@@ -330,10 +330,12 @@ async fn main() {
     engine
         .keybinds
         .insert(Keycode::C, (Box::new(run_compute_shaders), vec![]));
-    engine.main_loop(vec![
-        (Box::new(input), vec![]),
-        (Box::new(test_frame_deps), vec![test_dep.borrow_mut()]),
-    ]).await;
+    engine
+        .main_loop(vec![
+            (Box::new(input), vec![]),
+            (Box::new(test_frame_deps), vec![test_dep.borrow_mut()]),
+        ])
+        .await;
 }
 
 fn input(
@@ -367,10 +369,13 @@ fn run_compute_shaders(
     _engine_systems: Ref<EngineSystems>,
     _frame_dependancies: &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
 ) {
-    pollster::block_on(
+    let output = pollster::block_on(
         renderer.module_manager.compute_manager.borrow().shaders[1]
-            .run(renderer.device.clone(), renderer.queue.clone()),
+            .run::<u32>(renderer.device.clone(), renderer.queue.clone()),
     );
+    if let Ok(output) = output {
+        println!("Final output: {output:?}");
+    }
 }
 
 fn toggle_cursor(

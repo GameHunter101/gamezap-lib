@@ -1,8 +1,13 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
 use crate::pipeline::PipelineManager;
+
+#[derive(Debug)]
+pub enum ComputeError {
+    DataNotReceived,
+}
 
 pub struct ComputeShader {
     pub pipeline: wgpu::ComputePipeline,
@@ -41,8 +46,7 @@ impl ComputeShader {
         let output_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(format!("Compute shader #{compute_shader_index} output buffer").as_str()),
             size: output_buffer_size,
-            usage: wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::MAP_READ,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         }));
 
@@ -115,7 +119,7 @@ impl ComputeShader {
         }
     }
 
-    pub async fn run(&self, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) {
+    pub async fn run_passive(&self, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some(&format!(
                 "Compute shader #{} encoder",
@@ -137,11 +141,18 @@ impl ComputeShader {
         }
 
         queue.submit(Some(encoder.finish()));
+    }
+    pub async fn run<O: bytemuck::Pod + Debug + std::marker::Send>(
+        &self,
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
+    ) -> Result<Vec<O>, ComputeError> {
+        self.run_passive(device.clone(), queue.clone()).await;
 
         let buf = self.output_buffer.clone();
-        let index = self.compute_shader_index;
         let device = device.clone();
-        tokio::task::spawn(async move {
+
+        let future = tokio::task::spawn(async move {
             let buffer_slice = buf.slice(..);
             let (sender, receiver) = flume::bounded(1);
             buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
@@ -151,13 +162,17 @@ impl ComputeShader {
             if let Ok(Ok(())) = receiver.recv() {
                 let data = buffer_slice.get_mapped_range();
 
-                let result: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
-                println!("Compute #{} result: {result:?}", index);
+                let result: Vec<O> = bytemuck::cast_slice(&data).to_vec();
 
                 drop(data);
                 buf.unmap();
+                return Ok(result);
             }
-        });
+            return Err(ComputeError::DataNotReceived);
+        })
+        .await
+        .unwrap();
+        return future;
     }
 }
 
@@ -197,14 +212,14 @@ impl ComputeManager {
 
     pub async fn run_all_shaders(&self, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) {
         for shader in &self.shaders {
-            shader.run(device.clone(), queue.clone()).await;
+            shader.run_passive(device.clone(), queue.clone()).await;
         }
     }
 
     pub async fn run_passive_shaders(&self, device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) {
         for shader in &self.shaders {
             if shader.passive_shader {
-                shader.run(device.clone(), queue.clone()).await;
+                shader.run_passive(device.clone(), queue.clone()).await;
             }
         }
     }
