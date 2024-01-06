@@ -303,6 +303,7 @@ async fn main() {
         "./examples/shaders/compute.wgsl",
         (10, 1, 1),
         [0_u32, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        40,
         true,
     );
 
@@ -311,6 +312,7 @@ async fn main() {
         "./examples/shaders/compute_2.wgsl",
         (4, 1, 1),
         [10_u32, 12, 14, 20],
+        16,
         false,
     );
 

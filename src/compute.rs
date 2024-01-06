@@ -195,6 +195,7 @@ impl ComputeManager {
         shader_path: &str,
         workgroup_counts: (u32, u32, u32),
         data: T,
+        output_buffer_size: u64,
         passive_shader: bool,
     ) -> Option<&'a ComputeShader> {
         let shader = ComputeShader::new(
@@ -204,7 +205,7 @@ impl ComputeManager {
             data,
             self.shaders.len() as u32,
             passive_shader,
-            std::mem::size_of_val(&data) as u64,
+            output_buffer_size,
         );
         self.shaders.push(shader);
         self.shaders.last()
