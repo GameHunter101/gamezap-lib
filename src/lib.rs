@@ -1,7 +1,6 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
-    fmt::Debug,
     sync::Arc,
 };
 
@@ -27,6 +26,11 @@ pub mod module_manager;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
+mod ecs {
+    pub mod entity;
+    pub mod component;
+}
+
 
 /// Main struct for the engine, manages all higher-level state
 ///
