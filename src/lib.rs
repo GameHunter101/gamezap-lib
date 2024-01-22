@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use futures::Future;
 use module_manager::ModuleManager;
 use sdl2::{
     event::{Event, WindowEvent},
@@ -29,6 +28,7 @@ pub mod texture;
 mod ecs {
     pub mod entity;
     pub mod component;
+    pub mod scene;
 }
 
 
