@@ -11,17 +11,19 @@ use crate::pipeline::Pipeline;
 
 use super::component::ComponentSystem;
 
+pub type EntityId = Vec<usize>;
+
 #[derive(Debug)]
 pub struct Entity {
-    id: Vec<usize>,
+    id: EntityId
 }
 
 impl Entity {
-    pub fn new(id: Vec<usize>) -> Self {
+    pub fn new(id: EntityId) -> Self {
         Self { id }
     }
 
-    pub fn get_id<'a>(&'a self) -> &'a Vec<usize> {
+    pub fn get_id(&self) -> &EntityId {
         &self.id
     }
 }

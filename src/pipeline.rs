@@ -1,8 +1,9 @@
-use std::cell::Ref;
-use wgpu::util::DeviceExt;
+use std::{cell::Ref, num::NonZeroU32, sync::Arc};
+use wgpu::{util::DeviceExt, Device, PipelineLayout, ShaderStages};
 
 use crate::{
     camera::CameraManager,
+    ecs::component::MaterialId,
     materials::MaterialManager,
     model::{Mesh, Vertex, VertexData},
     texture::Texture,
@@ -27,12 +28,12 @@ impl PipelineManager {
 
     pub fn create_pipelines(
         &mut self,
-        device: &wgpu::Device,
+        device: Arc<wgpu::Device>,
         format: wgpu::TextureFormat,
         material_manager: Ref<MaterialManager>,
         camera_manager: Option<Ref<CameraManager>>,
     ) {
-        if material_manager.plain_materials.len() > 0 {
+        /* if material_manager.plain_materials.len() > 0 {
             if self.plain_pipeline.is_none() {
                 let mut layouts = vec![&material_manager.plain_materials[0].bind_group_layout];
                 if let Some(camera_manager) = &camera_manager {
@@ -69,11 +70,13 @@ impl PipelineManager {
                     layouts.push(&camera_manager.bind_group_layout.as_ref().unwrap());
                 }
                 let pipeline_layout =
-                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("DiffuseTexturePipelineLayout"),
-                        bind_group_layouts: &layouts,
-                        push_constant_ranges: &[],
-                    });
+                    device
+                        .clone()
+                        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                            label: Some("DiffuseTexturePipelineLayout"),
+                            bind_group_layouts: &layouts,
+                            push_constant_ranges: &[],
+                        });
 
                 let vertex_shader = wgpu::include_wgsl!("./default-shaders/texture_vert.wgsl");
                 let fragment_shader = wgpu::include_wgsl!("./default-shaders/texture_frag.wgsl");
@@ -89,7 +92,7 @@ impl PipelineManager {
                     fragment_shader,
                 ))
             }
-        }
+        } */
     }
 
     pub fn create_compute_shader<T: bytemuck::Pod + bytemuck::Zeroable>(
@@ -135,7 +138,7 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new(
         name: &str,
-        device: &wgpu::Device,
+        device: Arc<wgpu::Device>,
         layout: &wgpu::PipelineLayout,
         color_format: wgpu::TextureFormat,
         depth_format: Option<wgpu::TextureFormat>,
@@ -189,6 +192,48 @@ impl Pipeline {
 
         Pipeline {
             pipeline: render_pipeline,
+        }
+    }
+
+    pub fn create_pipeline_layout(material_id: &MaterialId, device: Arc<Device>) -> PipelineLayout {
+        let bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> = vec![
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: NonZeroU32::new(material_id.2 as u32),
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: NonZeroU32::new(material_id.2 as u32),
+            },
+        ];
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(&format!("{material_id:?} Bind Group Layout")),
+            entries: &bind_group_layout_entries,
+        });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some(&format!("{material_id:?} Pipeline Layout")),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        layout
+    }
+
+    pub fn load_shader_module_descriptor(shader_path: &str) -> wgpu::ShaderModuleDescriptor {
+        let shader_string =
+            std::fs::read_to_string(shader_path).expect("Failed to read shader file");
+
+        wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader_string)),
         }
     }
 }

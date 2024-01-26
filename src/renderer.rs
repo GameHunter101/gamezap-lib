@@ -163,7 +163,7 @@ impl Renderer {
             .pipeline_manager
             .borrow_mut()
             .create_pipelines(
-                &self.device,
+                self.device.clone(),
                 self.config.format,
                 self.module_manager.material_manager.borrow(),
                 camera_manager,
