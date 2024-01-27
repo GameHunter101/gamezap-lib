@@ -299,23 +299,8 @@ async fn main() {
     drop(renderer_queue);
     drop(renderer_device);
     drop(renderer);
-    let toggle_cursor_deps = vec![];
-    let test_dep: RefCell<Box<dyn FrameDependancy>> = RefCell::new(Box::new(TestFrameDep {
-        _name: "hi".to_string(),
-    }));
-    engine.keybinds.insert(
-        Keycode::Escape,
-        (Box::new(toggle_cursor), toggle_cursor_deps),
-    );
-    engine
-        .keybinds
-        .insert(Keycode::C, (Box::new(run_compute_shaders), vec![]));
-    engine
-        .main_loop(vec![
-            (Box::new(input), vec![]),
-            (Box::new(test_frame_deps), vec![test_dep.borrow_mut()]),
-        ])
-        .await;
+
+    engine.main_loop().await;
 }
 
 fn input(

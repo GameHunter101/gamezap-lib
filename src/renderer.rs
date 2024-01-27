@@ -16,12 +16,12 @@ use crate::{
 };
 
 pub struct Renderer {
-    pub surface: wgpu::Surface,
+    pub surface: Arc<wgpu::Surface>,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
     pub config: wgpu::SurfaceConfiguration,
     pub size: (u32, u32),
-    pub depth_texture: Texture,
+    pub depth_texture: Arc<Texture>,
     pub clear_color: wgpu::Color,
     pub smaa_target: Arc<Mutex<SmaaTarget>>,
     pub module_manager: ModuleManager,
@@ -41,7 +41,7 @@ impl Renderer {
             dx12_shader_compiler: Default::default(),
         });
 
-        let surface = unsafe { instance.create_surface(&*window) }.unwrap();
+        let surface = Arc::new(unsafe { instance.create_surface(&*window) }.unwrap());
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptionsBase {
@@ -86,7 +86,11 @@ impl Renderer {
         };
         surface.configure(&device, &config);
 
-        let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+        let depth_texture = Arc::new(Texture::create_depth_texture(
+            &device,
+            &config,
+            "depth_texture",
+        ));
 
         let smaa_target = Arc::new(Mutex::new(SmaaTarget::new(
             &device,
@@ -137,8 +141,11 @@ impl Renderer {
             self.config.width = new_size.0;
             self.config.height = new_size.1;
             self.surface.configure(&self.device, &self.config);
-            self.depth_texture =
-                Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.depth_texture = Arc::new(Texture::create_depth_texture(
+                &self.device,
+                &self.config,
+                "depth_texture",
+            ));
             if let Some(camera_manager) = &self.module_manager.camera_manager {
                 camera_manager.borrow().camera.borrow_mut().aspect =
                     new_size.0 as f32 / new_size.1 as f32;

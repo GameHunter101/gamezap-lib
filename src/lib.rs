@@ -1,9 +1,10 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashMap,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
+use ecs::scene::Scene;
 use module_manager::ModuleManager;
 use sdl2::{
     event::{Event, WindowEvent},
@@ -26,11 +27,10 @@ pub mod pipeline;
 pub mod renderer;
 pub mod texture;
 mod ecs {
-    pub mod entity;
     pub mod component;
+    pub mod entity;
     pub mod scene;
 }
-
 
 /// Main struct for the engine, manages all higher-level state
 ///
@@ -58,22 +58,24 @@ mod ecs {
 ///     engine.renderer.lock().unwrap().render().unwrap();
 /// }
 /// ```
-pub struct GameZap<'a> {
+pub struct GameZap {
     pub systems: RefCell<EngineSystems>,
     pub renderer: Renderer,
     pub clear_color: wgpu::Color,
     pub window: Arc<Window>,
     pub window_size: (u32, u32),
-    pub details: RefCell<EngineDetails>,
-    pub keybinds: HashMap<Keycode, (ExtensionFunction, Vec<RefMut<'a, Box<dyn FrameDependancy>>>)>,
+    pub details: Arc<Mutex<EngineDetails>>,
+
+    scenes: Vec<Scene>,
+    active_scene_index: usize,
 }
 
 pub struct EngineDetails {
     pub frame_number: u32,
-    pub initialized_instant: time::Instant,
-    pub time_elapsed: time::Duration,
-    pub last_frame_duration: time::Duration,
-    pub time_of_last_frame: time::Instant,
+    pub initialized_instant: Instant,
+    pub time_elapsed: Duration,
+    pub last_frame_duration: Duration,
+    pub time_of_last_frame: Instant,
 
     pub mouse_state: (Option<RelativeMouseState>, bool),
     pub pressed_scancodes: Vec<Scancode>,
@@ -84,15 +86,6 @@ pub struct EngineSystems {
     pub video_subsystem: RefCell<sdl2::VideoSubsystem>,
     pub event_pump: RefCell<sdl2::EventPump>,
 }
-
-pub type ExtensionFunction = Box<
-    dyn Fn(
-        RefMut<EngineDetails>,
-        &Renderer,
-        Ref<EngineSystems>,
-        &mut Vec<RefMut<Box<dyn FrameDependancy>>>,
-    ),
->;
 
 pub trait EngineSettings {
     fn update_cursor_mode(&mut self, cursor_visible: bool);
@@ -107,7 +100,7 @@ impl EngineSettings for Sdl {
 
 impl EngineDetails {
     pub fn update_details(&mut self, event_pump: Ref<EventPump>, sdl_context: Ref<Sdl>) {
-        let now = time::Instant::now();
+        let now = Instant::now();
         self.frame_number += 1;
         self.time_elapsed = now - self.initialized_instant;
         self.last_frame_duration = now - self.time_of_last_frame;
@@ -121,14 +114,14 @@ impl EngineDetails {
     }
 }
 
-impl<'a> GameZap<'a> {
+impl GameZap {
     /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
     pub fn builder() -> GameZapBuilder {
         GameZapBuilder::init()
     }
 
     pub fn update_details(&self) {
-        let mut engine_details = self.details.borrow_mut();
+        let mut engine_details = self.details.lock().unwrap();
         let systems = self.systems.borrow_mut();
         engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
     }
@@ -138,10 +131,7 @@ impl<'a> GameZap<'a> {
         self.renderer.render().await.unwrap();
     }
 
-    pub async fn main_loop<'b>(
-        &mut self,
-        mut extensions: Vec<(ExtensionFunction, Vec<RefMut<'b, Box<dyn FrameDependancy>>>)>,
-    ) {
+    pub async fn main_loop<'b>(&mut self) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
                 match event {
@@ -150,29 +140,20 @@ impl<'a> GameZap<'a> {
                         win_event: WindowEvent::Resized(width, height),
                         ..
                     } => self.renderer.resize((width as u32, height as u32)),
-                    Event::KeyDown {
-                        keycode: Some(key), ..
-                    } => {
-                        if let Some((func, deps)) = self.keybinds.get_mut(&key) {
-                            (func)(
-                                self.details.borrow_mut(),
-                                &self.renderer,
-                                self.systems.borrow(),
-                                deps,
-                            );
-                        }
-                    }
                     _ => {}
                 }
             }
-            for (func, deps) in extensions.iter_mut() {
-                (func)(
-                    self.details.borrow_mut(),
-                    &self.renderer,
-                    self.systems.borrow(),
-                    deps,
-                );
-            }
+
+            let renderer = &self.renderer;
+            let active_scene = &mut self.scenes[self.active_scene_index];
+            active_scene.update(
+                renderer.device.clone(),
+                renderer.queue.clone(),
+                renderer.smaa_target.clone(),
+                renderer.surface.clone(),
+                renderer.depth_texture.clone(),
+                self.details.clone(),
+            );
 
             self.update_renderer().await;
             self.update_details();
@@ -198,13 +179,16 @@ pub struct GameZapBuilder {
     frame_number: u32,
     window: Option<Arc<Window>>,
     window_size: Option<(u32, u32)>,
-    initialized_instant: time::Instant,
-    time_elapsed: time::Duration,
-    last_frame_duration: time::Duration,
-    time_of_last_frame: time::Instant,
+    initialized_instant: Instant,
+    time_elapsed: Duration,
+    last_frame_duration: Duration,
+    time_of_last_frame: Instant,
 
     module_manager: ModuleManager,
     antialiasing: bool,
+
+    scenes: Vec<Scene>,
+    active_scene_index: usize,
 }
 
 impl<'a> GameZapBuilder {
@@ -229,6 +213,9 @@ impl<'a> GameZapBuilder {
 
             module_manager: ModuleManager::minimal(),
             antialiasing: false,
+
+            scenes: vec![Scene::new()],
+            active_scene_index: 0,
         }
     }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
@@ -268,12 +255,18 @@ impl<'a> GameZapBuilder {
         self
     }
 
+    pub fn scenes(mut self, scenes: Vec<Scene>, active_scene_index: usize) -> GameZapBuilder {
+        self.scenes = scenes;
+        self.active_scene_index = active_scene_index;
+        self
+    }
+
     /// Pass in a customized [Camera] struct
     /// Default camera uses a 45 degree field of view, starts at (0,0,0),
     /// and points in the positive Z direction
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
-    pub fn build(self) -> GameZap<'a> {
+    pub fn build(self) -> GameZap {
         let sdl_context = RefCell::new(if let Some(context) = self.sdl_context {
             context
         } else {
@@ -308,7 +301,7 @@ impl<'a> GameZapBuilder {
             clear_color: self.clear_color,
             window,
             window_size: self.window_size.unwrap(),
-            details: RefCell::new(EngineDetails {
+            details: Arc::new(Mutex::new(EngineDetails {
                 frame_number: self.frame_number,
                 initialized_instant: self.initialized_instant,
                 time_elapsed: self.time_elapsed,
@@ -316,8 +309,9 @@ impl<'a> GameZapBuilder {
                 time_of_last_frame: self.time_of_last_frame,
                 mouse_state: (None, true),
                 pressed_scancodes: vec![],
-            }),
-            keybinds: HashMap::new(),
+            })),
+            scenes: self.scenes,
+            active_scene_index: self.active_scene_index,
         }
     }
 }

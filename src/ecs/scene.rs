@@ -2,6 +2,7 @@ use crate::{
     ecs::entity::Entity,
     model::{Mesh, Vertex, VertexData},
     texture::Texture,
+    EngineDetails,
 };
 use std::{
     collections::HashMap,
@@ -33,7 +34,7 @@ impl Scene {
         }
     }
 
-    pub fn initialize_material(
+    fn initialize_material(
         &mut self,
         entity: &EntityId,
         device: Arc<Device>,
@@ -68,7 +69,7 @@ impl Scene {
         }
     }
 
-    pub fn create_entity(
+    fn create_entity(
         &mut self,
         index: Option<EntityId>,
         components: Arc<Mutex<EntityComponentGroup>>,
@@ -103,7 +104,7 @@ impl Scene {
         entity_id
     }
 
-    fn initialize(
+    pub fn initialize(
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
@@ -119,30 +120,16 @@ impl Scene {
                 self.initialize_material(material_comp.this_entity(), device.clone(), color_format);
             }
         }
-
-        /* for (_, components) in self.component_map.clone().lock().unwrap().iter_mut() {
-            for component in components {
-                let map_arc = self.component_map.clone();
-                let mut component_map = map_arc.lock().unwrap();
-                let sibling_components = component_map.get_mut(component.this_entity()).unwrap();
-                match component {
-                    Component::Normal(comp) => {
-                        comp.initialize(device.clone(), queue.clone(), sibling_components)
-                    }
-                    Component::Material(mat) => {
-                        self.initialize_material(mat, device.clone(), color_format)
-                    }
-                };
-            }
-        } */
     }
-    fn update(
+
+    pub fn update(
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
         smaa_target: Arc<Mutex<smaa::SmaaTarget>>,
         surface: Arc<Surface>,
         depth_texture: Arc<crate::texture::Texture>,
+        engine_details: Arc<Mutex<EngineDetails>>,
     ) {
         let pipelines_clone = self.pipelines.clone();
         let pipelines = pipelines_clone.lock().unwrap();
@@ -188,7 +175,12 @@ impl Scene {
             let mut component_group = component_group_arc.lock().unwrap();
             if component_group.get_active_material().is_none() {
                 for component in component_group.get_normal_components_mut() {
-                    component.update(device.clone(), queue.clone(), component_group_arc.clone());
+                    component.update(
+                        device.clone(),
+                        queue.clone(),
+                        component_group_arc.clone(),
+                        engine_details.clone(),
+                    );
                 }
             }
         }
@@ -204,6 +196,7 @@ impl Scene {
                                 device.clone(),
                                 queue.clone(),
                                 component_group_arc.clone(),
+                                engine_details.clone()
                             );
                         }
                     }

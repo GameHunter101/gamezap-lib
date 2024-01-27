@@ -5,7 +5,7 @@ use wgpu::{
     Device, Queue,
 };
 
-use crate::{model::Vertex, texture::Texture};
+use crate::{model::Vertex, texture::Texture, EngineDetails};
 
 use super::entity::EntityId;
 
@@ -48,13 +48,18 @@ pub trait ComponentSystem {
         device: Arc<Device>,
         queue: Arc<Queue>,
         entity_components: Arc<Mutex<EntityComponentGroup>>,
-    );
+    ) {
+    }
+
     fn update(
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
         entity_components: Arc<Mutex<EntityComponentGroup>>,
-    );
+        engine_details: Arc<Mutex<EngineDetails>>,
+    ) {
+    }
+
     fn this_entity(&self) -> &EntityId;
 }
 
@@ -84,14 +89,6 @@ impl ComponentSystem for MeshComponent {
             contents: &bytemuck::cast_slice(&self.indices),
             usage: wgpu::BufferUsages::INDEX,
         }));
-    }
-
-    fn update(
-        &mut self,
-        device: Arc<Device>,
-        queue: Arc<Queue>,
-        entity_components: Arc<Mutex<EntityComponentGroup>>,
-    ) {
     }
 
     fn this_entity(&self) -> &EntityId {
