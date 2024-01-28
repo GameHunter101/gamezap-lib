@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::{
     ecs::entity::Entity,
     model::{Mesh, Vertex, VertexData},
@@ -15,13 +16,14 @@ use wgpu::{Device, Queue, Surface};
 use crate::pipeline::Pipeline;
 
 use super::{
-    component::{EntityComponentGroup, MaterialId},
+    component::{ComponentSystem, EntityComponentGroup, MaterialComponent, MaterialId},
     entity::EntityId,
 };
 pub struct Scene {
     entities: Tree<Entity>,
-    components: Arc<Mutex<HashMap<EntityId, Arc<Mutex<EntityComponentGroup>>>>>,
+    components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
     pipelines: Arc<Mutex<Vec<(MaterialId, Pipeline)>>>,
+    materials: Arc<Mutex<HashMap<EntityId, (Vec<MaterialComponent>, usize)>>>,
 }
 
 impl Scene {
@@ -31,40 +33,45 @@ impl Scene {
             entities: Tree::new(Entity::new(root_index)),
             components: Arc::new(Mutex::new(HashMap::new())),
             pipelines: Arc::from(Mutex::new(Vec::new())),
+            materials: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     fn initialize_material(
         &mut self,
-        entity: &EntityId,
+        entity_id: &EntityId,
         device: Arc<Device>,
         color_format: wgpu::TextureFormat,
     ) {
-        let all_components = self.components.lock().unwrap();
-        let components_arc = all_components.get(entity).unwrap();
-        let components = components_arc.lock().unwrap();
-        let material_id = components.get_active_material();
-        if let Some(mat_id) = material_id {
-            let is_new_material = self
-                .pipelines
-                .lock()
-                .unwrap()
-                .iter()
-                .position(|(id, _)| id == mat_id)
-                .is_none();
+        let all_materials = self.materials.lock().unwrap();
+        let materials = all_materials.get(entity_id);
+        if let Some(materials) = materials {
+            let active_material = materials.0.get(materials.1);
+            if let Some(active_material) = active_material {
+                let mat_id = active_material.id();
 
-            if is_new_material {
-                let new_pipeline_layout = Pipeline::create_pipeline_layout(mat_id, device.clone());
-                let new_pipeline = Pipeline::new(
-                    &format!("{:?} Pipeline", mat_id),
-                    device,
-                    &new_pipeline_layout,
-                    color_format,
-                    Some(Texture::DEPTH_FORMAT),
-                    &[Vertex::desc(), Mesh::desc()],
-                    Pipeline::load_shader_module_descriptor(&mat_id.0),
-                    Pipeline::load_shader_module_descriptor(&mat_id.1),
-                );
+                let is_new_material = self
+                    .pipelines
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .position(|(id, _)| id == mat_id)
+                    .is_none();
+
+                if is_new_material {
+                    let new_pipeline_layout =
+                        Pipeline::create_pipeline_layout(mat_id, device.clone());
+                    let new_pipeline = Pipeline::new(
+                        &format!("{:?} Pipeline", mat_id),
+                        device,
+                        &new_pipeline_layout,
+                        color_format,
+                        Some(Texture::DEPTH_FORMAT),
+                        &[Vertex::desc(), Mesh::desc()],
+                        Pipeline::load_shader_module_descriptor(&mat_id.0),
+                        Pipeline::load_shader_module_descriptor(&mat_id.1),
+                    );
+                }
             }
         }
     }
@@ -72,7 +79,9 @@ impl Scene {
     fn create_entity(
         &mut self,
         index: Option<EntityId>,
-        components: Arc<Mutex<EntityComponentGroup>>,
+        components: Vec<Box<dyn ComponentSystem>>,
+        materials: Vec<MaterialComponent>,
+        active_material: Option<usize>,
         device: Arc<Device>,
         color_format: wgpu::TextureFormat,
     ) -> EntityId {
@@ -99,7 +108,13 @@ impl Scene {
             .unwrap()
             .insert(entity_id.clone(), components);
 
-        self.initialize_material(&entity_id, device, color_format);
+        if let Some(active_mat) = active_material {
+            self.materials
+                .lock()
+                .unwrap()
+                .insert(entity_id.clone(), (materials, active_mat));
+            self.initialize_material(&entity_id, device, color_format);
+        }
 
         entity_id
     }
@@ -111,13 +126,17 @@ impl Scene {
         color_format: wgpu::TextureFormat,
     ) {
         let all_components = self.components.clone();
-        for (_, components_arc) in all_components.lock().unwrap().iter_mut() {
-            let mut components = components_arc.lock().unwrap();
-            for normal_comp in components.get_normal_components_mut() {
-                normal_comp.initialize(device.clone(), queue.clone(), components_arc.clone());
+        let materials_arc = self.materials.clone();
+        let all_materials = materials_arc.lock().unwrap();
+        for (entity_id, components) in all_components.lock().unwrap().iter_mut() {
+            for normal_comp in components.iter_mut() {
+                normal_comp.initialize(device.clone(), queue.clone(), all_components.clone());
             }
-            for material_comp in components.get_material_components_mut() {
-                self.initialize_material(material_comp.this_entity(), device.clone(), color_format);
+            let materials = all_materials.get(entity_id);
+            if let Some((materials, _)) = materials {
+                for material in materials {
+                    self.initialize_material(material.this_entity(), device.clone(), color_format);
+                }
             }
         }
     }
@@ -133,6 +152,10 @@ impl Scene {
     ) {
         let pipelines_clone = self.pipelines.clone();
         let pipelines = pipelines_clone.lock().unwrap();
+        let components_arc = self.components.clone();
+        let mut all_components = components_arc.lock().unwrap();
+        let materials_arc = self.materials.clone();
+        let mut all_materials = materials_arc.lock().unwrap();
 
         let output = surface.get_current_texture().unwrap();
         let view = output
@@ -171,15 +194,15 @@ impl Scene {
             }),
         });
 
-        for component_group_arc in self.components.lock().unwrap().values_mut().into_iter() {
-            let mut component_group = component_group_arc.lock().unwrap();
-            if component_group.get_active_material().is_none() {
-                for component in component_group.get_normal_components_mut() {
+        for (component_id, components) in all_components.iter_mut() {
+            if all_materials.get(component_id).is_none() {
+                for component in components {
                     component.update(
                         device.clone(),
                         queue.clone(),
-                        component_group_arc.clone(),
+                        components_arc.clone(),
                         engine_details.clone(),
+                        &mut render_pass,
                     );
                 }
             }
@@ -187,16 +210,20 @@ impl Scene {
         for pipeline_data in pipelines.iter() {
             let (current_pipeline_id, pipeline) = pipeline_data;
             render_pass.set_pipeline(&pipeline.pipeline);
-            for component_group_arc in self.components.lock().unwrap().values_mut().into_iter() {
-                let mut component_group = component_group_arc.lock().unwrap();
-                if let Some(mat_id) = component_group.get_active_material() {
-                    if current_pipeline_id == mat_id {
-                        for component in component_group.get_normal_components_mut() {
+
+            for (entity_id, (component_materials, active_material_index)) in all_materials.iter() {
+                let active_material = &component_materials[*active_material_index];
+                let active_material_id = active_material.id();
+                if active_material_id == current_pipeline_id {
+                    render_pass.set_bind_group(0, &active_material.bind_group(), &[]);
+                    if let Some(components) = all_components.get_mut(entity_id) {
+                        for component in components.iter_mut() {
                             component.update(
                                 device.clone(),
                                 queue.clone(),
-                                component_group_arc.clone(),
-                                engine_details.clone()
+                                components_arc.clone(),
+                                engine_details.clone(),
+                                &mut render_pass,
                             );
                         }
                     }

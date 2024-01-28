@@ -1,6 +1,5 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    collections::HashMap,
     sync::{Arc, Mutex},
 };
 
@@ -8,7 +7,7 @@ use ecs::scene::Scene;
 use module_manager::ModuleManager;
 use sdl2::{
     event::{Event, WindowEvent},
-    keyboard::{Keycode, Scancode},
+    keyboard::Scancode,
     mouse::RelativeMouseState,
     video::Window,
     EventPump, Sdl,
@@ -128,7 +127,7 @@ impl GameZap {
 
     pub async fn update_renderer(&self) {
         self.renderer.update_buffers();
-        self.renderer.render().await.unwrap();
+        // self.renderer.render().await.unwrap();
     }
 
     pub async fn main_loop<'b>(&mut self) {

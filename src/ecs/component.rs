@@ -1,8 +1,13 @@
-use std::sync::{Arc, Mutex};
+#![allow(unused)]
+use std::{
+    num::NonZeroU32,
+    sync::{Arc, Mutex}, collections::HashMap,
+};
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    Device, Queue,
+    BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, Queue,
+    RenderPass, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension,
 };
 
 use crate::{model::Vertex, texture::Texture, EngineDetails};
@@ -13,7 +18,7 @@ pub struct EntityComponentGroup {
     entity: EntityId,
     normal_components: Vec<Box<dyn ComponentSystem>>,
     material_components: Vec<MaterialComponent>,
-    active_material: Option<MaterialId>,
+    active_material_id: Option<MaterialId>,
 }
 
 impl EntityComponentGroup {
@@ -37,8 +42,19 @@ impl EntityComponentGroup {
         &mut self.material_components
     }
 
-    pub fn get_active_material(&self) -> &Option<MaterialId> {
-        &self.active_material
+    pub fn get_active_material_index(&self) -> &Option<MaterialId> {
+        &self.active_material_id
+    }
+
+    pub fn get_active_material(&self) -> Option<&MaterialComponent> {
+        if let Some(id) = &self.active_material_id {
+            for material in &self.material_components {
+                if material.id() == id {
+                    return Some(material);
+                }
+            }
+        }
+        return None;
     }
 }
 
@@ -47,7 +63,7 @@ pub trait ComponentSystem {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        entity_components: Arc<Mutex<EntityComponentGroup>>,
+        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
     ) {
     }
 
@@ -55,8 +71,9 @@ pub trait ComponentSystem {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        entity_components: Arc<Mutex<EntityComponentGroup>>,
+        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
         engine_details: Arc<Mutex<EngineDetails>>,
+        render_pass: &mut RenderPass,
     ) {
     }
 
@@ -76,7 +93,7 @@ impl ComponentSystem for MeshComponent {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        entity_components: Arc<Mutex<EntityComponentGroup>>,
+        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
     ) {
         self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
@@ -89,6 +106,16 @@ impl ComponentSystem for MeshComponent {
             contents: &bytemuck::cast_slice(&self.indices),
             usage: wgpu::BufferUsages::INDEX,
         }));
+    }
+
+    fn update(
+        &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
+        engine_details: Arc<Mutex<EngineDetails>>,
+        render_pass: &mut RenderPass,
+    ) {
     }
 
     fn this_entity(&self) -> &EntityId {
@@ -105,6 +132,7 @@ pub struct MaterialComponent {
     textures: Vec<Texture>,
     enabled: bool,
     id: MaterialId,
+    bind_group: BindGroup,
 }
 
 impl MaterialComponent {
@@ -114,12 +142,60 @@ impl MaterialComponent {
         fragment_shader_path: &str,
         textures: Vec<Texture>,
         enabled: bool,
+        device: Arc<Device>,
     ) -> Self {
         let id = (
             vertex_shader_path.to_string(),
             fragment_shader_path.to_string(),
             textures.len(),
         );
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(&format!("Material {id:?} Bind Group Layout")),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: NonZeroU32::new(textures.len() as u32),
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: NonZeroU32::new(textures.len() as u32),
+                },
+            ],
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("Material {id:?} Bind Group")),
+            layout: &bind_group_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureViewArray(
+                        &textures
+                            .iter()
+                            .map(|tex| &tex.view)
+                            .collect::<Vec<_>>()
+                            .as_slice(),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::SamplerArray(
+                        &textures
+                            .iter()
+                            .map(|tex| &tex.sampler)
+                            .collect::<Vec<_>>()
+                            .as_slice(),
+                    ),
+                },
+            ],
+        });
         Self {
             entity,
             vertex_shader_path: vertex_shader_path.to_string(),
@@ -127,6 +203,7 @@ impl MaterialComponent {
             textures,
             enabled,
             id,
+            bind_group,
         }
     }
 
@@ -140,5 +217,9 @@ impl MaterialComponent {
 
     pub fn enabled(&self) -> bool {
         self.enabled
+    }
+
+    pub fn bind_group(&self) -> &BindGroup {
+        &self.bind_group
     }
 }
