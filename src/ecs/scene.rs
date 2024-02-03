@@ -6,24 +6,30 @@ use crate::{
     EngineDetails,
 };
 use std::{
+    any::Any,
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use cool_utils::data_structures::tree::Tree;
-use wgpu::{Device, Queue, Surface};
+use wgpu::{Device, Queue, RenderPass, Surface};
+
+use nalgebra as na;
 
 use crate::pipeline::Pipeline;
 
 use super::{
-    component::{ComponentSystem, EntityComponentGroup, MaterialComponent, MaterialId},
+    component::{CameraComponent, ComponentSystem, MaterialComponent, MaterialId},
     entity::EntityId,
 };
+
 pub struct Scene {
     entities: Tree<Entity>,
     components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
     pipelines: Arc<Mutex<Vec<(MaterialId, Pipeline)>>>,
     materials: Arc<Mutex<HashMap<EntityId, (Vec<MaterialComponent>, usize)>>>,
+    active_camera_id: Option<EntityId>,
+    cameras: Arc<Mutex<HashMap<EntityId, CameraComponent>>>,
 }
 
 impl Scene {
@@ -34,6 +40,8 @@ impl Scene {
             components: Arc::new(Mutex::new(HashMap::new())),
             pipelines: Arc::from(Mutex::new(Vec::new())),
             materials: Arc::new(Mutex::new(HashMap::new())),
+            active_camera_id: None,
+            cameras: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -130,7 +138,12 @@ impl Scene {
         let all_materials = materials_arc.lock().unwrap();
         for (entity_id, components) in all_components.lock().unwrap().iter_mut() {
             for normal_comp in components.iter_mut() {
-                normal_comp.initialize(device.clone(), queue.clone(), all_components.clone());
+                normal_comp.initialize(
+                    device.clone(),
+                    queue.clone(),
+                    all_components.clone(),
+                    &mut self.active_camera_id,
+                );
             }
             let materials = all_materials.get(entity_id);
             if let Some((materials, _)) = materials {
@@ -156,6 +169,8 @@ impl Scene {
         let mut all_components = components_arc.lock().unwrap();
         let materials_arc = self.materials.clone();
         let mut all_materials = materials_arc.lock().unwrap();
+        let cameras_arc = self.cameras.clone();
+        let mut all_cameras = cameras_arc.lock().unwrap();
 
         let output = surface.get_current_texture().unwrap();
         let view = output
@@ -194,19 +209,15 @@ impl Scene {
             }),
         });
 
-        for (component_id, components) in all_components.iter_mut() {
-            if all_materials.get(component_id).is_none() {
-                for component in components {
-                    component.update(
-                        device.clone(),
-                        queue.clone(),
-                        components_arc.clone(),
-                        engine_details.clone(),
-                        &mut render_pass,
-                    );
-                }
-            }
-        }
+        self.update_plain_entities(
+            components_arc.clone(),
+            materials_arc.clone(),
+            device.clone(),
+            queue.clone(),
+            engine_details.clone(),
+            &mut render_pass,
+        );
+
         for pipeline_data in pipelines.iter() {
             let (current_pipeline_id, pipeline) = pipeline_data;
             render_pass.set_pipeline(&pipeline.pipeline);
@@ -216,6 +227,7 @@ impl Scene {
                 let active_material_id = active_material.id();
                 if active_material_id == current_pipeline_id {
                     render_pass.set_bind_group(0, &active_material.bind_group(), &[]);
+
                     if let Some(components) = all_components.get_mut(entity_id) {
                         for component in components.iter_mut() {
                             component.update(
@@ -224,9 +236,37 @@ impl Scene {
                                 components_arc.clone(),
                                 engine_details.clone(),
                                 &mut render_pass,
+                                &mut self.active_camera_id,
                             );
                         }
                     }
+                }
+            }
+        }
+    }
+
+    fn update_plain_entities(
+        &mut self,
+        components_arc: Arc<Mutex<HashMap<Vec<usize>, Vec<Box<dyn ComponentSystem>>>>>,
+        materials_arc: Arc<Mutex<HashMap<Vec<usize>, (Vec<MaterialComponent>, usize)>>>,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        engine_details: Arc<Mutex<EngineDetails>>,
+        render_pass: &mut RenderPass,
+    ) {
+        let mut all_components = components_arc.lock().unwrap();
+        let all_materials = materials_arc.lock().unwrap();
+        for (component_id, components) in all_components.iter_mut() {
+            if all_materials.get(component_id).is_none() {
+                for component in components {
+                    component.update(
+                        device.clone(),
+                        queue.clone(),
+                        components_arc.clone(),
+                        engine_details.clone(),
+                        render_pass,
+                        &mut self.active_camera_id,
+                    );
                 }
             }
         }

@@ -1,62 +1,24 @@
 #![allow(unused)]
 use std::{
+    collections::HashMap,
     num::NonZeroU32,
-    sync::{Arc, Mutex}, collections::HashMap,
+    sync::{Arc, Mutex},
 };
 
+use bytemuck::{Pod, Zeroable};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device, Queue,
-    RenderPass, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferUsages,
+    Device, Queue, RenderPass, SamplerBindingType, ShaderStages, TextureSampleType,
+    TextureViewDimension,
 };
+
+use nalgebra as na;
 
 use crate::{model::Vertex, texture::Texture, EngineDetails};
 
 use super::entity::EntityId;
-
-pub struct EntityComponentGroup {
-    entity: EntityId,
-    normal_components: Vec<Box<dyn ComponentSystem>>,
-    material_components: Vec<MaterialComponent>,
-    active_material_id: Option<MaterialId>,
-}
-
-impl EntityComponentGroup {
-    pub fn this_entity(&self) -> &EntityId {
-        &self.entity
-    }
-
-    pub fn get_normal_components(&self) -> &Vec<Box<dyn ComponentSystem>> {
-        &self.normal_components
-    }
-
-    pub fn get_material_components(&self) -> &Vec<MaterialComponent> {
-        &self.material_components
-    }
-
-    pub fn get_normal_components_mut(&mut self) -> &mut Vec<Box<dyn ComponentSystem>> {
-        &mut self.normal_components
-    }
-
-    pub fn get_material_components_mut(&mut self) -> &mut Vec<MaterialComponent> {
-        &mut self.material_components
-    }
-
-    pub fn get_active_material_index(&self) -> &Option<MaterialId> {
-        &self.active_material_id
-    }
-
-    pub fn get_active_material(&self) -> Option<&MaterialComponent> {
-        if let Some(id) = &self.active_material_id {
-            for material in &self.material_components {
-                if material.id() == id {
-                    return Some(material);
-                }
-            }
-        }
-        return None;
-    }
-}
 
 pub trait ComponentSystem {
     fn initialize(
@@ -64,6 +26,7 @@ pub trait ComponentSystem {
         device: Arc<Device>,
         queue: Arc<Queue>,
         all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
+        active_camera_id: &mut Option<EntityId>,
     ) {
     }
 
@@ -74,6 +37,7 @@ pub trait ComponentSystem {
         all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
         engine_details: Arc<Mutex<EngineDetails>>,
         render_pass: &mut RenderPass,
+        active_camera_id: &mut Option<EntityId>,
     ) {
     }
 
@@ -94,6 +58,7 @@ impl ComponentSystem for MeshComponent {
         device: Arc<Device>,
         queue: Arc<Queue>,
         all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
+        active_camera_id: &mut Option<EntityId>,
     ) {
         self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
@@ -115,6 +80,7 @@ impl ComponentSystem for MeshComponent {
         all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
         engine_details: Arc<Mutex<EngineDetails>>,
         render_pass: &mut RenderPass,
+        active_camera_id: &mut Option<EntityId>,
     ) {
     }
 
@@ -221,5 +187,86 @@ impl MaterialComponent {
 
     pub fn bind_group(&self) -> &BindGroup {
         &self.bind_group
+    }
+}
+
+#[repr(C)]
+#[derive(Pod, Zeroable, Clone, Copy)]
+pub struct RawCameraData {
+    view_pos: [f32; 4],
+    view_proj: [[f32; 4]; 4],
+}
+
+impl RawCameraData {
+    fn new(position: na::Vector3<f32>, projection: na::Matrix4<f32>) -> Self {
+        RawCameraData {
+            view_pos: position.to_homogeneous().into(),
+            view_proj: projection.into(),
+        }
+    }
+}
+
+pub struct CameraComponent {
+    entity: EntityId,
+    view_proj: na::Matrix4<f32>,
+}
+
+impl CameraComponent {
+    pub fn new(entity: EntityId, device: Arc<Device>) -> Self {
+        CameraComponent {
+            entity,
+            view_proj: na::Matrix4::identity(),
+        }
+    }
+
+    pub fn camera_bind_group_layout(device: Arc<Device>) -> BindGroupLayout {
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some(&format!("Default Camera Bind Group Layout")),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        bind_group_layout
+    }
+
+    pub fn create_camera_bind_group(&self, device: Arc<Device>, position: na::Vector3<f32>) -> BindGroup {
+        let raw_camera_data = RawCameraData::new(position, self.view_proj);
+        let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some(&format!("{:?} Camera Buffer", self.entity)),
+            contents: bytemuck::cast_slice(&[raw_camera_data]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some(&format!("{:?} Camera Bind Group", self.entity)),
+            layout: &Self::camera_bind_group_layout(device.clone()),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: todo!(),
+            }],
+        });
+        bind_group
+    }
+}
+
+impl ComponentSystem for CameraComponent {
+    fn this_entity(&self) -> &EntityId {
+        &self.entity
+    }
+
+    fn initialize(
+        &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
+        active_camera_id: &mut Option<EntityId>,
+    ) {
     }
 }

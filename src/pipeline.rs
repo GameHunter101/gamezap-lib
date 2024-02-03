@@ -3,7 +3,7 @@ use wgpu::{util::DeviceExt, Device, PipelineLayout, ShaderStages};
 
 use crate::{
     camera::CameraManager,
-    ecs::component::MaterialId,
+    ecs::component::{CameraComponent, MaterialId},
     materials::MaterialManager,
     model::{Mesh, Vertex, VertexData},
     texture::Texture,
@@ -220,7 +220,10 @@ impl Pipeline {
         });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&format!("{material_id:?} Pipeline Layout")),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[
+                &bind_group_layout,
+                &CameraComponent::camera_bind_group_layout(device.clone()),
+            ],
             push_constant_ranges: &[],
         });
 
