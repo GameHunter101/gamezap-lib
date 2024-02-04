@@ -1,8 +1,9 @@
 #![allow(unused)]
 use std::{
     collections::HashMap,
+    fmt::Debug,
     num::NonZeroU32,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, any::Any,
 };
 
 use bytemuck::{Pod, Zeroable};
@@ -18,15 +19,26 @@ use nalgebra as na;
 
 use crate::{model::Vertex, texture::Texture, EngineDetails};
 
-use super::entity::EntityId;
+use super::entity::{EntityId, Entity};
 
-pub trait ComponentSystem {
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: Any> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+pub type Component = Box<dyn ComponentSystem>;
+
+pub trait ComponentSystem:Debug {
     fn initialize(
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
-        active_camera_id: &mut Option<EntityId>,
+        all_entities: Arc<Mutex<Vec<Entity>>>,
     ) {
     }
 
@@ -34,16 +46,16 @@ pub trait ComponentSystem {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
+        all_components: Arc<Mutex<Vec<Entity>>>,
         engine_details: Arc<Mutex<EngineDetails>>,
         render_pass: &mut RenderPass,
-        active_camera_id: &mut Option<EntityId>,
     ) {
     }
 
     fn this_entity(&self) -> &EntityId;
 }
 
+#[derive(Debug)]
 pub struct MeshComponent {
     entity: EntityId,
     vertices: Vec<Vertex>,
@@ -57,8 +69,7 @@ impl ComponentSystem for MeshComponent {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
-        active_camera_id: &mut Option<EntityId>,
+        all_entities: Arc<Mutex<Vec<Entity>>>,
     ) {
         self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
@@ -73,17 +84,6 @@ impl ComponentSystem for MeshComponent {
         }));
     }
 
-    fn update(
-        &mut self,
-        device: Arc<Device>,
-        queue: Arc<Queue>,
-        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
-        engine_details: Arc<Mutex<EngineDetails>>,
-        render_pass: &mut RenderPass,
-        active_camera_id: &mut Option<EntityId>,
-    ) {
-    }
-
     fn this_entity(&self) -> &EntityId {
         &self.entity
     }
@@ -91,6 +91,7 @@ impl ComponentSystem for MeshComponent {
 
 pub type MaterialId = (String, String, usize);
 
+#[derive(Debug)]
 pub struct MaterialComponent {
     entity: EntityId,
     vertex_shader_path: String,
@@ -206,6 +207,7 @@ impl RawCameraData {
     }
 }
 
+#[derive(Debug)]
 pub struct CameraComponent {
     entity: EntityId,
     view_proj: na::Matrix4<f32>,
@@ -236,7 +238,11 @@ impl CameraComponent {
         bind_group_layout
     }
 
-    pub fn create_camera_bind_group(&self, device: Arc<Device>, position: na::Vector3<f32>) -> BindGroup {
+    pub fn create_camera_bind_group(
+        &self,
+        device: Arc<Device>,
+        position: na::Vector3<f32>,
+    ) -> BindGroup {
         let raw_camera_data = RawCameraData::new(position, self.view_proj);
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("{:?} Camera Buffer", self.entity)),
@@ -259,14 +265,5 @@ impl CameraComponent {
 impl ComponentSystem for CameraComponent {
     fn this_entity(&self) -> &EntityId {
         &self.entity
-    }
-
-    fn initialize(
-        &mut self,
-        device: Arc<Device>,
-        queue: Arc<Queue>,
-        all_components: Arc<Mutex<HashMap<EntityId, Vec<Box<dyn ComponentSystem>>>>>,
-        active_camera_id: &mut Option<EntityId>,
-    ) {
     }
 }

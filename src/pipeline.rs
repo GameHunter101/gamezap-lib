@@ -1,127 +1,7 @@
-use std::{cell::Ref, num::NonZeroU32, sync::Arc};
-use wgpu::{util::DeviceExt, Device, PipelineLayout, ShaderStages};
+use std::{num::NonZeroU32, sync::Arc};
+use wgpu::{util::DeviceExt, Device, PipelineLayout, ShaderStages, RenderPipeline};
 
-use crate::{
-    camera::CameraManager,
-    ecs::component::{CameraComponent, MaterialId},
-    materials::MaterialManager,
-    model::{Mesh, Vertex, VertexData},
-    texture::Texture,
-};
-
-pub struct PipelineManager {
-    pub plain_pipeline: Option<Pipeline>,
-    pub diffuse_texture_pipeline: Option<Pipeline>,
-    pub diffuse_normal_texture_pipeline: Option<Pipeline>,
-    pub compute_shaders: Vec<ComputePipeline>,
-}
-
-impl PipelineManager {
-    pub fn init() -> Self {
-        PipelineManager {
-            plain_pipeline: None,
-            diffuse_texture_pipeline: None,
-            diffuse_normal_texture_pipeline: None,
-            compute_shaders: vec![],
-        }
-    }
-
-    pub fn create_pipelines(
-        &mut self,
-        device: Arc<wgpu::Device>,
-        format: wgpu::TextureFormat,
-        material_manager: Ref<MaterialManager>,
-        camera_manager: Option<Ref<CameraManager>>,
-    ) {
-        /* if material_manager.plain_materials.len() > 0 {
-            if self.plain_pipeline.is_none() {
-                let mut layouts = vec![&material_manager.plain_materials[0].bind_group_layout];
-                if let Some(camera_manager) = &camera_manager {
-                    layouts.push(&camera_manager.bind_group_layout.as_ref().unwrap());
-                }
-                let pipeline_layout =
-                    device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("NoTexturePipelineLayout"),
-                        bind_group_layouts: &layouts,
-                        push_constant_ranges: &[],
-                    });
-
-                let vertex_shader = wgpu::include_wgsl!("../examples/shaders/vert.wgsl");
-                let fragment_shader = wgpu::include_wgsl!("../examples/shaders/frag.wgsl");
-
-                self.plain_pipeline = Some(Pipeline::new(
-                    "Plain pipeline",
-                    device,
-                    &pipeline_layout,
-                    format,
-                    Some(Texture::DEPTH_FORMAT),
-                    &[Vertex::desc(), Mesh::desc()],
-                    vertex_shader,
-                    fragment_shader,
-                ));
-            }
-        }
-
-        if material_manager.diffuse_texture_materials.len() > 0 {
-            if self.diffuse_texture_pipeline.is_none() {
-                let mut layouts =
-                    vec![&material_manager.diffuse_texture_materials[0].bind_group_layout];
-                if let Some(camera_manager) = &camera_manager {
-                    layouts.push(&camera_manager.bind_group_layout.as_ref().unwrap());
-                }
-                let pipeline_layout =
-                    device
-                        .clone()
-                        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                            label: Some("DiffuseTexturePipelineLayout"),
-                            bind_group_layouts: &layouts,
-                            push_constant_ranges: &[],
-                        });
-
-                let vertex_shader = wgpu::include_wgsl!("./default-shaders/texture_vert.wgsl");
-                let fragment_shader = wgpu::include_wgsl!("./default-shaders/texture_frag.wgsl");
-
-                self.diffuse_texture_pipeline = Some(Pipeline::new(
-                    "Diffuse pipeline",
-                    device,
-                    &pipeline_layout,
-                    format,
-                    Some(Texture::DEPTH_FORMAT),
-                    &[Vertex::desc(), Mesh::desc()],
-                    vertex_shader,
-                    fragment_shader,
-                ))
-            }
-        } */
-    }
-
-    pub fn create_compute_shader<T: bytemuck::Pod + bytemuck::Zeroable>(
-        &mut self,
-        device: &wgpu::Device,
-        shader_name: &str,
-        data: T,
-        workgroup_counts: (u32, u32, u32),
-    ) {
-        let shader_module_descriptor = PipelineManager::load_shader_module_descriptor(shader_name);
-        self.compute_shaders.push(ComputePipeline::new(
-            device,
-            shader_module_descriptor,
-            data,
-            self.compute_shaders.len(),
-            workgroup_counts,
-        ));
-    }
-
-    pub fn load_shader_module_descriptor(shader_path: &str) -> wgpu::ShaderModuleDescriptor {
-        let shader_string =
-            std::fs::read_to_string(shader_path).expect("Failed to read shader file");
-
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader_string)),
-        }
-    }
-}
+use crate::{ecs::component::{CameraComponent, MaterialId}, texture::Texture};
 
 #[derive(Debug)]
 pub enum PipelineType {
@@ -132,26 +12,27 @@ pub enum PipelineType {
 
 #[derive(Debug)]
 pub struct Pipeline {
-    pub pipeline: wgpu::RenderPipeline,
+    pipeline: RenderPipeline,
+    id: MaterialId,
 }
 
 impl Pipeline {
     pub fn new(
-        name: &str,
         device: Arc<wgpu::Device>,
-        layout: &wgpu::PipelineLayout,
         color_format: wgpu::TextureFormat,
-        depth_format: Option<wgpu::TextureFormat>,
         vertex_layouts: &[wgpu::VertexBufferLayout],
-        vertex_shader: wgpu::ShaderModuleDescriptor,
-        fragment_shader: wgpu::ShaderModuleDescriptor,
+        id: MaterialId,
     ) -> Self {
-        let vertex_shader = device.create_shader_module(vertex_shader);
-        let fragment_shader = device.create_shader_module(fragment_shader);
+        let vertex_descriptor = Pipeline::load_shader_module_descriptor(&id.0);
+        let fragment_descriptor = Pipeline::load_shader_module_descriptor(&id.1);
+        let vertex_shader = device.create_shader_module(vertex_descriptor);
+        let fragment_shader = device.create_shader_module(fragment_descriptor);
+
+        let layout = Pipeline::create_pipeline_layout(&id, device.clone());
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some(name),
-            layout: Some(layout),
+            label: Some(&format!("{id:?} Pipeline")),
+            layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &vertex_shader,
                 entry_point: "main",
@@ -175,8 +56,8 @@ impl Pipeline {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
-                format,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
@@ -192,6 +73,7 @@ impl Pipeline {
 
         Pipeline {
             pipeline: render_pipeline,
+            id 
         }
     }
 
@@ -238,6 +120,14 @@ impl Pipeline {
             label: None,
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader_string)),
         }
+    }
+
+    pub fn id(&self) -> &MaterialId {
+        &self.id
+    }
+
+    pub fn pipeline(&self) -> &RenderPipeline{
+        &self.pipeline
     }
 }
 
