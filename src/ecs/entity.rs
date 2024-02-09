@@ -20,8 +20,8 @@ pub struct Entity {
     enabled: bool,
     parent: EntityId,
     children: Vec<EntityId>,
-    components: Arc<Mutex<Vec<Component>>>,
-    materials: Arc<Mutex<Vec<MaterialComponent>>>,
+    components: Vec<Component>,
+    materials: Vec<MaterialComponent>,
 }
 
 impl Entity {
@@ -38,8 +38,8 @@ impl Entity {
             enabled,
             parent,
             children,
-            components: Arc::new(Mutex::new(components)),
-            materials: Arc::new(Mutex::new(materials)),
+            components,
+            materials,
         }
     }
 
@@ -47,20 +47,51 @@ impl Entity {
         &self.id
     }
 
-    pub fn active_material_id(&self) -> Option<MaterialId>{
-        let mats = self.materials.lock().unwrap();
+    pub fn active_material_id(&self) -> Option<MaterialId> {
+        let mats = &self.materials;
         if mats.len() == 0 {
             return None;
         }
         for mat in mats.iter() {
             if mat.enabled() {
-                return Some(*mat.id());
+                return Some(mat.id().clone());
             }
         }
         return None;
     }
 
-    pub fn components(&self) -> Arc<Mutex<Vec<Component>>>{
-        self.components.clone()
+    pub fn active_material_index(&self) -> Option<usize> {
+        let mats = &self.materials;
+        if mats.len() == 0 {
+            return None;
+        }
+        for (i, mat) in mats.iter().enumerate() {
+            if mat.enabled() {
+                return Some(i);
+            }
+        }
+        return None;
+    }
+
+    pub fn components(&self) -> &Vec<Component> {
+        &self.components
+    }
+
+    pub fn components_mut(&mut self) -> &mut Vec<Component> {
+        &mut self.components
+    }
+
+    pub fn materials(&self) -> &Vec<MaterialComponent> {
+        &self.materials
+    }
+
+    pub fn get_indices_of_components<T: ComponentSystem + Any>(&self) -> Vec<usize> {
+        self.components
+            .iter()
+            .enumerate()
+            .map(|(i, comp)| (i, comp.as_any().downcast_ref::<T>()))
+            .filter(|(i, comp)| comp.is_some())
+            .map(|(i, _)| i)
+            .collect()
     }
 }

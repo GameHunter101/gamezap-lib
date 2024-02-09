@@ -10,8 +10,8 @@ use crate::{
     camera::CameraManager,
     materials::MaterialManager,
     model::{Mesh, MeshManager},
-    module_manager::ModuleManager,
-    pipeline::{PipelineManager, PipelineType},
+    // module_manager::ModuleManager,
+    pipeline::PipelineType,
     texture::Texture,
 };
 
@@ -24,7 +24,7 @@ pub struct Renderer {
     pub depth_texture: Arc<Texture>,
     pub clear_color: wgpu::Color,
     pub smaa_target: Arc<Mutex<SmaaTarget>>,
-    pub module_manager: ModuleManager,
+    // pub module_manager: ModuleManager,
 }
 
 impl Renderer {
@@ -32,7 +32,7 @@ impl Renderer {
         window: Arc<Window>,
         clear_color: wgpu::Color,
         antialiasing: bool,
-        module_manager: ModuleManager,
+        // module_manager: ModuleManager,
     ) -> Renderer {
         let size = window.size();
 
@@ -105,7 +105,7 @@ impl Renderer {
             },
         )));
 
-        module_manager.try_build_camera_resources(&device);
+        // module_manager.try_build_camera_resources(&device);
 
         Renderer {
             surface,
@@ -116,11 +116,11 @@ impl Renderer {
             depth_texture,
             clear_color,
             smaa_target,
-            module_manager,
+            // module_manager,
         }
     }
 
-    pub fn update_buffers(&self) {
+    /* pub fn update_buffers(&self) {
         if let Some(camera_manager) = &self.module_manager.camera_manager {
             let camera_manager = camera_manager.borrow();
             camera_manager
@@ -133,9 +133,9 @@ impl Renderer {
                 bytemuck::cast_slice(&[camera_manager.camera_uniform.borrow().to_owned()]),
             );
         }
-    }
+    } */
 
-    pub fn resize(&mut self, new_size: (u32, u32)) {
+    /* pub fn resize(&mut self, new_size: (u32, u32)) {
         if new_size.0 > 0 && new_size.1 > 0 {
             self.size = new_size;
             self.config.width = new_size.0;
@@ -156,9 +156,9 @@ impl Renderer {
                 .unwrap()
                 .resize(&self.device, new_size.0, new_size.1);
         }
-    }
+    } */
 
-    /// Initializes things the pipeline needs, such as pipelines
+    /* /// Initializes things the pipeline needs, such as pipelines
     pub fn prep_renderer(&self) {
         let camera_manager = if let Some(camera_manager) = &self.module_manager.camera_manager {
             Some(camera_manager.borrow())
@@ -175,9 +175,9 @@ impl Renderer {
                 self.module_manager.material_manager.borrow(),
                 camera_manager,
             );
-    }
+    } */
 
-    fn bind_pipeline_and_resources<'a: 'b, 'b: 'c, 'c>(
+    /* fn bind_pipeline_and_resources<'a: 'b, 'b: 'c, 'c>(
         &'a self,
         pipeline_type: PipelineType,
         render_pass: &mut wgpu::RenderPass<'c>,
@@ -230,9 +230,9 @@ impl Renderer {
                 }
             }
         }
-    }
+    } */
 
-    pub async fn render(&self) -> Result<(), wgpu::SurfaceError> {
+    /* pub async fn render(&self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -310,5 +310,5 @@ impl Renderer {
         output.present();
 
         Ok(())
-    }
+    } */
 }

@@ -2,8 +2,6 @@ use std::{fmt::Debug, sync::Arc};
 
 use wgpu::util::DeviceExt;
 
-use crate::pipeline::PipelineManager;
-
 #[derive(Debug)]
 pub enum ComputeError {
     DataNotReceived,

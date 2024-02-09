@@ -4,7 +4,7 @@ use std::{
 };
 
 use ecs::scene::Scene;
-use module_manager::ModuleManager;
+// use module_manager::ModuleManager;
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Scancode,
@@ -17,11 +17,11 @@ use time::{Duration, Instant};
 use crate::renderer::Renderer;
 
 pub mod camera;
-pub mod compute;
+// pub mod compute;
 pub mod light;
 pub mod materials;
 pub mod model;
-pub mod module_manager;
+// pub mod module_manager;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
@@ -125,20 +125,20 @@ impl GameZap {
         engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
     }
 
-    pub async fn update_renderer(&self) {
+    /* pub async fn update_renderer(&self) {
         self.renderer.update_buffers();
         // self.renderer.render().await.unwrap();
-    }
+    } */
 
     pub async fn main_loop<'b>(&mut self) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
                 match event {
                     Event::Quit { .. } => break 'running,
-                    Event::Window {
+                    /* Event::Window {
                         win_event: WindowEvent::Resized(width, height),
                         ..
-                    } => self.renderer.resize((width as u32, height as u32)),
+                    } => self.renderer.resize((width as u32, height as u32)), */
                     _ => {}
                 }
             }
@@ -146,15 +146,13 @@ impl GameZap {
             let renderer = &self.renderer;
             let active_scene = &mut self.scenes[self.active_scene_index];
             active_scene.update(
-                renderer.device.clone(),
-                renderer.queue.clone(),
+                self.details.clone(),
                 renderer.smaa_target.clone(),
                 renderer.surface.clone(),
                 renderer.depth_texture.clone(),
-                self.details.clone(),
             );
 
-            self.update_renderer().await;
+            // self.update_renderer().await;
             self.update_details();
         }
     }
@@ -183,7 +181,7 @@ pub struct GameZapBuilder {
     last_frame_duration: Duration,
     time_of_last_frame: Instant,
 
-    module_manager: ModuleManager,
+    // module_manager: ModuleManager,
     antialiasing: bool,
 
     scenes: Vec<Scene>,
@@ -210,10 +208,10 @@ impl<'a> GameZapBuilder {
             last_frame_duration: Duration::ZERO,
             time_of_last_frame: Instant::now(),
 
-            module_manager: ModuleManager::minimal(),
+            // module_manager: ModuleManager::minimal(),
             antialiasing: false,
 
-            scenes: vec![Scene::new()],
+            scenes: vec![],
             active_scene_index: 0,
         }
     }
@@ -236,10 +234,10 @@ impl<'a> GameZapBuilder {
         self
     }
 
-    pub fn module_manager(mut self, module_manager: ModuleManager) -> GameZapBuilder {
-        self.module_manager = module_manager;
-        self
-    }
+    // pub fn module_manager(mut self, module_manager: ModuleManager) -> GameZapBuilder {
+    //     self.module_manager = module_manager;
+    //     self
+    // }
 
     pub fn antialiasing(mut self) -> GameZapBuilder {
         self.antialiasing = true;
@@ -287,7 +285,7 @@ impl<'a> GameZapBuilder {
             window.clone(),
             self.clear_color,
             self.antialiasing,
-            self.module_manager,
+            // self.module_manager,
         ));
 
         GameZap {

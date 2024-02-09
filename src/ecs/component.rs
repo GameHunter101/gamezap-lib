@@ -1,9 +1,10 @@
 #![allow(unused)]
 use std::{
+    any::Any,
     collections::HashMap,
     fmt::Debug,
     num::NonZeroU32,
-    sync::{Arc, Mutex}, any::Any,
+    sync::{Arc, Mutex},
 };
 
 use bytemuck::{Pod, Zeroable};
@@ -19,7 +20,7 @@ use nalgebra as na;
 
 use crate::{model::Vertex, texture::Texture, EngineDetails};
 
-use super::entity::{EntityId, Entity};
+use super::entity::{Entity, EntityId};
 
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
@@ -33,7 +34,7 @@ impl<T: Any> AsAny for T {
 
 pub type Component = Box<dyn ComponentSystem>;
 
-pub trait ComponentSystem:Debug {
+pub trait ComponentSystem: Debug {
     fn initialize(
         &mut self,
         device: Arc<Device>,
@@ -214,7 +215,7 @@ pub struct CameraComponent {
 }
 
 impl CameraComponent {
-    pub fn new(entity: EntityId, device: Arc<Device>) -> Self {
+    pub fn new(entity: EntityId) -> Self {
         CameraComponent {
             entity,
             view_proj: na::Matrix4::identity(),
@@ -263,6 +264,28 @@ impl CameraComponent {
 }
 
 impl ComponentSystem for CameraComponent {
+    fn this_entity(&self) -> &EntityId {
+        &self.entity
+    }
+}
+
+#[derive(Debug)]
+pub struct TransformComponent {
+    entity: EntityId,
+    position: na::Vector3<f32>,
+    roll: f32,
+    pitch: f32,
+    yaw: f32,
+    scale: na::Vector3<f32>,
+}
+
+impl TransformComponent {
+    pub fn position(&self) -> &na::Vector3<f32> {
+        &self.position
+    }
+}
+
+impl ComponentSystem for TransformComponent {
     fn this_entity(&self) -> &EntityId {
         &self.entity
     }
