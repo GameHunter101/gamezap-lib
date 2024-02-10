@@ -21,7 +21,7 @@ impl Pipeline {
         device: Arc<wgpu::Device>,
         color_format: wgpu::TextureFormat,
         vertex_layouts: &[wgpu::VertexBufferLayout],
-        id: MaterialId,
+        id: &MaterialId,
     ) -> Self {
         let vertex_descriptor = Pipeline::load_shader_module_descriptor(&id.0);
         let fragment_descriptor = Pipeline::load_shader_module_descriptor(&id.1);
@@ -73,7 +73,7 @@ impl Pipeline {
 
         Pipeline {
             pipeline: render_pipeline,
-            id 
+            id: id.clone(),
         }
     }
 

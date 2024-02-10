@@ -25,7 +25,7 @@ use crate::pipeline::Pipeline;
 
 use super::{
     component::{
-        AsAny, CameraComponent, Component, ComponentSystem, MaterialComponent, MaterialId,
+        AsAny, CameraComponent, Component, ComponentSystem, ComponentType, Material, MaterialId,
         TransformComponent,
     },
     entity::{self, EntityId},
@@ -34,7 +34,9 @@ use super::{
 pub struct Scene {
     entities: Arc<Mutex<Vec<Entity>>>,
     total_entites_created: u32,
-    pipelines: Vec<Pipeline>,
+    pipelines: HashMap<MaterialId, Pipeline>,
+    components: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+    materials: Arc<Mutex<HashMap<EntityId, (Vec<Material>, usize)>>>,
     device: Arc<Device>,
     queue: Arc<Queue>,
     color_format: TextureFormat,
@@ -47,7 +49,9 @@ impl Scene {
         Self {
             entities: Arc::new(Mutex::new(vec![])),
             total_entites_created: 0,
-            pipelines: vec![],
+            pipelines: HashMap::new(),
+            components: Arc::new(Mutex::new(HashMap::new())),
+            materials: Arc::new(Mutex::new(HashMap::new())),
             device,
             queue,
             color_format,
@@ -60,58 +64,26 @@ impl Scene {
         parent: EntityId,
         enabled: bool,
         components: Vec<Component>,
-        materials: Vec<MaterialComponent>,
-    ) {
-        let new_entity = Entity::new(
-            self.total_entites_created,
-            enabled,
-            parent,
-            vec![],
-            components,
-            materials,
-        );
-        if let Some(mat_id) = new_entity.active_material_id() {
-            if !self.does_pipeline_exist(&mat_id) {
+        materials: Option<(Vec<Material>, usize)>,
+    ) -> EntityId {
+        let new_entity_id = self.total_entites_created;
+        let new_entity = Entity::new(new_entity_id, enabled, parent, Vec::new());
+        if let Some((materials, active_material_index)) = materials {
+            let active_material = &materials[active_material_index];
+            let active_material_id = active_material.id().clone();
+            if !self.pipelines.contains_key(&active_material_id) {
                 let new_pipeline = Pipeline::new(
                     self.device.clone(),
                     self.color_format,
                     &[Vertex::desc(), Mesh::desc()],
-                    mat_id,
+                    &active_material_id,
                 );
-                self.pipelines.push(new_pipeline);
+                self.pipelines.insert(active_material_id, new_pipeline);
             }
         }
         self.entities.lock().unwrap().push(new_entity);
-    }
-
-    fn does_pipeline_exist(&self, id: &MaterialId) -> bool {
-        for pipeline in &self.pipelines {
-            if pipeline.id() == id {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    fn sort_entities_by_index(&self) -> (Vec<usize>, Vec<usize>) {
-        let mut pipeline_indices = Vec::with_capacity(self.pipelines.len());
-        let mut no_pipeline_indices = Vec::with_capacity(self.entities.lock().unwrap().len());
-        let entities_arc = self.entities.clone();
-        let entities = entities_arc.lock().unwrap();
-        for pipeline in &self.pipelines {
-            // pipeline_indices.push(Vec::new());
-            for (i, entity) in entities.iter().enumerate() {
-                if let Some(active_material_index) = entity.active_material_id() {
-                    if pipeline.id() == &active_material_index {
-                        pipeline_indices./* last_mut().unwrap(). */push(i);
-                    }
-                } else {
-                    no_pipeline_indices.push(i);
-                }
-            }
-        }
-        no_pipeline_indices.shrink_to_fit();
-        (pipeline_indices, no_pipeline_indices)
+        self.total_entites_created += 1;
+        new_entity_id
     }
 
     pub fn update(
@@ -125,11 +97,18 @@ impl Scene {
         let queue = self.queue.clone();
 
         let entities_arc = self.entities.clone();
-        let mut entities = entities_arc.lock().unwrap();
-        let mut non_updated_entities: Vec<usize> = (0..entities.len()).into_iter().collect();
+        let entities = entities_arc.lock().unwrap();
+
+        let materials_arc = self.materials.clone();
+        let materials = self.materials.lock().unwrap();
+
+        let components_arc = self.components.clone();
+        let mut components = components_arc.lock().unwrap();
+
+        let mut non_updated_entities: Vec<EntityId> = components.keys().cloned().collect();
         let camera_bind_group = self.create_camera_bind_group();
 
-        let mats_arc:Arc<Mutex<Vec<MaterialComponent>>> = Arc::new(Mutex::new(Vec::new()));
+        let mats_arc: Arc<Mutex<Vec<Material>>> = Arc::new(Mutex::new(Vec::new()));
         let mats = mats_arc.lock().unwrap();
 
         let output = surface.get_current_texture().unwrap();
@@ -171,78 +150,57 @@ impl Scene {
             }),
         });
 
-        let (pipeline_entity_indices, no_pipeline_entity_indices) = self.sort_entities_by_index();
-        for (pipeline_index, entity_index) in pipeline_entity_indices.iter().enumerate() {
-            // render_pass.set_pipeline(&self.pipelines[pipeline_index].pipeline());
-            // for entity_index in entity_indices.iter() {
-                let mut entity = &mut entities[*entity_index];
+        render_pass.set_bind_group(1, &camera_bind_group, &[]);
 
-                let entity_materials = entity.materials().clone();
-
-                if let Some(active_material_index) = &entity.active_material_index() {
-                    let active_mat = &entity_materials[*active_material_index];
-                    // let active_mat = &mats[0];
-                    render_pass.set_bind_group(0, active_mat.bind_group(), &[]);
+        for (pipeline_id, pipeline) in &self.pipelines {
+            for entity in entities.iter() {
+                let entity_materials = materials.get(entity.id());
+                if let Some((materials, active_material_index)) = entity_materials {
+                    let active_material = &materials[*active_material_index];
+                    if active_material.id() == pipeline_id {
+                        render_pass.set_bind_group(0, active_material.bind_group(), &[]);
+                        for component in components.get_mut(entity.id()).unwrap().iter_mut() {
+                            component.update(
+                                device.clone(),
+                                queue.clone(),
+                                components_arc.clone(),
+                                engine_details.clone(),
+                                &mut render_pass,
+                            );
+                        }
+                        non_updated_entities
+                            .iter_mut()
+                            .filter(|i| **i != entity.id().clone());
+                    }
                 }
-            // }
-        } 
-
-        /* for pipeline in &self.pipelines {
-            // render_pass.set_bind_group(1, &camera_bind_group, &[]);
-            for entity in entities.iter_mut() {
-                if entity.active_material_id() != Some(pipeline.id().clone()) {
-                    continue;
-                }
-                let entity_materials = entity.materials().clone();
-
-                if let Some(active_material_index) = &entity.active_material_index() {
-                    let active_mat = &entity_materials[*active_material_index];
-                    // render_pass.set_bind_group(0, active_mat.bind_group(), &[]);
-                }
-                // let components = entity.components_mut();
-                /* for (i, component) in components.iter_mut().enumerate() {
-                    component.update(
-                        self.device.clone(),
-                        self.queue.clone(),
-                        entities_arc.clone(),
-                        engine_details.clone(),
-                        &mut render_pass,
-                    );
-                    non_updated_entities
-                        .remove(non_updated_entities.iter().position(|&el| el == i).unwrap());
-                } */
             }
-        } */
+        }
 
-        /* for index in non_updated_entities.iter() {
-            let mut entity = &mut entities[*index];
-
-            let mut components = entity.components_mut();
-            for (i, component) in components.iter_mut().enumerate() {
+        for entity_id in &non_updated_entities {
+            for component in components.get_mut(entity_id).unwrap() {
                 component.update(
-                    self.device.clone(),
-                    self.queue.clone(),
-                    entities_arc,
-                    engine_details,
+                    device.clone(),
+                    queue.clone(),
+                    components_arc.clone(),
+                    engine_details.clone(),
                     &mut render_pass,
                 );
-                non_updated_entities
-                    .remove(non_updated_entities.iter().position(|&el| el == i).unwrap());
             }
-        } */
+        }
     }
 
     pub fn initialize(&mut self) {
+        let device = self.device.clone();
+        let queue = self.queue.clone();
+
         let entities_arc = self.entities.clone();
-        let mut entities = entities_arc.lock().unwrap();
-        for entity in entities.iter_mut() {
-            let components = entity.components_mut();
-            for component in components.iter_mut() {
-                component.initialize(
-                    self.device.clone(),
-                    self.queue.clone(),
-                    entities_arc.clone(),
-                );
+        let entities = entities_arc.lock().unwrap();
+        let components_arc = self.components.clone();
+        let mut components = components_arc.lock().unwrap();
+
+        for entity in entities.iter() {
+            for component in components.get_mut(entity.id()).unwrap() {
+                component.initialize(device.clone(), queue.clone(), components_arc.clone());
             }
         }
     }
@@ -250,43 +208,30 @@ impl Scene {
     pub fn create_camera_bind_group(&self) -> BindGroup {
         let device = self.device.clone();
 
+        let components_arc = self.components.clone();
+        let components = components_arc.lock().unwrap();
+
         if let Some(active_camera_id) = self.active_camera_id {
-            let entities_arc = self.entities.clone();
-            let entities = entities_arc.lock().unwrap();
-            let camera_entity_index = entities
-                .deref()
-                .into_iter()
-                .position(|entity| entity.get_id() == &active_camera_id)
-                .unwrap();
-            let camera_entity = &entities[camera_entity_index];
-
-            let camera_entity_components = &camera_entity.components();
-
-            // Do some error checking, make sure these components exist
-            let camera_component_index =
-                camera_entity.get_indices_of_components::<CameraComponent>()[0];
-            let transform_components_indices =
-                camera_entity.get_indices_of_components::<TransformComponent>();
-            let position = match transform_components_indices.len() {
-                0 => na::Vector3::new(0.0, 0.0, 0.0),
-                _ => {
-                    let transform_component = camera_entity_components
-                        [transform_components_indices[0]]
-                        .as_any()
-                        .downcast_ref::<TransformComponent>()
-                        .unwrap();
-                    *transform_component.position()
-                }
+            let camera_component = Scene::find_specific_component::<CameraComponent>(&*components[&active_camera_id], ComponentType::Camera);
+            let transform_component = Scene::find_specific_component::<TransformComponent>(&*components[&active_camera_id], ComponentType::Transform);
+            let position = match transform_component {
+                Some(comp) => comp.position().clone(),
+                None => na::Vector3::new(0.0, 0.0, 0.0),
             };
-            let cam = camera_entity_components[camera_component_index]
-                .as_any()
-                .downcast_ref::<CameraComponent>()
-                .unwrap();
-
-            return cam.create_camera_bind_group(device.clone(), position);
+            let bind_group = camera_component.unwrap().create_camera_bind_group(device.clone(), position);
+            return bind_group;
         }
 
         let cam = CameraComponent::new(u32::MAX);
         cam.create_camera_bind_group(device.clone(), na::Vector3::new(0.0, 0.0, 0.0))
+    }
+
+    pub fn find_specific_component<T: ComponentSystem + Any>(components: &[Component], component_type: ComponentType) -> Option<&T>{
+        for component in components {
+            if component.component_type() == component_type {
+                return component.as_any().downcast_ref::<T>();
+            }
+        }
+        None
     }
 }

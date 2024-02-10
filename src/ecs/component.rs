@@ -39,7 +39,7 @@ pub trait ComponentSystem: Debug {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_entities: Arc<Mutex<Vec<Entity>>>,
+        all_entities: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
     ) {
     }
 
@@ -47,13 +47,25 @@ pub trait ComponentSystem: Debug {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_components: Arc<Mutex<Vec<Entity>>>,
+        all_components: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
         engine_details: Arc<Mutex<EngineDetails>>,
         render_pass: &mut RenderPass,
     ) {
     }
 
     fn this_entity(&self) -> &EntityId;
+
+    fn component_type(&self) -> ComponentType {
+        ComponentType::Custom(String::from("Custom Unnamed Component"))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ComponentType {
+    Mesh,
+    Transform,
+    Camera,
+    Custom(String),
 }
 
 #[derive(Debug)]
@@ -70,7 +82,7 @@ impl ComponentSystem for MeshComponent {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_entities: Arc<Mutex<Vec<Entity>>>,
+        all_entities: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
     ) {
         self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
@@ -88,12 +100,16 @@ impl ComponentSystem for MeshComponent {
     fn this_entity(&self) -> &EntityId {
         &self.entity
     }
+
+    fn component_type(&self) -> ComponentType {
+        ComponentType::Mesh
+    }
 }
 
 pub type MaterialId = (String, String, usize);
 
 #[derive(Debug)]
-pub struct MaterialComponent {
+pub struct Material {
     entity: EntityId,
     vertex_shader_path: String,
     fragment_shader_path: String,
@@ -103,7 +119,7 @@ pub struct MaterialComponent {
     bind_group: BindGroup,
 }
 
-impl MaterialComponent {
+impl Material {
     pub fn new(
         entity: EntityId,
         vertex_shader_path: &str,
@@ -266,6 +282,10 @@ impl CameraComponent {
 impl ComponentSystem for CameraComponent {
     fn this_entity(&self) -> &EntityId {
         &self.entity
+    }
+
+    fn component_type(&self) -> ComponentType {
+        ComponentType::Camera
     }
 }
 
