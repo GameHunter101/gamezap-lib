@@ -125,68 +125,73 @@ impl Scene {
                 label: Some("Scene Encoder"),
             });
 
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Scene Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &smaa_frame,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
-                        a: 1.0,
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Scene Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &smaa_frame,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 1.0,
+                            g: 1.0,
+                            b: 1.0,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
                     }),
-                    store: true,
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &depth_texture.view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: true,
+                    stencil_ops: None,
                 }),
-                stencil_ops: None,
-            }),
-        });
+            });
 
-        render_pass.set_bind_group(1, &camera_bind_group, &[]);
-
-        for (pipeline_id, pipeline) in &self.pipelines {
-            for entity in entities.iter() {
-                let entity_materials = materials.get(entity.id());
-                if let Some((materials, active_material_index)) = entity_materials {
-                    let active_material = &materials[*active_material_index];
-                    if active_material.id() == pipeline_id {
-                        render_pass.set_bind_group(0, active_material.bind_group(), &[]);
-                        for component in components.get_mut(entity.id()).unwrap().iter_mut() {
-                            component.update(
-                                device.clone(),
-                                queue.clone(),
-                                components_arc.clone(),
-                                engine_details.clone(),
-                                &mut render_pass,
-                            );
+            render_pass.set_bind_group(1, &camera_bind_group, &[]);
+            for (pipeline_id, pipeline) in &self.pipelines {
+                for entity in entities.iter() {
+                    let entity_materials = materials.get(entity.id());
+                    if let Some((materials, active_material_index)) = entity_materials {
+                        let active_material = &materials[*active_material_index];
+                        if active_material.id() == pipeline_id {
+                            render_pass.set_bind_group(0, active_material.bind_group(), &[]);
+                            for component in components.get_mut(entity.id()).unwrap().iter_mut() {
+                                component.update(
+                                    device.clone(),
+                                    queue.clone(),
+                                    components_arc.clone(),
+                                    engine_details.clone(),
+                                    &mut render_pass,
+                                );
+                            }
+                            non_updated_entities
+                                .iter_mut()
+                                .filter(|i| **i != entity.id().clone());
                         }
-                        non_updated_entities
-                            .iter_mut()
-                            .filter(|i| **i != entity.id().clone());
                     }
+                }
+            }
+
+            for entity_id in &non_updated_entities {
+                for component in components.get_mut(entity_id).unwrap() {
+                    component.update(
+                        device.clone(),
+                        queue.clone(),
+                        components_arc.clone(),
+                        engine_details.clone(),
+                        &mut render_pass,
+                    );
                 }
             }
         }
 
-        for entity_id in &non_updated_entities {
-            for component in components.get_mut(entity_id).unwrap() {
-                component.update(
-                    device.clone(),
-                    queue.clone(),
-                    components_arc.clone(),
-                    engine_details.clone(),
-                    &mut render_pass,
-                );
-            }
-        }
+        queue.submit(std::iter::once(encoder.finish()));
+        smaa_frame.resolve();
+        output.present();
     }
 
     pub fn initialize(&mut self) {
@@ -212,13 +217,21 @@ impl Scene {
         let components = components_arc.lock().unwrap();
 
         if let Some(active_camera_id) = self.active_camera_id {
-            let camera_component = Scene::find_specific_component::<CameraComponent>(&*components[&active_camera_id], ComponentType::Camera);
-            let transform_component = Scene::find_specific_component::<TransformComponent>(&*components[&active_camera_id], ComponentType::Transform);
+            let camera_component = Scene::find_specific_component::<CameraComponent>(
+                &*components[&active_camera_id],
+                ComponentType::Camera,
+            );
+            let transform_component = Scene::find_specific_component::<TransformComponent>(
+                &*components[&active_camera_id],
+                ComponentType::Transform,
+            );
             let position = match transform_component {
                 Some(comp) => comp.position().clone(),
                 None => na::Vector3::new(0.0, 0.0, 0.0),
             };
-            let bind_group = camera_component.unwrap().create_camera_bind_group(device.clone(), position);
+            let bind_group = camera_component
+                .unwrap()
+                .create_camera_bind_group(device.clone(), position);
             return bind_group;
         }
 
@@ -226,7 +239,10 @@ impl Scene {
         cam.create_camera_bind_group(device.clone(), na::Vector3::new(0.0, 0.0, 0.0))
     }
 
-    pub fn find_specific_component<T: ComponentSystem + Any>(components: &[Component], component_type: ComponentType) -> Option<&T>{
+    pub fn find_specific_component<T: ComponentSystem + Any>(
+        components: &[Component],
+        component_type: ComponentType,
+    ) -> Option<&T> {
         for component in components {
             if component.component_type() == component_type {
                 return component.as_any().downcast_ref::<T>();
