@@ -37,14 +37,11 @@ pub struct Scene {
     pipelines: HashMap<MaterialId, Pipeline>,
     components: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
     materials: Arc<Mutex<HashMap<EntityId, (Vec<Material>, usize)>>>,
-    device: Arc<Device>,
-    queue: Arc<Queue>,
-    color_format: TextureFormat,
     active_camera_id: Option<EntityId>,
 }
 
 impl Scene {
-    pub fn new(device: Arc<Device>, queue: Arc<Queue>, color_format: TextureFormat) -> Self {
+    pub fn new() -> Self {
         let root_index = vec![0];
         Self {
             entities: Arc::new(Mutex::new(vec![])),
@@ -52,15 +49,14 @@ impl Scene {
             pipelines: HashMap::new(),
             components: Arc::new(Mutex::new(HashMap::new())),
             materials: Arc::new(Mutex::new(HashMap::new())),
-            device,
-            queue,
-            color_format,
             active_camera_id: None,
         }
     }
 
     pub fn create_entity(
         &mut self,
+        device: Arc<Device>,
+        color_format: TextureFormat,
         parent: EntityId,
         enabled: bool,
         components: Vec<Component>,
@@ -73,8 +69,8 @@ impl Scene {
             let active_material_id = active_material.id().clone();
             if !self.pipelines.contains_key(&active_material_id) {
                 let new_pipeline = Pipeline::new(
-                    self.device.clone(),
-                    self.color_format,
+                    device.clone(),
+                    color_format,
                     &[Vertex::desc(), Mesh::desc()],
                     &active_material_id,
                 );
@@ -88,28 +84,25 @@ impl Scene {
 
     pub fn update(
         &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         engine_details: Arc<Mutex<EngineDetails>>,
         smaa_target: Arc<Mutex<SmaaTarget>>,
         surface: Arc<Surface>,
         depth_texture: Arc<Texture>,
     ) {
-        let device = self.device.clone();
-        let queue = self.queue.clone();
-
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
 
         let materials_arc = self.materials.clone();
         let materials = self.materials.lock().unwrap();
 
+        let camera_bind_group = self.create_camera_bind_group(device.clone());
         let components_arc = self.components.clone();
         let mut components = components_arc.lock().unwrap();
 
         let mut non_updated_entities: Vec<EntityId> = components.keys().cloned().collect();
-        let camera_bind_group = self.create_camera_bind_group();
 
-        let mats_arc: Arc<Mutex<Vec<Material>>> = Arc::new(Mutex::new(Vec::new()));
-        let mats = mats_arc.lock().unwrap();
 
         let output = surface.get_current_texture().unwrap();
         let view = output
@@ -119,11 +112,9 @@ impl Scene {
         let mut smaa_binding = smaa_target.lock().unwrap();
         let smaa_frame = smaa_binding.start_frame(&device, &queue, &view);
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("Scene Encoder"),
-            });
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Scene Encoder"),
+        });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -133,9 +124,9 @@ impl Scene {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 1.0,
-                            g: 1.0,
-                            b: 1.0,
+                            r: 0.01,
+                            g: 0.01,
+                            b: 0.01,
                             a: 1.0,
                         }),
                         store: true,
@@ -176,6 +167,7 @@ impl Scene {
                 }
             }
 
+
             for entity_id in &non_updated_entities {
                 for component in components.get_mut(entity_id).unwrap() {
                     component.update(
@@ -194,10 +186,7 @@ impl Scene {
         output.present();
     }
 
-    pub fn initialize(&mut self) {
-        let device = self.device.clone();
-        let queue = self.queue.clone();
-
+    pub fn initialize(&mut self, device: Arc<Device>, queue: Arc<Queue>) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
         let components_arc = self.components.clone();
@@ -210,9 +199,7 @@ impl Scene {
         }
     }
 
-    pub fn create_camera_bind_group(&self) -> BindGroup {
-        let device = self.device.clone();
-
+    pub fn create_camera_bind_group(&self, device: Arc<Device>) -> BindGroup {
         let components_arc = self.components.clone();
         let components = components_arc.lock().unwrap();
 

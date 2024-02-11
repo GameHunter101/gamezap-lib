@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use gamezap::GameZap;
+use gamezap::{GameZap, ecs::scene::Scene};
 use nalgebra as na;
 
 extern crate gamezap;
@@ -22,7 +22,9 @@ async fn main() {
             .unwrap(),
     );
 
-    let camera_position = na::Vector3::new(-2.0, 0.0, -5.0);
+    let mut scene = Scene::new();
+
+    let scenes = vec![scene];
 
     let mut engine = GameZap::builder()
         .window_and_renderer(
@@ -38,9 +40,9 @@ async fn main() {
             },
         )
         .antialiasing()
-        .hide_cursor()
+        // .hide_cursor()
+        .scenes(scenes, 0)
         .build();
 
-    // let mut engine_borrow = engine.borrow_mut();
-    let renderer = &engine.renderer;
+    engine.main_loop();
 }

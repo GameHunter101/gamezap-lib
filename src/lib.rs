@@ -25,7 +25,7 @@ pub mod model;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
-mod ecs {
+pub mod ecs {
     pub mod component;
     pub mod entity;
     pub mod scene;
@@ -130,7 +130,7 @@ impl GameZap {
         // self.renderer.render().await.unwrap();
     } */
 
-    pub async fn main_loop<'b>(&mut self) {
+    pub fn main_loop<'b>(&mut self) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
                 match event {
@@ -146,6 +146,8 @@ impl GameZap {
             let renderer = &self.renderer;
             let active_scene = &mut self.scenes[self.active_scene_index];
             active_scene.update(
+                renderer.device.clone(),
+                renderer.queue.clone(),
                 self.details.clone(),
                 renderer.smaa_target.clone(),
                 renderer.surface.clone(),
@@ -211,7 +213,7 @@ impl<'a> GameZapBuilder {
             // module_manager: ModuleManager::minimal(),
             antialiasing: false,
 
-            scenes: vec![],
+            scenes: vec![Scene::new()],
             active_scene_index: 0,
         }
     }

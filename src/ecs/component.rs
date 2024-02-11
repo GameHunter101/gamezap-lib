@@ -272,7 +272,7 @@ impl CameraComponent {
             layout: &Self::camera_bind_group_layout(device.clone()),
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: todo!(),
+                resource: camera_buffer.as_entire_binding(),
             }],
         });
         bind_group

@@ -1,19 +1,9 @@
-use std::{
-    cell::Ref,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::sync::{Arc, Mutex};
 
 use sdl2::video::Window;
 use smaa::SmaaTarget;
 
-use crate::{
-    camera::CameraManager,
-    materials::MaterialManager,
-    model::{Mesh, MeshManager},
-    // module_manager::ModuleManager,
-    pipeline::PipelineType,
-    texture::Texture,
-};
+use crate::texture::Texture;
 
 pub struct Renderer {
     pub surface: Arc<wgpu::Surface>,
@@ -24,7 +14,6 @@ pub struct Renderer {
     pub depth_texture: Arc<Texture>,
     pub clear_color: wgpu::Color,
     pub smaa_target: Arc<Mutex<SmaaTarget>>,
-    // pub module_manager: ModuleManager,
 }
 
 impl Renderer {
@@ -32,7 +21,6 @@ impl Renderer {
         window: Arc<Window>,
         clear_color: wgpu::Color,
         antialiasing: bool,
-        // module_manager: ModuleManager,
     ) -> Renderer {
         let size = window.size();
 
