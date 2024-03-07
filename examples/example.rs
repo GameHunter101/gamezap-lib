@@ -1,6 +1,13 @@
 use std::sync::Arc;
 
-use gamezap::{GameZap, ecs::scene::Scene};
+use gamezap::{
+    ecs::{
+        component::{CameraComponent, ComponentSystem},
+        entity::EntityId,
+        scene::Scene,
+    },
+    GameZap,
+};
 use nalgebra as na;
 
 extern crate gamezap;
@@ -24,6 +31,10 @@ async fn main() {
 
     let mut scene = Scene::new();
 
+    let test_component = TestComponent { entity_id: 0 };
+
+    scene.create_entity(0, true, vec![Box::new(test_component)], None);
+
     let scenes = vec![scene];
 
     let mut engine = GameZap::builder()
@@ -45,4 +56,28 @@ async fn main() {
         .build();
 
     engine.main_loop();
+}
+
+#[derive(Debug)]
+struct TestComponent {
+    entity_id: EntityId,
+}
+
+impl ComponentSystem for TestComponent {
+    fn this_entity(&self) -> &EntityId {
+        &self.entity_id
+    }
+    fn update(
+        &mut self,
+        _device: Arc<wgpu::Device>,
+        _queue: Arc<wgpu::Queue>,
+        _all_components: Arc<
+            std::sync::Mutex<
+                std::collections::HashMap<EntityId, Vec<gamezap::ecs::component::Component>>,
+            >,
+        >,
+        _engine_details: Arc<std::sync::Mutex<gamezap::EngineDetails>>,
+    ) {
+        println!("Hello");
+    }
 }

@@ -31,11 +31,13 @@ use super::{
     entity::{self, EntityId},
 };
 
+pub type AllComponents = Arc<Mutex<HashMap<EntityId, Vec<Component>>>>;
+
 pub struct Scene {
     entities: Arc<Mutex<Vec<Entity>>>,
     total_entites_created: u32,
     pipelines: HashMap<MaterialId, Pipeline>,
-    components: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+    components: AllComponents,
     materials: Arc<Mutex<HashMap<EntityId, (Vec<Material>, usize)>>>,
     active_camera_id: Option<EntityId>,
 }
@@ -44,7 +46,7 @@ impl Scene {
     pub fn new() -> Self {
         let root_index = vec![0];
         Self {
-            entities: Arc::new(Mutex::new(vec![])),
+            entities: Arc::new(Mutex::new(Vec::new())),
             total_entites_created: 0,
             pipelines: HashMap::new(),
             components: Arc::new(Mutex::new(HashMap::new())),
@@ -55,8 +57,6 @@ impl Scene {
 
     pub fn create_entity(
         &mut self,
-        device: Arc<Device>,
-        color_format: TextureFormat,
         parent: EntityId,
         enabled: bool,
         components: Vec<Component>,
@@ -65,18 +65,15 @@ impl Scene {
         let new_entity_id = self.total_entites_created;
         let new_entity = Entity::new(new_entity_id, enabled, parent, Vec::new());
         if let Some((materials, active_material_index)) = materials {
-            let active_material = &materials[active_material_index];
-            let active_material_id = active_material.id().clone();
-            if !self.pipelines.contains_key(&active_material_id) {
-                let new_pipeline = Pipeline::new(
-                    device.clone(),
-                    color_format,
-                    &[Vertex::desc(), Mesh::desc()],
-                    &active_material_id,
-                );
-                self.pipelines.insert(active_material_id, new_pipeline);
-            }
+            self.materials
+                .lock()
+                .unwrap()
+                .insert(new_entity_id, (materials, active_material_index));
         }
+        self.components
+            .lock()
+            .unwrap()
+            .insert(new_entity_id, components);
         self.entities.lock().unwrap().push(new_entity);
         self.total_entites_created += 1;
         new_entity_id
@@ -87,6 +84,29 @@ impl Scene {
         device: Arc<Device>,
         queue: Arc<Queue>,
         engine_details: Arc<Mutex<EngineDetails>>,
+    ) {
+        let entities_arc = self.entities.clone();
+        let entities = entities_arc.lock().unwrap();
+
+        let components_arc = self.components.clone();
+        let mut components = components_arc.lock().unwrap();
+
+        for entity in entities.iter() {
+            for component in components.get_mut(entity.id()).unwrap() {
+                component.update(
+                    device.clone(),
+                    queue.clone(),
+                    components_arc.clone(),
+                    engine_details.clone(),
+                );
+            }
+        }
+    }
+
+    pub fn render(
+        &self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         smaa_target: Arc<Mutex<SmaaTarget>>,
         surface: Arc<Surface>,
         depth_texture: Arc<Texture>,
@@ -99,10 +119,7 @@ impl Scene {
 
         let camera_bind_group = self.create_camera_bind_group(device.clone());
         let components_arc = self.components.clone();
-        let mut components = components_arc.lock().unwrap();
-
-        let mut non_updated_entities: Vec<EntityId> = components.keys().cloned().collect();
-
+        let components = &*components_arc.lock().unwrap();
 
         let output = surface.get_current_texture().unwrap();
         let view = output
@@ -124,9 +141,9 @@ impl Scene {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.01,
-                            g: 0.01,
-                            b: 0.01,
+                            r: 0.7,
+                            g: 0.2,
+                            b: 0.2,
                             a: 1.0,
                         }),
                         store: true,
@@ -150,49 +167,51 @@ impl Scene {
                         let active_material = &materials[*active_material_index];
                         if active_material.id() == pipeline_id {
                             render_pass.set_bind_group(0, active_material.bind_group(), &[]);
-                            for component in components.get_mut(entity.id()).unwrap().iter_mut() {
-                                component.update(
+                            for component in components.get(entity.id()).unwrap().iter() {
+                                component.render(
                                     device.clone(),
                                     queue.clone(),
-                                    components_arc.clone(),
-                                    engine_details.clone(),
                                     &mut render_pass,
+                                    &components,
                                 );
                             }
-                            non_updated_entities
-                                .iter_mut()
-                                .filter(|i| **i != entity.id().clone());
                         }
                     }
                 }
             }
-
-
-            for entity_id in &non_updated_entities {
-                for component in components.get_mut(entity_id).unwrap() {
-                    component.update(
-                        device.clone(),
-                        queue.clone(),
-                        components_arc.clone(),
-                        engine_details.clone(),
-                        &mut render_pass,
-                    );
-                }
-            }
         }
-
         queue.submit(std::iter::once(encoder.finish()));
         smaa_frame.resolve();
         output.present();
     }
 
-    pub fn initialize(&mut self, device: Arc<Device>, queue: Arc<Queue>) {
+    pub fn initialize(
+        &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        color_format: TextureFormat,
+    ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
         let components_arc = self.components.clone();
         let mut components = components_arc.lock().unwrap();
+        let materials_arc = self.materials.clone();
+        let materials = materials_arc.lock().unwrap();
 
         for entity in entities.iter() {
+            if let Some((materials, active_material_index)) = materials.get(entity.id()) {
+                let active_material = &materials[*active_material_index];
+                let active_material_id = active_material.id().clone();
+                if !self.pipelines.contains_key(&active_material_id) {
+                    let new_pipeline = Pipeline::new(
+                        device.clone(),
+                        color_format,
+                        &[Vertex::desc(), Mesh::desc()],
+                        &active_material_id,
+                    );
+                    self.pipelines.insert(active_material_id, new_pipeline);
+                }
+            }
             for component in components.get_mut(entity.id()).unwrap() {
                 component.initialize(device.clone(), queue.clone(), components_arc.clone());
             }
@@ -226,15 +245,19 @@ impl Scene {
         cam.create_camera_bind_group(device.clone(), na::Vector3::new(0.0, 0.0, 0.0))
     }
 
-    pub fn find_specific_component<T: ComponentSystem + Any>(
-        components: &[Component],
+    pub fn find_specific_component<'a, T: ComponentSystem + Any>(
+        components: &'a [Component],
         component_type: ComponentType,
-    ) -> Option<&T> {
+    ) -> Option<&'a T> {
         for component in components {
             if component.component_type() == component_type {
                 return component.as_any().downcast_ref::<T>();
             }
         }
         None
+    }
+
+    pub fn get_components(&self) -> AllComponents {
+        self.components.clone()
     }
 }

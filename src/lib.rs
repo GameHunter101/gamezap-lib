@@ -29,6 +29,7 @@ pub mod ecs {
     pub mod component;
     pub mod entity;
     pub mod scene;
+    pub mod channel;
 }
 
 /// Main struct for the engine, manages all higher-level state
@@ -149,6 +150,10 @@ impl GameZap {
                 renderer.device.clone(),
                 renderer.queue.clone(),
                 self.details.clone(),
+            );
+            active_scene.render(
+                renderer.device.clone(),
+                renderer.queue.clone(),
                 renderer.smaa_target.clone(),
                 renderer.surface.clone(),
                 renderer.depth_texture.clone(),

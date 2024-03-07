@@ -4,23 +4,26 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     num::NonZeroU32,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType, BufferUsages,
-    Device, Queue, RenderPass, SamplerBindingType, ShaderStages, TextureSampleType,
-    TextureViewDimension,
+    BindGroupLayoutEntry, BindingResource, BindingType, Buffer, BufferBindingType,
+    BufferDescriptor, BufferSlice, BufferUsages, Device, Queue, RenderPass, SamplerBindingType,
+    ShaderStages, TextureSampleType, TextureViewDimension,
 };
 
 use nalgebra as na;
 
 use crate::{model::Vertex, texture::Texture, EngineDetails};
 
-use super::entity::{Entity, EntityId};
+use super::{
+    entity::{Entity, EntityId},
+    scene::Scene,
+};
 
 pub trait AsAny {
     fn as_any(&self) -> &dyn Any;
@@ -39,7 +42,7 @@ pub trait ComponentSystem: Debug {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_entities: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+        component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
     ) {
     }
 
@@ -47,9 +50,8 @@ pub trait ComponentSystem: Debug {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_components: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+        component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
         engine_details: Arc<Mutex<EngineDetails>>,
-        render_pass: &mut RenderPass,
     ) {
     }
 
@@ -57,6 +59,15 @@ pub trait ComponentSystem: Debug {
 
     fn component_type(&self) -> ComponentType {
         ComponentType::Custom(String::from("Custom Unnamed Component"))
+    }
+
+    fn render<'a: 'b, 'b>(
+        &'a self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        render_pass: &mut RenderPass<'b>,
+        component_map: &'a HashMap<EntityId, Vec<Component>>,
+    ) {
     }
 }
 
@@ -73,8 +84,8 @@ pub struct MeshComponent {
     entity: EntityId,
     vertices: Vec<Vertex>,
     indices: Vec<u64>,
-    vertex_buffer: Option<wgpu::Buffer>,
-    index_buffer: Option<wgpu::Buffer>,
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
 }
 
 impl ComponentSystem for MeshComponent {
@@ -82,19 +93,60 @@ impl ComponentSystem for MeshComponent {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        all_entities: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+        component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
     ) {
-        self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
+        self.vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
             contents: &bytemuck::cast_slice(&self.vertices),
             usage: wgpu::BufferUsages::VERTEX,
-        }));
+        });
 
-        self.index_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
+        self.index_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
             contents: &bytemuck::cast_slice(&self.indices),
             usage: wgpu::BufferUsages::INDEX,
-        }));
+        });
+    }
+
+    fn update(
+        &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+        engine_details: Arc<Mutex<EngineDetails>>,
+    ) {
+        let components_arc = component_map.clone();
+        let lock = components_arc.as_ref().lock();
+        let components = &*lock.as_ref().unwrap();
+        let components_slice = &components[&0];
+        let transform_component = Scene::find_specific_component::<TransformComponent>(
+            components_slice,
+            ComponentType::Transform,
+        );
+
+        if let Some(comp) = transform_component {
+            // self.transform_buffer = comp.buffer();
+        }
+    }
+
+    fn render<'a: 'b, 'b>(
+        &'a self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        render_pass: &mut RenderPass<'b>,
+        component_map: &'a HashMap<EntityId, Vec<Component>>,
+    ) {
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+        let components_slice = &component_map[&0];
+        let transform_component = Scene::find_specific_component::<TransformComponent>(
+            components_slice,
+            ComponentType::Transform,
+        );
+
+        if let Some(comp) = transform_component {
+            render_pass.set_vertex_buffer(1, comp.buffer().unwrap().slice(..));
+        }
     }
 
     fn this_entity(&self) -> &EntityId {
@@ -297,16 +349,59 @@ pub struct TransformComponent {
     pitch: f32,
     yaw: f32,
     scale: na::Vector3<f32>,
+    buf: Option<Buffer>,
+}
+
+impl Default for TransformComponent {
+    fn default() -> Self {
+        Self {
+            entity: 0,
+            position: na::Vector3::zeros(),
+            roll: 0.0,
+            pitch: 0.0,
+            yaw: 0.0,
+            scale: na::Vector3::zeros(),
+            buf: None,
+        }
+    }
 }
 
 impl TransformComponent {
     pub fn position(&self) -> &na::Vector3<f32> {
         &self.position
     }
+
+    pub fn update_buffer(&mut self, device: Arc<Device>) {
+        let matrix = [[0.0; 4]; 4];
+        let new_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some(&format!("{} Entity Transform Buffer", self.this_entity())),
+            contents: bytemuck::cast_slice(&matrix),
+            usage: BufferUsages::VERTEX,
+        });
+        self.buf = Some(new_buffer);
+    }
+
+    pub fn buffer(&self) -> Option<&Buffer> {
+        self.buf.as_ref()
+    }
 }
 
 impl ComponentSystem for TransformComponent {
     fn this_entity(&self) -> &EntityId {
         &self.entity
+    }
+}
+
+struct Controller {
+    data: Arc<Buffer>,
+}
+
+struct Temp {
+    controller: Arc<Controller>,
+}
+
+impl Temp {
+    fn testing<'a: 'b, 'b>(&'a self, render_pass: &'b mut RenderPass<'b>) {
+        render_pass.set_vertex_buffer(0, self.controller.data.slice(..))
     }
 }
