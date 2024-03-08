@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use gamezap::{
     ecs::{
-        component::{CameraComponent, ComponentSystem},
-        entity::EntityId,
+        component::{CameraComponent, Material, MeshComponent},
         scene::Scene,
     },
+    model::Vertex,
     GameZap,
 };
 use nalgebra as na;
@@ -29,13 +29,10 @@ async fn main() {
             .unwrap(),
     );
 
-    let mut scene = Scene::new();
+    let scene = Arc::new(Mutex::new(Scene::new()));
 
-    let test_component = TestComponent { entity_id: 0 };
 
-    scene.create_entity(0, true, vec![Box::new(test_component)], None);
-
-    let scenes = vec![scene];
+    let scenes = vec![scene.clone()];
 
     let mut engine = GameZap::builder()
         .window_and_renderer(
@@ -55,29 +52,43 @@ async fn main() {
         .scenes(scenes, 0)
         .build();
 
+    let device = engine.renderer.device.clone();
+
+    let mesh_component = MeshComponent::new(
+        vec![
+            Vertex {
+                position: [-1.0, -1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+                normal: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [0.0, 1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+                normal: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [1.0, -1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+            },
+        ],
+        vec![0, 1, 2],
+    );
+
+    let test_material = Material::new(
+        "examples/shaders/vert.wgsl",
+        "examples/shaders/frag.wgsl",
+        Vec::new(),
+        true,
+        device,
+    );
+
+    scene.lock().unwrap().create_entity(
+        0,
+        true,
+        vec![Box::new(mesh_component)],
+        Some((vec![test_material], 0)),
+    );
+
     engine.main_loop();
-}
-
-#[derive(Debug)]
-struct TestComponent {
-    entity_id: EntityId,
-}
-
-impl ComponentSystem for TestComponent {
-    fn this_entity(&self) -> &EntityId {
-        &self.entity_id
-    }
-    fn update(
-        &mut self,
-        _device: Arc<wgpu::Device>,
-        _queue: Arc<wgpu::Queue>,
-        _all_components: Arc<
-            std::sync::Mutex<
-                std::collections::HashMap<EntityId, Vec<gamezap::ecs::component::Component>>,
-            >,
-        >,
-        _engine_details: Arc<std::sync::Mutex<gamezap::EngineDetails>>,
-    ) {
-        println!("Hello");
-    }
 }

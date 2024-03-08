@@ -133,6 +133,9 @@ impl Scene {
             label: Some("Scene Encoder"),
         });
 
+        let mut default_transform = TransformComponent::default();
+        default_transform.initialize(device.clone(), queue.clone(), self.components.clone());
+
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Scene Render Pass"),
@@ -161,12 +164,17 @@ impl Scene {
 
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
             for (pipeline_id, pipeline) in &self.pipelines {
+                render_pass.set_pipeline(pipeline.pipeline());
                 for entity in entities.iter() {
                     let entity_materials = materials.get(entity.id());
                     if let Some((materials, active_material_index)) = entity_materials {
                         let active_material = &materials[*active_material_index];
                         if active_material.id() == pipeline_id {
                             render_pass.set_bind_group(0, active_material.bind_group(), &[]);
+                            render_pass.set_vertex_buffer(
+                                1,
+                                default_transform.buffer().unwrap().slice(..),
+                            );
                             for component in components.get(entity.id()).unwrap().iter() {
                                 component.render(
                                     device.clone(),
@@ -223,13 +231,10 @@ impl Scene {
         let components = components_arc.lock().unwrap();
 
         if let Some(active_camera_id) = self.active_camera_id {
-            let camera_component = Scene::find_specific_component::<CameraComponent>(
-                &*components[&active_camera_id],
-                ComponentType::Camera,
-            );
+            let camera_component =
+                Scene::find_specific_component::<CameraComponent>(&*components[&active_camera_id]);
             let transform_component = Scene::find_specific_component::<TransformComponent>(
                 &*components[&active_camera_id],
-                ComponentType::Transform,
             );
             let position = match transform_component {
                 Some(comp) => comp.position().clone(),
@@ -247,11 +252,10 @@ impl Scene {
 
     pub fn find_specific_component<'a, T: ComponentSystem + Any>(
         components: &'a [Component],
-        component_type: ComponentType,
     ) -> Option<&'a T> {
         for component in components {
-            if component.component_type() == component_type {
-                return component.as_any().downcast_ref::<T>();
+            if let Some(comp) = component.as_any().downcast_ref::<T>() {
+                return Some(comp);
             }
         }
         None

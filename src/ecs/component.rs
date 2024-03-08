@@ -55,12 +55,6 @@ pub trait ComponentSystem: Debug {
     ) {
     }
 
-    fn this_entity(&self) -> &EntityId;
-
-    fn component_type(&self) -> ComponentType {
-        ComponentType::Custom(String::from("Custom Unnamed Component"))
-    }
-
     fn render<'a: 'b, 'b>(
         &'a self,
         device: Arc<Device>,
@@ -81,11 +75,21 @@ pub enum ComponentType {
 
 #[derive(Debug)]
 pub struct MeshComponent {
-    entity: EntityId,
     vertices: Vec<Vertex>,
-    indices: Vec<u64>,
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
+    indices: Vec<u32>,
+    vertex_buffer: Option<Buffer>,
+    index_buffer: Option<Buffer>,
+}
+
+impl MeshComponent {
+    pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>) -> Self {
+        MeshComponent {
+            vertices,
+            indices,
+            vertex_buffer: None,
+            index_buffer: None,
+        }
+    }
 }
 
 impl ComponentSystem for MeshComponent {
@@ -95,38 +99,17 @@ impl ComponentSystem for MeshComponent {
         queue: Arc<Queue>,
         component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
     ) {
-        self.vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
+        self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Entity Vertex Buffer"),
             contents: &bytemuck::cast_slice(&self.vertices),
             usage: wgpu::BufferUsages::VERTEX,
-        });
+        }));
 
-        self.index_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some(&format!("Entity {:?} Vertex Buffer", self.entity)),
+        self.index_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Entity Index Buffer"),
             contents: &bytemuck::cast_slice(&self.indices),
             usage: wgpu::BufferUsages::INDEX,
-        });
-    }
-
-    fn update(
-        &mut self,
-        device: Arc<Device>,
-        queue: Arc<Queue>,
-        component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
-        engine_details: Arc<Mutex<EngineDetails>>,
-    ) {
-        let components_arc = component_map.clone();
-        let lock = components_arc.as_ref().lock();
-        let components = &*lock.as_ref().unwrap();
-        let components_slice = &components[&0];
-        let transform_component = Scene::find_specific_component::<TransformComponent>(
-            components_slice,
-            ComponentType::Transform,
-        );
-
-        if let Some(comp) = transform_component {
-            // self.transform_buffer = comp.buffer();
-        }
+        }));
     }
 
     fn render<'a: 'b, 'b>(
@@ -136,25 +119,22 @@ impl ComponentSystem for MeshComponent {
         render_pass: &mut RenderPass<'b>,
         component_map: &'a HashMap<EntityId, Vec<Component>>,
     ) {
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        if let Some(vertex_buffer) = &self.vertex_buffer {
+            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        }
 
         let components_slice = &component_map[&0];
-        let transform_component = Scene::find_specific_component::<TransformComponent>(
-            components_slice,
-            ComponentType::Transform,
-        );
+        let transform_component =
+            Scene::find_specific_component::<TransformComponent>(components_slice);
 
         if let Some(comp) = transform_component {
             render_pass.set_vertex_buffer(1, comp.buffer().unwrap().slice(..));
         }
-    }
 
-    fn this_entity(&self) -> &EntityId {
-        &self.entity
-    }
-
-    fn component_type(&self) -> ComponentType {
-        ComponentType::Mesh
+        if let Some(index_buffer) = &self.index_buffer {
+            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
+        }
     }
 }
 
@@ -162,7 +142,6 @@ pub type MaterialId = (String, String, usize);
 
 #[derive(Debug)]
 pub struct Material {
-    entity: EntityId,
     vertex_shader_path: String,
     fragment_shader_path: String,
     textures: Vec<Texture>,
@@ -173,7 +152,6 @@ pub struct Material {
 
 impl Material {
     pub fn new(
-        entity: EntityId,
         vertex_shader_path: &str,
         fragment_shader_path: &str,
         textures: Vec<Texture>,
@@ -185,9 +163,10 @@ impl Material {
             fragment_shader_path.to_string(),
             textures.len(),
         );
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(&format!("Material {id:?} Bind Group Layout")),
-            entries: &[
+        let bind_group_layout_entries = if textures.len() == 0 {
+            Vec::new()
+        } else {
+            vec![
                 BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
@@ -204,36 +183,37 @@ impl Material {
                     ty: BindingType::Sampler(SamplerBindingType::Filtering),
                     count: NonZeroU32::new(textures.len() as u32),
                 },
-            ],
+            ]
+        };
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(&format!("Material {id:?} Bind Group Layout")),
+            entries: &bind_group_layout_entries,
         });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(&format!("Material {id:?} Bind Group")),
-            layout: &bind_group_layout,
-            entries: &[
+        let views = textures.iter().map(|tex| &tex.view).collect::<Vec<_>>();
+
+        let samplers = textures.iter().map(|tex| &tex.sampler).collect::<Vec<_>>();
+
+        let bind_group_entries = if textures.len() == 0 {
+            Vec::new()
+        } else {
+            vec![
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureViewArray(
-                        &textures
-                            .iter()
-                            .map(|tex| &tex.view)
-                            .collect::<Vec<_>>()
-                            .as_slice(),
-                    ),
+                    resource: BindingResource::TextureViewArray(&views),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::SamplerArray(
-                        &textures
-                            .iter()
-                            .map(|tex| &tex.sampler)
-                            .collect::<Vec<_>>()
-                            .as_slice(),
-                    ),
+                    resource: BindingResource::SamplerArray(&samplers),
                 },
-            ],
+            ]
+        };
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("Material {id:?} Bind Group")),
+            layout: &bind_group_layout,
+            entries: &bind_group_entries,
         });
         Self {
-            entity,
             vertex_shader_path: vertex_shader_path.to_string(),
             fragment_shader_path: fragment_shader_path.to_string(),
             textures,
@@ -241,10 +221,6 @@ impl Material {
             id,
             bind_group,
         }
-    }
-
-    pub fn this_entity(&self) -> &EntityId {
-        &self.entity
     }
 
     pub fn id(&self) -> &MaterialId {
@@ -314,13 +290,13 @@ impl CameraComponent {
     ) -> BindGroup {
         let raw_camera_data = RawCameraData::new(position, self.view_proj);
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some(&format!("{:?} Camera Buffer", self.entity)),
+            label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[raw_camera_data]),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some(&format!("{:?} Camera Bind Group", self.entity)),
+            label: Some("Camera Bind Group"),
             layout: &Self::camera_bind_group_layout(device.clone()),
             entries: &[BindGroupEntry {
                 binding: 0,
@@ -331,19 +307,11 @@ impl CameraComponent {
     }
 }
 
-impl ComponentSystem for CameraComponent {
-    fn this_entity(&self) -> &EntityId {
-        &self.entity
-    }
-
-    fn component_type(&self) -> ComponentType {
-        ComponentType::Camera
-    }
-}
+impl ComponentSystem for CameraComponent {}
 
 #[derive(Debug)]
 pub struct TransformComponent {
-    entity: EntityId,
+    matrix: na::Matrix4<f32>,
     position: na::Vector3<f32>,
     roll: f32,
     pitch: f32,
@@ -355,7 +323,7 @@ pub struct TransformComponent {
 impl Default for TransformComponent {
     fn default() -> Self {
         Self {
-            entity: 0,
+            matrix: na::Matrix4::identity(),
             position: na::Vector3::zeros(),
             roll: 0.0,
             pitch: 0.0,
@@ -374,7 +342,7 @@ impl TransformComponent {
     pub fn update_buffer(&mut self, device: Arc<Device>) {
         let matrix = [[0.0; 4]; 4];
         let new_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some(&format!("{} Entity Transform Buffer", self.this_entity())),
+            label: Some(&format!("Entity Transform Buffer")),
             contents: bytemuck::cast_slice(&matrix),
             usage: BufferUsages::VERTEX,
         });
@@ -387,8 +355,18 @@ impl TransformComponent {
 }
 
 impl ComponentSystem for TransformComponent {
-    fn this_entity(&self) -> &EntityId {
-        &self.entity
+    fn initialize(
+        &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+    ) {
+        let matrix_as_arr: [[f32; 4]; 4] = self.matrix.into();
+        self.buf = Some(device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Transform Component Buffer"),
+            contents: bytemuck::cast_slice(&matrix_as_arr),
+            usage: BufferUsages::VERTEX,
+        }));
     }
 }
 

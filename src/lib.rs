@@ -29,7 +29,6 @@ pub mod ecs {
     pub mod component;
     pub mod entity;
     pub mod scene;
-    pub mod channel;
 }
 
 /// Main struct for the engine, manages all higher-level state
@@ -66,7 +65,7 @@ pub struct GameZap {
     pub window_size: (u32, u32),
     pub details: Arc<Mutex<EngineDetails>>,
 
-    scenes: Vec<Scene>,
+    scenes: Vec<Arc<Mutex<Scene>>>,
     active_scene_index: usize,
 }
 
@@ -145,19 +144,26 @@ impl GameZap {
             }
 
             let renderer = &self.renderer;
-            let active_scene = &mut self.scenes[self.active_scene_index];
-            active_scene.update(
-                renderer.device.clone(),
-                renderer.queue.clone(),
-                self.details.clone(),
-            );
-            active_scene.render(
-                renderer.device.clone(),
-                renderer.queue.clone(),
-                renderer.smaa_target.clone(),
-                renderer.surface.clone(),
-                renderer.depth_texture.clone(),
-            );
+            let active_scene = &mut self.scenes.get(self.active_scene_index);
+            if let Some(active_scene_arc) = active_scene {
+                let details = self.details.lock().unwrap();
+                let mut active_scene = active_scene_arc.lock().unwrap();
+                if details.frame_number == 0 {
+                    active_scene.initialize(renderer.device.clone(), renderer.queue.clone(), renderer.config.format);
+                }
+                active_scene.update(
+                    renderer.device.clone(),
+                    renderer.queue.clone(),
+                    self.details.clone(),
+                );
+                active_scene.render(
+                    renderer.device.clone(),
+                    renderer.queue.clone(),
+                    renderer.smaa_target.clone(),
+                    renderer.surface.clone(),
+                    renderer.depth_texture.clone(),
+                );
+            }
 
             // self.update_renderer().await;
             self.update_details();
@@ -191,7 +197,7 @@ pub struct GameZapBuilder {
     // module_manager: ModuleManager,
     antialiasing: bool,
 
-    scenes: Vec<Scene>,
+    scenes: Vec<Arc<Mutex<Scene>>>,
     active_scene_index: usize,
 }
 
@@ -218,7 +224,7 @@ impl<'a> GameZapBuilder {
             // module_manager: ModuleManager::minimal(),
             antialiasing: false,
 
-            scenes: vec![Scene::new()],
+            scenes: vec![Arc::new(Mutex::new(Scene::new()))],
             active_scene_index: 0,
         }
     }
@@ -259,7 +265,11 @@ impl<'a> GameZapBuilder {
         self
     }
 
-    pub fn scenes(mut self, scenes: Vec<Scene>, active_scene_index: usize) -> GameZapBuilder {
+    pub fn scenes(
+        mut self,
+        scenes: Vec<Arc<Mutex<Scene>>>,
+        active_scene_index: usize,
+    ) -> GameZapBuilder {
         self.scenes = scenes;
         self.active_scene_index = active_scene_index;
         self

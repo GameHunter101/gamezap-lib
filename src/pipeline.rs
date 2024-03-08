@@ -1,7 +1,15 @@
 use std::{num::NonZeroU32, sync::Arc};
-use wgpu::{util::DeviceExt, Device, PipelineLayout, ShaderStages, RenderPipeline};
+use wgpu::{util::DeviceExt, Device, PipelineLayout, RenderPipeline, ShaderStages};
 
-use crate::{ecs::component::{CameraComponent, MaterialId}, texture::Texture};
+use crate::{
+    ecs::component::{CameraComponent, MaterialId},
+    texture::Texture,
+};
+
+#[derive(Debug)]
+pub enum PipelineError {
+    PathNotFound(String),
+}
 
 #[derive(Debug)]
 pub enum PipelineType {
@@ -23,8 +31,8 @@ impl Pipeline {
         vertex_layouts: &[wgpu::VertexBufferLayout],
         id: &MaterialId,
     ) -> Self {
-        let vertex_descriptor = Pipeline::load_shader_module_descriptor(&id.0);
-        let fragment_descriptor = Pipeline::load_shader_module_descriptor(&id.1);
+        let vertex_descriptor = Pipeline::load_shader_module_descriptor(&id.0).unwrap();
+        let fragment_descriptor = Pipeline::load_shader_module_descriptor(&id.1).unwrap();
         let vertex_shader = device.create_shader_module(vertex_descriptor);
         let fragment_shader = device.create_shader_module(fragment_descriptor);
 
@@ -78,24 +86,28 @@ impl Pipeline {
     }
 
     pub fn create_pipeline_layout(material_id: &MaterialId, device: Arc<Device>) -> PipelineLayout {
-        let bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> = vec![
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
+        let bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> = if material_id.2 == 0 {
+            Vec::new()
+        } else {
+            vec![
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: NonZeroU32::new(material_id.2 as u32),
                 },
-                count: NonZeroU32::new(material_id.2 as u32),
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: NonZeroU32::new(material_id.2 as u32),
-            },
-        ];
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: NonZeroU32::new(material_id.2 as u32),
+                },
+            ]
+        };
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some(&format!("{material_id:?} Bind Group Layout")),
             entries: &bind_group_layout_entries,
@@ -112,13 +124,18 @@ impl Pipeline {
         layout
     }
 
-    pub fn load_shader_module_descriptor(shader_path: &str) -> wgpu::ShaderModuleDescriptor {
-        let shader_string =
-            std::fs::read_to_string(shader_path).expect("Failed to read shader file");
-
-        wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader_string)),
+    pub fn load_shader_module_descriptor(
+        shader_path: &str,
+    ) -> Result<wgpu::ShaderModuleDescriptor, PipelineError> {
+        let shader_string = std::fs::read_to_string(shader_path);
+        match shader_string {
+            Ok(shader) => Ok(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shader)),
+            }),
+            Err(_) => Err(PipelineError::PathNotFound(format!(
+                "Failed to read shader file at path: {shader_path}"
+            ))),
         }
     }
 
@@ -126,7 +143,7 @@ impl Pipeline {
         &self.id
     }
 
-    pub fn pipeline(&self) -> &RenderPipeline{
+    pub fn pipeline(&self) -> &RenderPipeline {
         &self.pipeline
     }
 }
