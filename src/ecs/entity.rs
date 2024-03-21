@@ -10,7 +10,10 @@ use wgpu::{Device, Queue, Surface};
 
 use crate::pipeline::Pipeline;
 
-use super::component::{AsAny, Component, ComponentSystem, Material, MaterialId};
+use super::{
+    component::{Component, ComponentSystem},
+    material::{Material, MaterialId},
+};
 
 pub type EntityId = u32;
 
@@ -23,12 +26,7 @@ pub struct Entity {
 }
 
 impl Entity {
-    pub fn new(
-        id: EntityId,
-        enabled: bool,
-        parent: EntityId,
-        children: Vec<EntityId>,
-    ) -> Self {
+    pub fn new(id: EntityId, enabled: bool, parent: EntityId, children: Vec<EntityId>) -> Self {
         Self {
             id,
             enabled,

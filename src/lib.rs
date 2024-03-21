@@ -1,5 +1,5 @@
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::{Ref, RefCell},
     sync::{Arc, Mutex},
 };
 
@@ -18,17 +18,21 @@ use crate::renderer::Renderer;
 
 pub mod camera;
 // pub mod compute;
-pub mod light;
-pub mod materials;
 pub mod model;
-// pub mod module_manager;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
 pub mod ecs {
     pub mod component;
     pub mod entity;
+    pub mod material;
     pub mod scene;
+    pub mod concepts;
+    pub mod components {
+        pub mod mesh_component;
+        pub mod camera_component;
+        pub mod transform_component;
+    }
 }
 
 /// Main struct for the engine, manages all higher-level state
@@ -78,6 +82,7 @@ pub struct EngineDetails {
 
     pub mouse_state: (Option<RelativeMouseState>, bool),
     pub pressed_scancodes: Vec<Scancode>,
+    pub window_aspect_ratio: f32,
 }
 
 pub struct EngineSystems {
@@ -130,15 +135,20 @@ impl GameZap {
         // self.renderer.render().await.unwrap();
     } */
 
-    pub fn main_loop<'b>(&mut self) {
+    pub fn main_loop(&mut self) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
                 match event {
                     Event::Quit { .. } => break 'running,
-                    /* Event::Window {
+                    Event::Window {
                         win_event: WindowEvent::Resized(width, height),
                         ..
-                    } => self.renderer.resize((width as u32, height as u32)), */
+                    } => {
+                        self.renderer.resize((width as u32, height as u32));
+                        let details_clone = self.details.clone();
+                        let mut details = details_clone.lock().unwrap();
+                        details.window_aspect_ratio = width as f32 / height as f32;
+                    }
                     _ => {}
                 }
             }
@@ -149,8 +159,13 @@ impl GameZap {
                 let details = self.details.lock().unwrap();
                 let mut active_scene = active_scene_arc.lock().unwrap();
                 if details.frame_number == 0 {
-                    active_scene.initialize(renderer.device.clone(), renderer.queue.clone(), renderer.config.format);
+                    active_scene.initialize(
+                        renderer.device.clone(),
+                        renderer.queue.clone(),
+                        renderer.config.format,
+                    );
                 }
+                drop(details);
                 active_scene.update(
                     renderer.device.clone(),
                     renderer.queue.clone(),
@@ -162,22 +177,13 @@ impl GameZap {
                     renderer.smaa_target.clone(),
                     renderer.surface.clone(),
                     renderer.depth_texture.clone(),
+                    self.window_size,
                 );
             }
 
-            // self.update_renderer().await;
             self.update_details();
         }
     }
-}
-
-pub trait FrameDependancy {
-    fn frame_update(
-        &mut self,
-        engine_details: RefMut<EngineDetails>,
-        renderer: &Renderer,
-        engine_systems: Ref<EngineSystems>,
-    );
 }
 
 /// Builder struct for main [GameZap] struct
@@ -201,7 +207,7 @@ pub struct GameZapBuilder {
     active_scene_index: usize,
 }
 
-impl<'a> GameZapBuilder {
+impl GameZapBuilder {
     fn init() -> Self {
         GameZapBuilder {
             sdl_context: None,
@@ -224,7 +230,7 @@ impl<'a> GameZapBuilder {
             // module_manager: ModuleManager::minimal(),
             antialiasing: false,
 
-            scenes: vec![Arc::new(Mutex::new(Scene::new()))],
+            scenes: vec![Arc::new(Mutex::new(Scene::default()))],
             active_scene_index: 0,
         }
     }
@@ -323,6 +329,8 @@ impl<'a> GameZapBuilder {
                 time_of_last_frame: self.time_of_last_frame,
                 mouse_state: (None, true),
                 pressed_scancodes: vec![],
+                window_aspect_ratio: self.window_size.unwrap().0 as f32
+                    / self.window_size.unwrap().1 as f32,
             })),
             scenes: self.scenes,
             active_scene_index: self.active_scene_index,

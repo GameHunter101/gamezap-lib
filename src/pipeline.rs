@@ -2,7 +2,7 @@ use std::{num::NonZeroU32, sync::Arc};
 use wgpu::{util::DeviceExt, Device, PipelineLayout, RenderPipeline, ShaderStages};
 
 use crate::{
-    ecs::component::{CameraComponent, MaterialId},
+    ecs::{components::camera_component::CameraComponent, material::MaterialId},
     texture::Texture,
 };
 
@@ -36,7 +36,7 @@ impl Pipeline {
         let vertex_shader = device.create_shader_module(vertex_descriptor);
         let fragment_shader = device.create_shader_module(fragment_descriptor);
 
-        let layout = Pipeline::create_pipeline_layout(&id, device.clone());
+        let layout = Pipeline::create_pipeline_layout(id, device.clone());
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(&format!("{id:?} Pipeline")),
@@ -112,16 +112,14 @@ impl Pipeline {
             label: Some(&format!("{material_id:?} Bind Group Layout")),
             entries: &bind_group_layout_entries,
         });
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&format!("{material_id:?} Pipeline Layout")),
             bind_group_layouts: &[
                 &bind_group_layout,
                 &CameraComponent::camera_bind_group_layout(device.clone()),
             ],
             push_constant_ranges: &[],
-        });
-
-        layout
+        })
     }
 
     pub fn load_shader_module_descriptor(

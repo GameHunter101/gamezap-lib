@@ -43,7 +43,8 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS,
+                    features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+                        | wgpu::Features::TEXTURE_BINDING_ARRAY,
                     limits: wgpu::Limits::default(),
                     label: None,
                 },
@@ -123,7 +124,7 @@ impl Renderer {
         }
     } */
 
-    /* pub fn resize(&mut self, new_size: (u32, u32)) {
+    pub fn resize(&mut self, new_size: (u32, u32)) {
         if new_size.0 > 0 && new_size.1 > 0 {
             self.size = new_size;
             self.config.width = new_size.0;
@@ -134,17 +135,13 @@ impl Renderer {
                 &self.config,
                 "depth_texture",
             ));
-            if let Some(camera_manager) = &self.module_manager.camera_manager {
-                camera_manager.borrow().camera.borrow_mut().aspect =
-                    new_size.0 as f32 / new_size.1 as f32;
-            }
             self.smaa_target
                 .clone()
                 .lock()
                 .unwrap()
                 .resize(&self.device, new_size.0, new_size.1);
         }
-    } */
+    }
 
     /* /// Initializes things the pipeline needs, such as pipelines
     pub fn prep_renderer(&self) {

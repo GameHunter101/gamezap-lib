@@ -1,69 +1,61 @@
-#![allow(unused)]
+// #![allow(unused)]
 use crate::{
-    ecs::entity::Entity,
-    model::{Mesh, Vertex, VertexData},
+    ecs::{concepts::ConceptManager, entity::Entity},
+    model::{Vertex, VertexData},
     texture::Texture,
     EngineDetails,
 };
 use std::{
     any::Any,
     collections::HashMap,
-    ops::Deref,
-    sync::{Arc, Mutex, MutexGuard},
+    ops::DerefMut,
+    sync::{Arc, Mutex},
 };
 
-use cool_utils::data_structures::tree::Tree;
 use smaa::SmaaTarget;
-use wgpu::{
-    BindGroup, BindGroupDescriptor, CommandEncoderDescriptor, Device, Queue, RenderPass, Surface,
-    TextureFormat,
-};
-
-use nalgebra as na;
+use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, Surface, TextureFormat};
 
 use crate::pipeline::Pipeline;
 
 use super::{
-    component::{
-        AsAny, CameraComponent, Component, ComponentSystem, ComponentType, Material, MaterialId,
-        TransformComponent,
-    },
-    entity::{self, EntityId},
+    component::{Component, ComponentSystem},
+    components::{camera_component::CameraComponent, transform_component::TransformComponent},
+    entity::EntityId,
+    material::{Material, MaterialId},
 };
 
 pub type AllComponents = Arc<Mutex<HashMap<EntityId, Vec<Component>>>>;
+pub type Materials = Arc<Mutex<HashMap<EntityId, (Vec<Material>, usize)>>>;
 
 pub struct Scene {
     entities: Arc<Mutex<Vec<Entity>>>,
-    total_entites_created: u32,
+    total_entities_created: u32,
     pipelines: HashMap<MaterialId, Pipeline>,
     components: AllComponents,
-    materials: Arc<Mutex<HashMap<EntityId, (Vec<Material>, usize)>>>,
+    materials: Materials,
     active_camera_id: Option<EntityId>,
+    concept_manager: Arc<Mutex<ConceptManager>>,
 }
 
 impl Scene {
-    pub fn new() -> Self {
-        let root_index = vec![0];
-        Self {
-            entities: Arc::new(Mutex::new(Vec::new())),
-            total_entites_created: 0,
-            pipelines: HashMap::new(),
-            components: Arc::new(Mutex::new(HashMap::new())),
-            materials: Arc::new(Mutex::new(HashMap::new())),
-            active_camera_id: None,
-        }
-    }
-
     pub fn create_entity(
         &mut self,
         parent: EntityId,
         enabled: bool,
-        components: Vec<Component>,
+        mut components: Vec<Component>,
         materials: Option<(Vec<Material>, usize)>,
     ) -> EntityId {
-        let new_entity_id = self.total_entites_created;
+        let new_entity_id = self.total_entities_created;
         let new_entity = Entity::new(new_entity_id, enabled, parent, Vec::new());
+
+        let mut concept_manager = self.concept_manager.lock().unwrap();
+
+        for component in components.iter_mut() {
+            let old_id = component.get_id();
+            component.update_metadata(new_entity_id, 0);
+            concept_manager.modify_key(old_id, component.get_id());
+        }
+
         if let Some((materials, active_material_index)) = materials {
             self.materials
                 .lock()
@@ -74,8 +66,9 @@ impl Scene {
             .lock()
             .unwrap()
             .insert(new_entity_id, components);
-        self.entities.lock().unwrap().push(new_entity);
-        self.total_entites_created += 1;
+        let entities = self.entities.clone();
+        entities.lock().unwrap().push(new_entity);
+        self.total_entities_created += 1;
         new_entity_id
     }
 
@@ -92,12 +85,13 @@ impl Scene {
         let mut components = components_arc.lock().unwrap();
 
         for entity in entities.iter() {
-            for component in components.get_mut(entity.id()).unwrap() {
+            for component in components.deref_mut().get_mut(entity.id()).unwrap() {
                 component.update(
                     device.clone(),
                     queue.clone(),
                     components_arc.clone(),
                     engine_details.clone(),
+                    self.concept_manager.clone(),
                 );
             }
         }
@@ -110,14 +104,14 @@ impl Scene {
         smaa_target: Arc<Mutex<SmaaTarget>>,
         surface: Arc<Surface>,
         depth_texture: Arc<Texture>,
+        window_size: (u32, u32),
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
 
-        let materials_arc = self.materials.clone();
         let materials = self.materials.lock().unwrap();
 
-        let camera_bind_group = self.create_camera_bind_group(device.clone());
+        let camera_bind_group = self.create_camera_bind_group(device.clone(), window_size);
         let components_arc = self.components.clone();
         let components = &*components_arc.lock().unwrap();
 
@@ -133,8 +127,16 @@ impl Scene {
             label: Some("Scene Encoder"),
         });
 
-        let mut default_transform = TransformComponent::default();
-        default_transform.initialize(device.clone(), queue.clone(), self.components.clone());
+        // PROBLEM HERE (already locked concept_manager):
+        let mut default_transform = TransformComponent::default(self.concept_manager.clone());
+        default_transform.initialize(
+            device.clone(),
+            queue.clone(),
+            self.components.clone(),
+            self.concept_manager.clone(),
+        );
+
+        let concept_manager = &*self.concept_manager.lock().unwrap();
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -171,16 +173,22 @@ impl Scene {
                         let active_material = &materials[*active_material_index];
                         if active_material.id() == pipeline_id {
                             render_pass.set_bind_group(0, active_material.bind_group(), &[]);
-                            render_pass.set_vertex_buffer(
-                                1,
-                                default_transform.buffer().unwrap().slice(..),
+                            default_transform.render(
+                                device.clone(),
+                                queue.clone(),
+                                &mut render_pass,
+                                components,
+                                concept_manager,
                             );
+
+                            // render_pass.set_vertex_buffer(1, default_transform_buffer.slice(..));
                             for component in components.get(entity.id()).unwrap().iter() {
                                 component.render(
                                     device.clone(),
                                     queue.clone(),
                                     &mut render_pass,
-                                    &components,
+                                    components,
+                                    concept_manager,
                                 );
                             }
                         }
@@ -210,49 +218,49 @@ impl Scene {
             if let Some((materials, active_material_index)) = materials.get(entity.id()) {
                 let active_material = &materials[*active_material_index];
                 let active_material_id = active_material.id().clone();
-                if !self.pipelines.contains_key(&active_material_id) {
-                    let new_pipeline = Pipeline::new(
-                        device.clone(),
-                        color_format,
-                        &[Vertex::desc(), Mesh::desc()],
-                        &active_material_id,
-                    );
-                    self.pipelines.insert(active_material_id, new_pipeline);
-                }
+                self.pipelines
+                    .entry(active_material_id.clone())
+                    .or_insert_with(|| {
+                        let new_pipeline = Pipeline::new(
+                            device.clone(),
+                            color_format,
+                            &[Vertex::desc(), TransformComponent::desc()],
+                            &active_material_id,
+                        );
+                        new_pipeline
+                    });
             }
             for component in components.get_mut(entity.id()).unwrap() {
-                component.initialize(device.clone(), queue.clone(), components_arc.clone());
+                component.initialize(
+                    device.clone(),
+                    queue.clone(),
+                    components_arc.clone(),
+                    self.concept_manager.clone(),
+                );
             }
         }
     }
 
-    pub fn create_camera_bind_group(&self, device: Arc<Device>) -> BindGroup {
+    pub fn create_camera_bind_group(
+        &self,
+        device: Arc<Device>,
+        window_size: (u32, u32),
+    ) -> BindGroup {
         let components_arc = self.components.clone();
         let components = components_arc.lock().unwrap();
 
         if let Some(active_camera_id) = self.active_camera_id {
             let camera_component =
-                Scene::find_specific_component::<CameraComponent>(&*components[&active_camera_id]);
-            let transform_component = Scene::find_specific_component::<TransformComponent>(
-                &*components[&active_camera_id],
-            );
-            let position = match transform_component {
-                Some(comp) => comp.position().clone(),
-                None => na::Vector3::new(0.0, 0.0, 0.0),
-            };
-            let bind_group = camera_component
-                .unwrap()
-                .create_camera_bind_group(device.clone(), position);
+                Scene::get_component::<CameraComponent>(&components[&active_camera_id]);
+            let bind_group = camera_component.unwrap().create_camera_bind_group(device);
             return bind_group;
         }
 
-        let cam = CameraComponent::new(u32::MAX);
-        cam.create_camera_bind_group(device.clone(), na::Vector3::new(0.0, 0.0, 0.0))
+        let cam = CameraComponent::new_2d(self.concept_manager.clone(), window_size);
+        cam.create_camera_bind_group(device)
     }
 
-    pub fn find_specific_component<'a, T: ComponentSystem + Any>(
-        components: &'a [Component],
-    ) -> Option<&'a T> {
+    pub fn get_component<T: ComponentSystem + Any>(components: &[Component]) -> Option<&T> {
         for component in components {
             if let Some(comp) = component.as_any().downcast_ref::<T>() {
                 return Some(comp);
@@ -261,7 +269,40 @@ impl Scene {
         None
     }
 
+    pub fn get_component_mut<T: ComponentSystem + Any>(
+        components: &mut [Component],
+    ) -> Option<&mut T> {
+        for component in components.iter_mut() {
+            if let Some(comp) = component.as_any_mut().downcast_mut::<T>() {
+                return Some(comp);
+            }
+        }
+        None
+    }
+
     pub fn get_components(&self) -> AllComponents {
         self.components.clone()
+    }
+
+    pub fn set_active_camera(&mut self, entity_id: EntityId) {
+        self.active_camera_id = Some(entity_id);
+    }
+
+    pub fn get_concept_manager(&self) -> Arc<Mutex<ConceptManager>> {
+        self.concept_manager.clone()
+    }
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        Self {
+            entities: Arc::new(Mutex::new(Vec::new())),
+            total_entities_created: 0,
+            pipelines: HashMap::new(),
+            components: Arc::new(Mutex::new(HashMap::new())),
+            materials: Arc::new(Mutex::new(HashMap::new())),
+            active_camera_id: None,
+            concept_manager: Arc::new(Mutex::new(ConceptManager::default())),
+        }
     }
 }
