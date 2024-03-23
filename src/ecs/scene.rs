@@ -1,4 +1,3 @@
-// #![allow(unused)]
 use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
@@ -8,7 +7,6 @@ use crate::{
 use std::{
     any::Any,
     collections::HashMap,
-    ops::DerefMut,
     sync::{Arc, Mutex},
 };
 
@@ -24,7 +22,7 @@ use super::{
     material::{Material, MaterialId},
 };
 
-pub type AllComponents = Arc<Mutex<HashMap<EntityId, Vec<Component>>>>;
+pub type AllComponents = Arc<HashMap<EntityId, Vec<Component>>>;
 pub type Materials = Arc<Mutex<HashMap<EntityId, (Vec<Material>, usize)>>>;
 
 pub struct Scene {
@@ -62,14 +60,67 @@ impl Scene {
                 .unwrap()
                 .insert(new_entity_id, (materials, active_material_index));
         }
-        self.components
-            .lock()
+        Arc::get_mut(&mut self.components)
             .unwrap()
             .insert(new_entity_id, components);
         let entities = self.entities.clone();
         entities.lock().unwrap().push(new_entity);
         self.total_entities_created += 1;
         new_entity_id
+    }
+
+    pub fn initialize(
+        &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        color_format: TextureFormat,
+    ) {
+        let entities_arc = self.entities.clone();
+        let entities = entities_arc.lock().unwrap();
+        // let components_arc = self.components.clone();
+        let materials_arc = self.materials.clone();
+        let materials = materials_arc.lock().unwrap();
+
+        let new_components = entities
+            .iter()
+            .map(|entity| {
+                if let Some((materials, active_material_index)) = materials.get(entity.id()) {
+                    let active_material = &materials[*active_material_index];
+                    let active_material_id = active_material.id().clone();
+                    self.pipelines
+                        .entry(active_material_id.clone())
+                        .or_insert_with(|| {
+                            let new_pipeline = Pipeline::new(
+                                device.clone(),
+                                color_format,
+                                &[Vertex::desc(), TransformComponent::desc()],
+                                &active_material_id,
+                            );
+                            new_pipeline
+                        });
+                }
+                (
+                    *entity.id(),
+                    self.components
+                        .get(entity.id())
+                        .unwrap_or(&Vec::<Component>::new())
+                        .iter()
+                        .map(|comp| {
+                            let mut comp_clone = dyn_clone::clone_box(&**comp);
+                            comp_clone.initialize(
+                                device.clone(),
+                                queue.clone(),
+                                self.components.clone(),
+                                self.concept_manager.clone(),
+                            );
+                            comp_clone
+                        })
+                        .collect::<Vec<Component>>(),
+                )
+            })
+            .collect::<HashMap<EntityId, Vec<Component>>>();
+
+        *Arc::get_mut(&mut self.components).unwrap() = new_components;
     }
 
     pub fn update(
@@ -81,20 +132,32 @@ impl Scene {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
 
-        let components_arc = self.components.clone();
-        let mut components = components_arc.lock().unwrap();
+        let new_components = entities
+            .iter()
+            .map(|entity| {
+                (
+                    *entity.id(),
+                    self.components
+                        .get(entity.id())
+                        .unwrap_or(&Vec::<Component>::new())
+                        .iter()
+                        .map(|comp| {
+                            let mut comp_clone = dyn_clone::clone_box(&**comp);
+                            comp_clone.update(
+                                device.clone(),
+                                queue.clone(),
+                                self.components.clone(),
+                                engine_details.clone(),
+                                self.concept_manager.clone(),
+                            );
+                            comp_clone
+                        })
+                        .collect::<Vec<Component>>(),
+                )
+            })
+            .collect::<HashMap<EntityId, Vec<Component>>>();
 
-        for entity in entities.iter() {
-            for component in components.deref_mut().get_mut(entity.id()).unwrap() {
-                component.update(
-                    device.clone(),
-                    queue.clone(),
-                    components_arc.clone(),
-                    engine_details.clone(),
-                    self.concept_manager.clone(),
-                );
-            }
-        }
+        *Arc::get_mut(&mut self.components).unwrap() = new_components;
     }
 
     pub fn render(
@@ -111,9 +174,9 @@ impl Scene {
 
         let materials = self.materials.lock().unwrap();
 
-        let camera_bind_group = self.create_camera_bind_group(device.clone(), window_size);
+        let camera_bind_group =
+            self.create_camera_bind_group(device.clone(), queue.clone(), window_size);
         let components_arc = self.components.clone();
-        let components = &*components_arc.lock().unwrap();
 
         let output = surface.get_current_texture().unwrap();
         let view = output
@@ -127,7 +190,6 @@ impl Scene {
             label: Some("Scene Encoder"),
         });
 
-        // PROBLEM HERE (already locked concept_manager):
         let mut default_transform = TransformComponent::default(self.concept_manager.clone());
         default_transform.initialize(
             device.clone(),
@@ -167,6 +229,28 @@ impl Scene {
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
             for (pipeline_id, pipeline) in &self.pipelines {
                 render_pass.set_pipeline(pipeline.pipeline());
+
+                /* entities.iter().for_each(|entity| {
+                    let entity_materials = materials.get(entity.id());
+                    if let Some((materials, active_material_index)) = entity_materials {
+                        components_arc
+                            .get(entity.id())
+                            .unwrap_or(&Vec::<Component>::new())
+                            .iter()
+                            .map(|comp| {
+                                let mut comp_clone = dyn_clone::clone_box(&**comp);
+                                comp_clone.update(
+                                    device.clone(),
+                                    queue.clone(),
+                                    components_arc.clone(),
+                                    engine_details.clone(),
+                                    self.concept_manager.clone(),
+                                );
+                                comp_clone
+                            });
+                    }
+                }); */
+
                 for entity in entities.iter() {
                     let entity_materials = materials.get(entity.id());
                     if let Some((materials, active_material_index)) = entity_materials {
@@ -177,17 +261,17 @@ impl Scene {
                                 device.clone(),
                                 queue.clone(),
                                 &mut render_pass,
-                                components,
+                                &components_arc,
                                 concept_manager,
                             );
 
                             // render_pass.set_vertex_buffer(1, default_transform_buffer.slice(..));
-                            for component in components.get(entity.id()).unwrap().iter() {
+                            for component in components_arc.get(entity.id()).unwrap().iter() {
                                 component.render(
                                     device.clone(),
                                     queue.clone(),
                                     &mut render_pass,
-                                    components,
+                                    &components_arc,
                                     concept_manager,
                                 );
                             }
@@ -201,62 +285,28 @@ impl Scene {
         output.present();
     }
 
-    pub fn initialize(
-        &mut self,
-        device: Arc<Device>,
-        queue: Arc<Queue>,
-        color_format: TextureFormat,
-    ) {
-        let entities_arc = self.entities.clone();
-        let entities = entities_arc.lock().unwrap();
-        let components_arc = self.components.clone();
-        let mut components = components_arc.lock().unwrap();
-        let materials_arc = self.materials.clone();
-        let materials = materials_arc.lock().unwrap();
-
-        for entity in entities.iter() {
-            if let Some((materials, active_material_index)) = materials.get(entity.id()) {
-                let active_material = &materials[*active_material_index];
-                let active_material_id = active_material.id().clone();
-                self.pipelines
-                    .entry(active_material_id.clone())
-                    .or_insert_with(|| {
-                        let new_pipeline = Pipeline::new(
-                            device.clone(),
-                            color_format,
-                            &[Vertex::desc(), TransformComponent::desc()],
-                            &active_material_id,
-                        );
-                        new_pipeline
-                    });
-            }
-            for component in components.get_mut(entity.id()).unwrap() {
-                component.initialize(
-                    device.clone(),
-                    queue.clone(),
-                    components_arc.clone(),
-                    self.concept_manager.clone(),
-                );
-            }
-        }
-    }
-
     pub fn create_camera_bind_group(
         &self,
         device: Arc<Device>,
+        queue: Arc<Queue>,
         window_size: (u32, u32),
     ) -> BindGroup {
         let components_arc = self.components.clone();
-        let components = components_arc.lock().unwrap();
 
         if let Some(active_camera_id) = self.active_camera_id {
             let camera_component =
-                Scene::get_component::<CameraComponent>(&components[&active_camera_id]);
+                Scene::get_component::<CameraComponent>(&components_arc[&active_camera_id]);
             let bind_group = camera_component.unwrap().create_camera_bind_group(device);
             return bind_group;
         }
 
-        let cam = CameraComponent::new_2d(self.concept_manager.clone(), window_size);
+        let mut cam = CameraComponent::new_2d(self.concept_manager.clone(), window_size);
+        cam.initialize(
+            device.clone(),
+            queue,
+            self.components.clone(),
+            self.concept_manager.clone(),
+        );
         cam.create_camera_bind_group(device)
     }
 
@@ -299,7 +349,7 @@ impl Default for Scene {
             entities: Arc::new(Mutex::new(Vec::new())),
             total_entities_created: 0,
             pipelines: HashMap::new(),
-            components: Arc::new(Mutex::new(HashMap::new())),
+            components: Arc::new(HashMap::new()),
             materials: Arc::new(Mutex::new(HashMap::new())),
             active_camera_id: None,
             concept_manager: Arc::new(Mutex::new(ConceptManager::default())),

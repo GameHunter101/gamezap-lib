@@ -17,13 +17,13 @@ use crate::{
 
 use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MeshComponent {
     parent: EntityId,
     concept_ids: Vec<String>,
     id: ComponentId,
-    vertex_buffer: Option<Buffer>,
-    index_buffer: Option<Buffer>,
+    vertex_buffer: Arc<Option<Buffer>>,
+    index_buffer: Arc<Option<Buffer>>,
 }
 
 impl MeshComponent {
@@ -36,8 +36,8 @@ impl MeshComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-            vertex_buffer: None,
-            index_buffer: None,
+            vertex_buffer: Arc::new(None),
+            index_buffer: Arc::new(None),
         };
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
@@ -75,21 +75,21 @@ impl ComponentSystem for MeshComponent {
             .get_concept::<Vec<Vertex>>(self.id, "vertices".to_string())
             .unwrap();
 
-        self.vertex_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
+        self.vertex_buffer = Arc::new(Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Entity Vertex Buffer"),
             contents: bytemuck::cast_slice(vertices),
             usage: wgpu::BufferUsages::VERTEX,
-        }));
+        })));
 
         let indices = concept_manager
             .get_concept::<Vec<u32>>(self.id, "indices".to_string())
             .unwrap();
 
-        self.index_buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
+        self.index_buffer = Arc::new(Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Entity Index Buffer"),
             contents: bytemuck::cast_slice(indices),
             usage: wgpu::BufferUsages::INDEX,
-        }));
+        })));
     }
 
     fn render<'a: 'b, 'b>(

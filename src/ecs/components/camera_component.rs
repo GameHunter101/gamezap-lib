@@ -15,7 +15,10 @@ use wgpu::{
 use nalgebra as na;
 
 use crate::{
-    ecs::component::{Component, ComponentId, ComponentSystem},
+    ecs::{
+        component::{ComponentId, ComponentSystem},
+        scene::Scene,
+    },
     EngineDetails,
 };
 
@@ -40,12 +43,12 @@ impl Default for RawCameraData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CameraComponent {
     parent: EntityId,
     concept_ids: Vec<String>,
     id: ComponentId,
-    buf: Option<Buffer>,
+    buf: Arc<Option<Buffer>>,
     raw_data: RawCameraData,
 }
 
@@ -55,7 +58,7 @@ impl CameraComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-            buf: None,
+            buf: Arc::new(None),
             raw_data: RawCameraData::default(),
         };
 
@@ -97,7 +100,7 @@ impl CameraComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-            buf: None,
+            buf: Arc::new(None),
             raw_data: RawCameraData::default(),
         };
 
@@ -143,12 +146,14 @@ impl CameraComponent {
     }
 
     pub fn create_camera_bind_group(&self, device: Arc<Device>) -> BindGroup {
+        let buf_clone = self.buf.clone();
+        let buffer = buf_clone.as_ref();
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("Camera Bind Group"),
             layout: &Self::camera_bind_group_layout(device.clone()),
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: self.buf.as_ref().unwrap().as_entire_binding(),
+                resource: buffer.as_ref().unwrap().as_entire_binding(),
             }],
         });
         bind_group
@@ -176,21 +181,23 @@ impl ComponentSystem for CameraComponent {
         concept_manager: Arc<Mutex<ConceptManager>>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
-        let position = concept_manager
-            .get_concept::<na::Vector3<f32>>(
-                (self.parent, TypeId::of::<TransformComponent>(), 0),
-                "position".to_string(),
-            )
-            .unwrap();
+        let position_concept = concept_manager.get_concept::<na::Vector3<f32>>(
+            (self.parent, TypeId::of::<TransformComponent>(), 0),
+            "position".to_string(),
+        );
+        let position = match position_concept {
+            Ok(position) => *position,
+            Err(_) => na::Vector3::zeros(),
+        };
         self.raw_data.cam_pos = position.to_homogeneous().into();
-        self.buf = Some(self.create_camera_buffer(device));
+        self.buf = Arc::new(Some(self.create_camera_buffer(device)));
     }
 
     fn update(
         &mut self,
         _device: Arc<Device>,
         queue: Arc<Queue>,
-        _component_map: Arc<Mutex<HashMap<EntityId, Vec<Component>>>>,
+        component_map: AllComponents,
         engine_details: Arc<Mutex<EngineDetails>>,
         concept_manager: Arc<Mutex<ConceptManager>>,
     ) {
@@ -213,17 +220,21 @@ impl ComponentSystem for CameraComponent {
         let view_proj = concept_manager
             .get_concept::<na::Matrix4<f32>>(self.id, "view_proj".to_string())
             .unwrap();
-        /* let component_map = component_map.lock().unwrap();
-        let transform_component = Scene::get_component::<TransformComponent>(component_map.get(&self.parent).unwrap());
+        let transform_component =
+            Scene::get_component::<TransformComponent>(component_map.get(&self.parent).unwrap());
         let rotation_matrix = match transform_component {
             Some(transform) => transform.create_rotation_matrix(&concept_manager),
             None => na::Matrix4::identity(),
-        }; */
-        let cam_mat = view_proj * na::Matrix4::new_translation(position)/* * rotation_matrix */;
+        };
+        // println!("{rotation_matrix}");
+        let cam_mat = view_proj * na::Matrix4::new_translation(position) * rotation_matrix;
+        // println!("{cam_mat}");
         self.raw_data.cam_mat = cam_mat.into();
+        let buf_clone = self.buf.clone();
+        let buffer = buf_clone.as_ref();
 
         queue.write_buffer(
-            self.buf.as_ref().unwrap(),
+            buffer.as_ref().unwrap(),
             0,
             bytemuck::cast_slice(&[self.raw_data]),
         )

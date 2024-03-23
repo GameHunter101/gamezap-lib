@@ -16,7 +16,7 @@ pub type ComponentId = (EntityId, TypeId, u32);
 pub type Component = Box<dyn ComponentSystem>;
 
 #[allow(unused)]
-pub trait ComponentSystem: Debug {
+pub trait ComponentSystem: Debug + dyn_clone::DynClone{
     fn register_component(
         &mut self,
         concept_manager: Arc<Mutex<ConceptManager>>,

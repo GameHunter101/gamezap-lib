@@ -20,12 +20,12 @@ use crate::{
 
 use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TransformComponent {
     parent: EntityId,
     concept_ids: Vec<String>,
     id: ComponentId,
-    buf: Option<Buffer>,
+    buf: Arc<Option<Buffer>>,
 }
 
 impl TransformComponent {
@@ -36,7 +36,7 @@ impl TransformComponent {
         let yaw = concept_manager
             .get_concept::<f32>(self.id, "yaw".to_string())
             .unwrap();
-        
+
         let pitch = concept_manager
             .get_concept::<f32>(self.id, "pitch".to_string())
             .unwrap();
@@ -45,18 +45,13 @@ impl TransformComponent {
             .get_concept::<f32>(self.id, "roll".to_string())
             .unwrap();
 
-        na::Matrix3::new(
-            yaw.cos() * pitch.cos(),
-            yaw.cos() * pitch.sin() * roll.sin() - yaw.sin() * roll.cos(),
-            yaw.cos() * pitch.sin() * roll.cos() + yaw.sin() * roll.sin(),
-            yaw.sin() * pitch.cos(),
-            yaw.sin() * pitch.sin() * roll.sin() + yaw.cos() * roll.cos(),
-            yaw.sin() * pitch.sin() * roll.cos() - yaw.cos() * roll.sin(),
-            -1.0 * pitch.sin(),
-            pitch.cos() * roll.sin(),
-            pitch.cos() * roll.cos(),
-        )
-        .to_homogeneous()
+        #[rustfmt::skip]
+        let rotation_matrix = na::Matrix3::new(
+            pitch.cos() * roll.cos(), yaw.sin() * pitch.sin() * roll.cos() - yaw.cos() * roll.sin(), yaw.cos() * pitch.sin() * roll.cos() + yaw.sin() * roll.sin(), 
+            pitch.cos() * roll.sin(), yaw.sin() * pitch.sin() * roll.sin() + yaw.cos() * roll.cos(), yaw.cos() * pitch.sin() * roll.sin() - yaw.sin() * roll.cos(),
+            -1.0 * pitch.sin(), yaw.sin() * pitch.cos(), yaw.cos() * pitch.cos()
+        ).to_homogeneous();
+        rotation_matrix
     }
 }
 
@@ -80,6 +75,13 @@ impl TransformComponent {
         yaw: f32,
         scale: na::Vector3<f32>,
     ) -> TransformComponent {
+        let mut component = TransformComponent {
+            parent: EntityId::MAX,
+            concept_ids: Vec::new(),
+            id: (EntityId::MAX, TypeId::of::<Self>(), 0),
+            buf: Arc::new(None),
+        };
+
         #[rustfmt::skip]
         let rotation_matrix = na::Matrix3::new(
             yaw.cos() * pitch.cos(), yaw.cos() * pitch.sin() * roll.sin() - yaw.sin() * roll.cos(), yaw.cos() * pitch.sin() * roll.cos() + yaw.sin() * roll.sin(),
@@ -90,12 +92,6 @@ impl TransformComponent {
         let scale_matrix = na::Scale3::from(scale).to_homogeneous();
         let transform_matrix = translation_matrix * rotation_matrix * scale_matrix;
 
-        let mut component = TransformComponent {
-            parent: EntityId::MAX,
-            concept_ids: Vec::new(),
-            id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-            buf: None,
-        };
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
 
@@ -115,7 +111,7 @@ impl TransformComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-            buf: None,
+            buf: Arc::new(None),
         };
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
@@ -158,7 +154,7 @@ impl TransformComponent {
             contents: bytemuck::cast_slice(&matrix_as_arr),
             usage: BufferUsages::VERTEX,
         });
-        self.buf = Some(new_buffer);
+        self.buf = Arc::new(Some(new_buffer));
     }
 }
 
@@ -188,11 +184,11 @@ impl ComponentSystem for TransformComponent {
             .unwrap();
         let matrix_as_arr: [[f32; 4]; 4] = matrix.clone_owned().into();
 
-        self.buf = Some(device.create_buffer_init(&BufferInitDescriptor {
+        self.buf = Arc::new(Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Transform Component Buffer"),
             contents: bytemuck::cast_slice(&matrix_as_arr),
             usage: BufferUsages::VERTEX,
-        }));
+        })));
     }
 
     fn update(
@@ -203,9 +199,6 @@ impl ComponentSystem for TransformComponent {
         _engine_details: Arc<Mutex<EngineDetails>>,
         concept_manager: Arc<Mutex<ConceptManager>>,
     ) {
-        // let concept_manager = concept_manager.lock().unwrap();
-        // let position = concept_manager.get_concept::<na::Vector3<f32>>(self.id, "position".to_string()).unwrap();
-        // println!("Position: {position}");
         self.update_buffer(concept_manager, device);
     }
 

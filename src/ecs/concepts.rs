@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap, fmt::Debug};
 
-use super::{component::ComponentId, entity::EntityId};
+use super::component::ComponentId;
 
 #[derive(Debug)]
 pub enum ConceptManagerError {
@@ -46,7 +46,7 @@ impl ConceptManager {
                     let concept_ref_option = concept.downcast_ref::<T>();
                     match concept_ref_option {
                         Some(concept_ref) => Ok(concept_ref),
-                        None => Err(ConceptManagerError::DowncastFailed)
+                        None => Err(ConceptManagerError::DowncastFailed),
                     }
                 }
                 None => Err(ConceptManagerError::ConceptNotFound(concept_name)),
@@ -67,7 +67,7 @@ impl ConceptManager {
                     let concept_mut_option = concept.downcast_mut::<T>();
                     match concept_mut_option {
                         Some(concept_mut) => Ok(concept_mut),
-                        None => Err(ConceptManagerError::DowncastFailed)
+                        None => Err(ConceptManagerError::DowncastFailed),
                     }
                 }
                 None => Err(ConceptManagerError::ConceptNotFound(concept_name)),
@@ -92,11 +92,3 @@ impl ConceptManager {
         }
     }
 }
-
-/*
-* Plans:
-* - make a macro that creates a new struct & registers concepts from dev input
-* - the update trait method is passed in a queue object that stores any entity additions/deletions
-*   in corresponding hash maps
-* - only completes these entity modifications after the end of the update loop
-* */

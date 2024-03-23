@@ -33,7 +33,7 @@ impl Material {
             fragment_shader_path.to_string(),
             textures.len(),
         );
-        let bind_group_layout_entries = if textures.len() == 0 {
+        let bind_group_layout_entries = if textures.is_empty() {
             Vec::new()
         } else {
             vec![
@@ -63,7 +63,7 @@ impl Material {
 
         let samplers = textures.iter().map(|tex| &tex.sampler).collect::<Vec<_>>();
 
-        let bind_group_entries = if textures.len() == 0 {
+        let bind_group_entries = if textures.is_empty() {
             Vec::new()
         } else {
             vec![

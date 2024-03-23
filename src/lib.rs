@@ -130,11 +130,6 @@ impl GameZap {
         engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
     }
 
-    /* pub async fn update_renderer(&self) {
-        self.renderer.update_buffers();
-        // self.renderer.render().await.unwrap();
-    } */
-
     pub fn main_loop(&mut self) {
         'running: loop {
             for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {

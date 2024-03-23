@@ -128,8 +128,8 @@ async fn main() {
         concept_manager,
         na::Vector3::new(0.1, 0.0, -1.0),
         0.0,
+        10.0,
         0.0,
-        20.0,
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
@@ -152,7 +152,7 @@ async fn main() {
     engine.main_loop();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct KeyboardInputComponent {
     parent: EntityId,
     id: ComponentId,
