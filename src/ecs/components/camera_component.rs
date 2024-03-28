@@ -19,7 +19,7 @@ use crate::{
         component::{ComponentId, ComponentSystem},
         scene::Scene,
     },
-    EngineDetails,
+    EngineSystems, EngineDetails,
 };
 
 use super::{
@@ -199,10 +199,11 @@ impl ComponentSystem for CameraComponent {
         queue: Arc<Queue>,
         component_map: AllComponents,
         engine_details: Arc<Mutex<EngineDetails>>,
+        _engine_systems: Arc<Mutex<EngineSystems>>,
         concept_manager: Arc<Mutex<ConceptManager>>,
+        _active_camera_id: Option<EntityId>,
     ) {
-        let engine_details_arc = engine_details;
-        let details = engine_details_arc.lock().unwrap();
+        let details = engine_details.lock().unwrap();
         let mut concept_manager = concept_manager.lock().unwrap();
         let aspect_ratio = concept_manager
             .get_concept_mut::<f32>(self.id, "aspect_ratio".to_string())
@@ -227,7 +228,7 @@ impl ComponentSystem for CameraComponent {
             None => na::Matrix4::identity(),
         };
         // println!("{rotation_matrix}");
-        let cam_mat = view_proj * na::Matrix4::new_translation(position) * rotation_matrix;
+        let cam_mat = view_proj * rotation_matrix * na::Matrix4::new_translation(position);
         // println!("{cam_mat}");
         self.raw_data.cam_mat = cam_mat.into();
         let buf_clone = self.buf.clone();

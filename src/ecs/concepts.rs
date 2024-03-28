@@ -76,6 +76,31 @@ impl ConceptManager {
         }
     }
 
+    pub fn modify_concept<T: Any + Debug>(
+        &mut self,
+        component: ComponentId,
+        concept_name: String,
+        data: T,
+    ) -> Result<(), ConceptManagerError> {
+        let component_concepts = self.concepts.get_mut(&component);
+        match component_concepts {
+            Some(concepts_map) => match concepts_map.get_mut(&concept_name) {
+                Some(concept) => {
+                    let concept_mut_option = concept.downcast_mut::<T>();
+                    match concept_mut_option {
+                        Some(concept_mut) => {
+                            *concept_mut = data;
+                            Ok(())
+                        },
+                        None => Err(ConceptManagerError::DowncastFailed),
+                    }
+                }
+                None => Err(ConceptManagerError::ConceptNotFound(concept_name)),
+            },
+            None => Err(ConceptManagerError::ComponentNotFound(component)),
+        }
+    }
+
     pub fn register_component_concepts(
         &mut self,
         component: ComponentId,

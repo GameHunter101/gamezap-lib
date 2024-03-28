@@ -16,11 +16,14 @@ use gamezap::{
     },
     model::Vertex,
     texture::Texture,
-    GameZap,
+    EngineSystems, GameZap, EngineDetails,
 };
 
 use nalgebra as na;
-use sdl2::keyboard::Scancode;
+use sdl2::{
+    event::Event,
+    keyboard::{Keycode, Scancode},
+};
 
 extern crate gamezap;
 
@@ -59,7 +62,7 @@ async fn main() {
             },
         )
         .antialiasing()
-        // .hide_cursor()
+        .hide_cursor()
         .scenes(scenes, 0)
         .build();
 
@@ -128,12 +131,13 @@ async fn main() {
         concept_manager,
         na::Vector3::new(0.1, 0.0, -1.0),
         0.0,
-        10.0,
+        0.0,
         0.0,
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
     let camera_keyboard_controller = KeyboardInputComponent::new();
+    let camera_mouse_controller = MouseInputComponent::new();
 
     let camera = scene_lock.create_entity(
         0,
@@ -142,6 +146,7 @@ async fn main() {
             Box::new(camera_component),
             Box::new(camera_transform),
             Box::new(camera_keyboard_controller),
+            Box::new(camera_mouse_controller),
         ],
         None,
     );
@@ -167,37 +172,15 @@ impl KeyboardInputComponent {
 }
 
 impl ComponentSystem for KeyboardInputComponent {
-    /* fn update(
-        &mut self,
-        _device: Arc<wgpu::Device>,
-        _queue: Arc<wgpu::Queue>,
-        component_map: AllComponents,
-        engine_details: Arc<Mutex<gamezap::EngineDetails>>,
-    ) {
-        let components_arc = component_map.clone();
-        let mut components = components_arc.lock().unwrap();
-        // let transform_component = Scene::get_component_mut::<TransformComponent>(
-        //     components.get_mut(&self.parent).unwrap(),
-        // );
-        /* if let Some(comp) = transform_component {
-            let details_arc = engine_details.clone();
-            let details = details_arc.lock().unwrap();
-            for scancode in &details.pressed_scancodes {
-                match scancode {
-                    Scancode::W => comp.position.z += 0.5,
-                    _ => {}
-                }
-            }
-        } */
-    } */
-
     fn update(
         &mut self,
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
         _component_map: AllComponents,
         engine_details: Arc<Mutex<gamezap::EngineDetails>>,
+        _engine_systems: Arc<Mutex<EngineSystems>>,
         concept_manager: Arc<Mutex<gamezap::ecs::concepts::ConceptManager>>,
+        _active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let position_concept = concept_manager
@@ -209,6 +192,7 @@ impl ComponentSystem for KeyboardInputComponent {
 
         let details = engine_details.lock().unwrap();
         let speed = 0.1;
+
         for scancode in &details.pressed_scancodes {
             match scancode {
                 Scancode::W => {
@@ -222,6 +206,12 @@ impl ComponentSystem for KeyboardInputComponent {
                 }
                 Scancode::D => {
                     position_concept.x -= speed;
+                }
+                Scancode::LCtrl => {
+                    position_concept.y += speed;
+                }
+                Scancode::Space => {
+                    position_concept.y -= speed;
                 }
                 _ => {}
             }
@@ -248,5 +238,134 @@ impl ComponentSystem for KeyboardInputComponent {
 
     fn get_id(&self) -> ComponentId {
         self.id
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MouseInputComponent {
+    parent: EntityId,
+    id: ComponentId,
+}
+
+impl MouseInputComponent {
+    fn new() -> Self {
+        MouseInputComponent {
+            parent: EntityId::MAX,
+            id: (EntityId::MAX, TypeId::of::<Self>(), 0),
+        }
+    }
+}
+
+impl ComponentSystem for MouseInputComponent {
+    fn update(
+        &mut self,
+        _device: Arc<wgpu::Device>,
+        _queue: Arc<wgpu::Queue>,
+        _component_map: AllComponents,
+        engine_details: Arc<Mutex<gamezap::EngineDetails>>,
+        engine_systems: Arc<Mutex<EngineSystems>>,
+        concept_manager: Arc<Mutex<gamezap::ecs::concepts::ConceptManager>>,
+        active_camera_id: Option<EntityId>,
+    ) {
+        let mut concept_manager = concept_manager.lock().unwrap();
+        let pitch = *concept_manager
+            .get_concept::<f32>(
+                (
+                    active_camera_id.unwrap(),
+                    TypeId::of::<TransformComponent>(),
+                    0,
+                ),
+                "pitch".to_string(),
+            )
+            .unwrap();
+
+        let yaw = *concept_manager
+            .get_concept::<f32>(
+                (
+                    active_camera_id.unwrap(),
+                    TypeId::of::<TransformComponent>(),
+                    0,
+                ),
+                "yaw".to_string(),
+            )
+            .unwrap();
+
+        let systems = engine_systems.lock().unwrap();
+        let sdl_context = systems.sdl_context.lock().unwrap();
+        let mouse = sdl_context.mouse();
+        let is_hidden = mouse.relative_mouse_mode();
+        let details = engine_details.lock().unwrap();
+        if is_hidden {
+            if let Some(mouse_state) = details.mouse_state.0 {
+                concept_manager
+                    .modify_concept(
+                        (
+                            active_camera_id.unwrap(),
+                            TypeId::of::<TransformComponent>(),
+                            0,
+                        ),
+                        "pitch".to_string(),
+                        pitch + mouse_state.x() as f32 / 100.0,
+                    )
+                    .unwrap();
+
+                concept_manager
+                    .modify_concept(
+                        (
+                            active_camera_id.unwrap(),
+                            TypeId::of::<TransformComponent>(),
+                            0,
+                        ),
+                        "yaw".to_string(),
+                        yaw + mouse_state.y() as f32 / 100.0,
+                    )
+                    .unwrap();
+            }
+        }
+    }
+
+    fn on_event(
+        &self,
+        event: &Event,
+        _component_map: &std::collections::HashMap<
+            EntityId,
+            Vec<gamezap::ecs::component::Component>,
+        >,
+        _concept_manager: &gamezap::ecs::concepts::ConceptManager,
+        _active_camera_id: Option<EntityId>,
+        _engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
+    ) {
+        if let Event::KeyDown {
+            keycode: Some(Keycode::Escape),
+            ..
+        } = event
+        {
+            let context = engine_systems.sdl_context.lock().unwrap();
+            let is_cursor_showing = context.mouse().is_cursor_showing();
+            context.mouse().show_cursor(!is_cursor_showing);
+            context.mouse().set_relative_mouse_mode(is_cursor_showing);
+        }
+    }
+
+    fn get_parent_entity(&self) -> EntityId {
+        self.parent
+    }
+    fn get_id(&self) -> ComponentId {
+        self.id
+    }
+
+    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
+        self.parent = parent;
+        self.id.0 = parent;
+        self.id.2 = same_component_count;
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

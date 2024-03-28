@@ -2,7 +2,7 @@ use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
     texture::Texture,
-    EngineDetails,
+    EngineSystems, EngineDetails,
 };
 use std::{
     any::Any,
@@ -128,6 +128,7 @@ impl Scene {
         device: Arc<Device>,
         queue: Arc<Queue>,
         engine_details: Arc<Mutex<EngineDetails>>,
+        engine_systems: Arc<Mutex<EngineSystems>>,
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
@@ -148,7 +149,9 @@ impl Scene {
                                 queue.clone(),
                                 self.components.clone(),
                                 engine_details.clone(),
+                                engine_systems.clone(),
                                 self.concept_manager.clone(),
+                                self.active_camera_id,
                             );
                             comp_clone
                         })
@@ -336,6 +339,10 @@ impl Scene {
 
     pub fn set_active_camera(&mut self, entity_id: EntityId) {
         self.active_camera_id = Some(entity_id);
+    }
+
+    pub fn get_active_camera(&self) -> Option<EntityId> {
+        self.active_camera_id
     }
 
     pub fn get_concept_manager(&self) -> Arc<Mutex<ConceptManager>> {

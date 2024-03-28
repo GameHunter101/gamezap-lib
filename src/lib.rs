@@ -1,7 +1,4 @@
-use std::{
-    cell::{Ref, RefCell},
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use ecs::scene::Scene;
 // use module_manager::ModuleManager;
@@ -24,13 +21,13 @@ pub mod renderer;
 pub mod texture;
 pub mod ecs {
     pub mod component;
+    pub mod concepts;
     pub mod entity;
     pub mod material;
     pub mod scene;
-    pub mod concepts;
     pub mod components {
-        pub mod mesh_component;
         pub mod camera_component;
+        pub mod mesh_component;
         pub mod transform_component;
     }
 }
@@ -62,7 +59,7 @@ pub mod ecs {
 /// }
 /// ```
 pub struct GameZap {
-    pub systems: RefCell<EngineSystems>,
+    pub systems: Arc<Mutex<EngineSystems>>,
     pub renderer: Renderer,
     pub clear_color: wgpu::Color,
     pub window: Arc<Window>,
@@ -86,9 +83,9 @@ pub struct EngineDetails {
 }
 
 pub struct EngineSystems {
-    pub sdl_context: RefCell<Sdl>,
-    pub video_subsystem: RefCell<sdl2::VideoSubsystem>,
-    pub event_pump: RefCell<sdl2::EventPump>,
+    pub sdl_context: Arc<Mutex<Sdl>>,
+    pub video_subsystem: Arc<Mutex<sdl2::VideoSubsystem>>,
+    pub event_pump: Arc<Mutex<sdl2::EventPump>>,
 }
 
 pub trait EngineSettings {
@@ -103,7 +100,11 @@ impl EngineSettings for Sdl {
 }
 
 impl EngineDetails {
-    pub fn update_details(&mut self, event_pump: Ref<EventPump>, sdl_context: Ref<Sdl>) {
+    pub fn update_details(
+        &mut self,
+        event_pump: MutexGuard<EventPump>,
+        sdl_context: MutexGuard<Sdl>,
+    ) {
         let now = Instant::now();
         self.frame_number += 1;
         self.time_elapsed = now - self.initialized_instant;
@@ -126,30 +127,51 @@ impl GameZap {
 
     pub fn update_details(&self) {
         let mut engine_details = self.details.lock().unwrap();
-        let systems = self.systems.borrow_mut();
-        engine_details.update_details(systems.event_pump.borrow(), systems.sdl_context.borrow());
+        let systems = self.systems.lock().unwrap();
+        let event_pump = systems.event_pump.lock().unwrap();
+        let sdl_context = systems.sdl_context.lock().unwrap();
+        engine_details.update_details(event_pump, sdl_context);
     }
 
     pub fn main_loop(&mut self) {
         'running: loop {
-            for event in self.systems.borrow().event_pump.borrow_mut().poll_iter() {
-                match event {
-                    Event::Quit { .. } => break 'running,
-                    Event::Window {
-                        win_event: WindowEvent::Resized(width, height),
-                        ..
-                    } => {
-                        self.renderer.resize((width as u32, height as u32));
-                        let details_clone = self.details.clone();
-                        let mut details = details_clone.lock().unwrap();
-                        details.window_aspect_ratio = width as f32 / height as f32;
+            let active_scene = &mut self.scenes.get(self.active_scene_index);
+            {
+                let systems = self.systems.lock().unwrap();
+                let mut event_pump = systems.event_pump.lock().unwrap();
+                for event in event_pump.poll_iter() {
+                    if let Some(active_scene_arc) = active_scene {
+                        let active_scene = active_scene_arc.lock().unwrap();
+                        let component_map = active_scene.get_components();
+                        for component in component_map.clone().values().flatten() {
+                            component.on_event(
+                                &event,
+                                &component_map.clone(),
+                                &active_scene.get_concept_manager().lock().unwrap(),
+                                active_scene.get_active_camera(),
+                                &self.details.lock().unwrap(),
+                                &systems,
+                            );
+                        }
                     }
-                    _ => {}
+                    // for component in active_scene
+                    match event {
+                        Event::Quit { .. } => break 'running,
+                        Event::Window {
+                            win_event: WindowEvent::Resized(width, height),
+                            ..
+                        } => {
+                            self.renderer.resize((width as u32, height as u32));
+                            let details_clone = self.details.clone();
+                            let mut details = details_clone.lock().unwrap();
+                            details.window_aspect_ratio = width as f32 / height as f32;
+                        }
+                        _ => {}
+                    }
                 }
             }
 
             let renderer = &self.renderer;
-            let active_scene = &mut self.scenes.get(self.active_scene_index);
             if let Some(active_scene_arc) = active_scene {
                 let details = self.details.lock().unwrap();
                 let mut active_scene = active_scene_arc.lock().unwrap();
@@ -165,6 +187,7 @@ impl GameZap {
                     renderer.device.clone(),
                     renderer.queue.clone(),
                     self.details.clone(),
+                    self.systems.clone(),
                 );
                 active_scene.render(
                     renderer.device.clone(),
@@ -282,21 +305,21 @@ impl GameZapBuilder {
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
     pub fn build(self) -> GameZap {
-        let sdl_context = RefCell::new(if let Some(context) = self.sdl_context {
+        let sdl_context = if let Some(context) = self.sdl_context {
             context
         } else {
             sdl2::init().unwrap()
-        });
-        let video_subsystem = RefCell::new(if let Some(video) = self.video_subsystem {
+        };
+        let video_subsystem = Arc::new(Mutex::new(if let Some(video) = self.video_subsystem {
             video
         } else {
-            sdl_context.borrow().video().unwrap()
-        });
-        let event_pump = RefCell::new(if let Some(pump) = self.event_pump {
+            sdl_context.video().unwrap()
+        }));
+        let event_pump = Arc::new(Mutex::new(if let Some(pump) = self.event_pump {
             pump
         } else {
-            sdl_context.borrow().event_pump().unwrap()
-        });
+            sdl_context.event_pump().unwrap()
+        }));
 
         let window = self.window.unwrap();
         let renderer = pollster::block_on(Renderer::new(
@@ -307,11 +330,11 @@ impl GameZapBuilder {
         ));
 
         GameZap {
-            systems: RefCell::new(EngineSystems {
-                sdl_context,
+            systems: Arc::new(Mutex::new(EngineSystems {
+                sdl_context: Arc::new(Mutex::new(sdl_context)),
                 video_subsystem,
                 event_pump,
-            }),
+            })),
             renderer,
             clear_color: self.clear_color,
             window,

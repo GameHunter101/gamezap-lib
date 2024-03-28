@@ -15,7 +15,7 @@ use nalgebra as na;
 use crate::{
     ecs::component::{Component, ComponentId, ComponentSystem},
     model::VertexData,
-    EngineDetails,
+    EngineSystems, EngineDetails,
 };
 
 use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
@@ -197,7 +197,9 @@ impl ComponentSystem for TransformComponent {
         _queue: Arc<Queue>,
         _component_map: AllComponents,
         _engine_details: Arc<Mutex<EngineDetails>>,
+        _engine_systems: Arc<Mutex<EngineSystems>>,
         concept_manager: Arc<Mutex<ConceptManager>>,
+        _active_camera_id: Option<EntityId>,
     ) {
         self.update_buffer(concept_manager, device);
     }

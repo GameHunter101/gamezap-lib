@@ -5,9 +5,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use sdl2::event::Event;
 use wgpu::{Device, Queue, RenderPass};
 
-use crate::EngineDetails;
+use crate::{EngineDetails, EngineSystems};
 
 use super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
 
@@ -15,8 +16,8 @@ pub type ComponentId = (EntityId, TypeId, u32);
 
 pub type Component = Box<dyn ComponentSystem>;
 
-#[allow(unused)]
-pub trait ComponentSystem: Debug + dyn_clone::DynClone{
+#[allow(unused, clippy::too_many_arguments)]
+pub trait ComponentSystem: Debug + dyn_clone::DynClone {
     fn register_component(
         &mut self,
         concept_manager: Arc<Mutex<ConceptManager>>,
@@ -39,7 +40,9 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone{
         queue: Arc<Queue>,
         component_map: AllComponents,
         engine_details: Arc<Mutex<EngineDetails>>,
+        engine_systems: Arc<Mutex<EngineSystems>>,
         concept_manager: Arc<Mutex<ConceptManager>>,
+        active_camera_id: Option<EntityId>,
     ) {
     }
 
@@ -50,6 +53,17 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone{
         render_pass: &mut RenderPass<'b>,
         component_map: &'a HashMap<EntityId, Vec<Component>>,
         concept_manager: &'a ConceptManager,
+    ) {
+    }
+
+    fn on_event(
+        &self,
+        event: &Event,
+        component_map: &HashMap<EntityId, Vec<Component>>,
+        concept_manager: &ConceptManager,
+        active_camera_id: Option<EntityId>,
+        engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
     ) {
     }
 
