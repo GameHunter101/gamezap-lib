@@ -19,7 +19,7 @@ use crate::{
         component::{ComponentId, ComponentSystem},
         scene::Scene,
     },
-    EngineSystems, EngineDetails,
+    EngineDetails, EngineSystems,
 };
 
 use super::{
@@ -65,7 +65,7 @@ impl CameraComponent {
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
 
         concepts.insert(
-            "view_proj".to_string(),
+            "view_to_projected_mat".to_string(),
             Box::new(na::Matrix4::<f32>::identity()),
         );
         concepts.insert(
@@ -93,8 +93,8 @@ impl CameraComponent {
         let view_proj = na::Matrix4::new(
             c / aspect_ratio, 0.0, 0.0, 0.0,
             0.0, c, 0.0, 0.0,
-            0.0, 0.0, -1.0 * (far_plane + near_plane)/(far_plane - near_plane), -1.0 * (2.0 * far_plane * near_plane) / (far_plane - near_plane),
-            0.0, 0.0, -1.0, 0.0
+            0.0, 0.0, 1.0 * (far_plane + near_plane)/(far_plane - near_plane), -1.0 * (2.0 * far_plane * near_plane) / (far_plane - near_plane),
+            0.0, 0.0, 1.0, 0.0
         );
         let mut component = CameraComponent {
             parent: EntityId::MAX,
@@ -106,7 +106,7 @@ impl CameraComponent {
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
 
-        concepts.insert("view_proj".to_string(), Box::new(view_proj));
+        concepts.insert("view_to_projected_mat".to_string(), Box::new(view_proj));
         concepts.insert(
             "aspect_ratio".to_string(),
             Box::new(window_size.0 as f32 / window_size.1 as f32),
@@ -218,8 +218,8 @@ impl ComponentSystem for CameraComponent {
             .unwrap();
         self.raw_data.cam_pos = position.to_homogeneous().into();
 
-        let view_proj = concept_manager
-            .get_concept::<na::Matrix4<f32>>(self.id, "view_proj".to_string())
+        let view_to_projected_mat = concept_manager
+            .get_concept::<na::Matrix4<f32>>(self.id, "view_to_projected_mat".to_string())
             .unwrap();
         let transform_component =
             Scene::get_component::<TransformComponent>(component_map.get(&self.parent).unwrap());
@@ -228,7 +228,8 @@ impl ComponentSystem for CameraComponent {
             None => na::Matrix4::identity(),
         };
         // println!("{rotation_matrix}");
-        let cam_mat = view_proj * rotation_matrix * na::Matrix4::new_translation(position);
+        let world_to_view_mat = na::Matrix4::new_translation(position) * rotation_matrix;
+        let cam_mat = view_to_projected_mat * world_to_view_mat.try_inverse().unwrap();
         // println!("{cam_mat}");
         self.raw_data.cam_mat = cam_mat.into();
         let buf_clone = self.buf.clone();

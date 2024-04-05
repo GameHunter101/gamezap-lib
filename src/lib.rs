@@ -6,19 +6,21 @@ use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Scancode,
     mouse::RelativeMouseState,
+    ttf::Sdl2TtfContext,
     video::Window,
-    EventPump, Sdl,
+    EventPump, Sdl, VideoSubsystem,
 };
 use time::{Duration, Instant};
+use ui_manager::UiManager;
 
 use crate::renderer::Renderer;
 
-pub mod camera;
 // pub mod compute;
 pub mod model;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
+pub mod ui_manager;
 pub mod ecs {
     pub mod component;
     pub mod concepts;
@@ -68,6 +70,8 @@ pub struct GameZap {
 
     scenes: Vec<Arc<Mutex<Scene>>>,
     active_scene_index: usize,
+
+    pub ui_manager: Arc<Mutex<UiManager>>,
 }
 
 pub struct EngineDetails {
@@ -84,8 +88,9 @@ pub struct EngineDetails {
 
 pub struct EngineSystems {
     pub sdl_context: Arc<Mutex<Sdl>>,
-    pub video_subsystem: Arc<Mutex<sdl2::VideoSubsystem>>,
-    pub event_pump: Arc<Mutex<sdl2::EventPump>>,
+    pub video_subsystem: Arc<Mutex<VideoSubsystem>>,
+    pub event_pump: Arc<Mutex<EventPump>>,
+    pub font_context: Arc<Sdl2TtfContext>,
 }
 
 pub trait EngineSettings {
@@ -134,12 +139,17 @@ impl GameZap {
     }
 
     pub fn main_loop(&mut self) {
+        let ui_manager = self.ui_manager.lock().unwrap();
+        let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
         'running: loop {
             let active_scene = &mut self.scenes.get(self.active_scene_index);
+            let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
             {
                 let systems = self.systems.lock().unwrap();
                 let mut event_pump = systems.event_pump.lock().unwrap();
                 for event in event_pump.poll_iter() {
+                    imgui_platform.handle_event(&mut imgui_context, &event);
+
                     if let Some(active_scene_arc) = active_scene {
                         let active_scene = active_scene_arc.lock().unwrap();
                         let component_map = active_scene.get_components();
@@ -169,6 +179,12 @@ impl GameZap {
                         _ => {}
                     }
                 }
+
+                imgui_platform.prepare_frame(
+                    imgui_context.io_mut(),
+                    &self.window.clone(),
+                    &event_pump.mouse_state(),
+                );
             }
 
             let renderer = &self.renderer;
@@ -199,26 +215,67 @@ impl GameZap {
                 );
             }
 
+            /* let ui = imgui_context.new_frame();
+            ui.show_demo_window(&mut true);
+
+            let draw_data = imgui_context.render();
+
+            let mut encoder = renderer
+                .device
+                .clone()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+            let frame = renderer.surface.get_current_texture().unwrap();
+
+            let view = frame
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(self.clear_color),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            }); */
+
+            /* imgui_renderer
+            .render(
+                draw_data,
+                &renderer.queue.clone(),
+                &renderer.device.clone(),
+                &mut rpass,
+            )
+            .unwrap(); */
+            /* drop(rpass);
+            renderer.queue.submit(Some(encoder.finish()));
+            frame.present(); */
+
             self.update_details();
         }
     }
 }
 
 /// Builder struct for main [GameZap] struct
+#[allow(dead_code)]
 pub struct GameZapBuilder {
     sdl_context: Option<sdl2::Sdl>,
-    video_subsystem: Option<sdl2::VideoSubsystem>,
-    event_pump: Option<sdl2::EventPump>,
+    video_subsystem: Option<VideoSubsystem>,
+    event_pump: Option<EventPump>,
     clear_color: wgpu::Color,
     frame_number: u32,
-    window: Option<Arc<Window>>,
+    window: Option<Window>,
     window_size: Option<(u32, u32)>,
     initialized_instant: Instant,
     time_elapsed: Duration,
     last_frame_duration: Duration,
     time_of_last_frame: Instant,
 
-    // module_manager: ModuleManager,
     antialiasing: bool,
 
     scenes: Vec<Arc<Mutex<Scene>>>,
@@ -245,7 +302,6 @@ impl GameZapBuilder {
             last_frame_duration: Duration::ZERO,
             time_of_last_frame: Instant::now(),
 
-            // module_manager: ModuleManager::minimal(),
             antialiasing: false,
 
             scenes: vec![Arc::new(Mutex::new(Scene::default()))],
@@ -257,24 +313,19 @@ impl GameZapBuilder {
     pub fn window_and_renderer(
         mut self,
         sdl_context: sdl2::Sdl,
-        video_subsystem: sdl2::VideoSubsystem,
-        event_pump: sdl2::EventPump,
-        window: Arc<Window>,
+        video_subsystem: VideoSubsystem,
+        event_pump: EventPump,
+        window: Window,
         clear_color: wgpu::Color,
     ) -> GameZapBuilder {
-        self.window = Some(window.clone());
+        self.window_size = Some(window.size());
+        self.window = Some(window);
         self.clear_color = clear_color;
         self.sdl_context = Some(sdl_context);
         self.video_subsystem = Some(video_subsystem);
         self.event_pump = Some(event_pump);
-        self.window_size = Some(window.size());
         self
     }
-
-    // pub fn module_manager(mut self, module_manager: ModuleManager) -> GameZapBuilder {
-    //     self.module_manager = module_manager;
-    //     self
-    // }
 
     pub fn antialiasing(mut self) -> GameZapBuilder {
         self.antialiasing = true;
@@ -299,10 +350,6 @@ impl GameZapBuilder {
         self
     }
 
-    /// Pass in a customized [Camera] struct
-    /// Default camera uses a 45 degree field of view, starts at (0,0,0),
-    /// and points in the positive Z direction
-
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
     pub fn build(self) -> GameZap {
         let sdl_context = if let Some(context) = self.sdl_context {
@@ -321,19 +368,26 @@ impl GameZapBuilder {
             sdl_context.event_pump().unwrap()
         }));
 
-        let window = self.window.unwrap();
-        let renderer = pollster::block_on(Renderer::new(
-            window.clone(),
-            self.clear_color,
-            self.antialiasing,
-            // self.module_manager,
-        ));
+        let font_context = Arc::new(sdl2::ttf::init().unwrap());
+
+        let window = Arc::new(self.window.unwrap());
+
+        let renderer =
+            pollster::block_on(Renderer::new(&window, self.clear_color, self.antialiasing));
+
+        let ui_manager = Arc::new(Mutex::new(UiManager::new(
+            renderer.surface_format,
+            renderer.device.clone(),
+            renderer.queue.clone(),
+            &window,
+        )));
 
         GameZap {
             systems: Arc::new(Mutex::new(EngineSystems {
                 sdl_context: Arc::new(Mutex::new(sdl_context)),
                 video_subsystem,
                 event_pump,
+                font_context,
             })),
             renderer,
             clear_color: self.clear_color,
@@ -352,6 +406,8 @@ impl GameZapBuilder {
             })),
             scenes: self.scenes,
             active_scene_index: self.active_scene_index,
+
+            ui_manager,
         }
     }
 }

@@ -90,7 +90,7 @@ impl TransformComponent {
         ).to_homogeneous();
         let translation_matrix = na::Translation3::from(position).to_homogeneous();
         let scale_matrix = na::Scale3::from(scale).to_homogeneous();
-        let transform_matrix = translation_matrix * rotation_matrix * scale_matrix;
+        let transform_matrix = scale_matrix * rotation_matrix * translation_matrix;
 
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
@@ -146,7 +146,7 @@ impl TransformComponent {
         let position = concept_manager
             .get_concept::<na::Vector3<f32>>(self.id, "position".to_string())
             .unwrap();
-        let matrix = na::Matrix4::<f32>::new_translation(position); // [[0.0; 4]; 4];
+        let matrix = self.create_rotation_matrix(&concept_manager) * na::Matrix4::<f32>::new_translation(position);
         let matrix_as_arr: [[f32; 4]; 4] = matrix.into();
 
         let new_buffer = device.create_buffer_init(&BufferInitDescriptor {

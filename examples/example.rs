@@ -1,22 +1,24 @@
 use std::{
     any::TypeId,
+    collections::HashMap,
     sync::{Arc, Mutex},
 };
 
 use gamezap::{
     ecs::{
-        component::{ComponentId, ComponentSystem},
+        component::{Component, ComponentId, ComponentSystem},
         components::{
             camera_component::CameraComponent, mesh_component::MeshComponent,
             transform_component::TransformComponent,
         },
+        concepts::ConceptManager,
         entity::EntityId,
         material::Material,
         scene::{AllComponents, Scene},
     },
     model::Vertex,
     texture::Texture,
-    EngineSystems, GameZap, EngineDetails,
+    EngineDetails, EngineSystems, GameZap,
 };
 
 use nalgebra as na;
@@ -36,13 +38,11 @@ async fn main() {
     let event_pump = sdl_context.event_pump().unwrap();
     let application_title = "Test";
     let window_size = (800, 600);
-    let window = Arc::new(
-        video_subsystem
-            .window(application_title, window_size.0, window_size.1)
-            .resizable()
-            .build()
-            .unwrap(),
-    );
+    let window = video_subsystem
+        .window(application_title, window_size.0, window_size.1)
+        .resizable()
+        .build()
+        .unwrap();
 
     let scene = Arc::new(Mutex::new(Scene::default()));
 
@@ -55,14 +55,14 @@ async fn main() {
             event_pump,
             window,
             wgpu::Color {
-                r: 0.2,
+                r: 0.0,
                 g: 0.0,
                 b: 0.0,
-                a: 1.0,
+                a: 0.0,
             },
         )
         .antialiasing()
-        .hide_cursor()
+        // .hide_cursor()
         .scenes(scenes, 0)
         .build();
 
@@ -107,7 +107,7 @@ async fn main() {
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
         vec![pollster::block_on(Texture::load_texture(
-            "../textures/dude.png",
+            "../assets/testing_textures/dude.png",
             &device.clone(),
             &queue,
             false,
@@ -154,6 +154,79 @@ async fn main() {
     scene_lock.set_active_camera(camera);
     drop(scene_lock);
 
+    /* {
+        let systems = engine.systems.lock().unwrap();
+        let font_context = systems.font_context.clone();
+        // let mut canvas = engine.canvas.lock().unwrap();
+        let texture_creator = canvas.texture_creator();
+
+        let mut font = font_context
+            .load_font(
+                std::env::current_dir()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+                    + "\\assets\\fonts\\inter.ttf",
+                16,
+            )
+            .unwrap();
+
+        font.set_style(sdl2::ttf::FontStyle::BOLD);
+        let surface = font
+            .render("Hello world!")
+            .blended(Color::RGBA(255, 0, 0, 10))
+            .unwrap();
+
+        let texture = texture_creator
+            .create_texture_from_surface(&surface)
+            .unwrap();
+
+        let mut other_surface =
+            sdl2::surface::Surface::new(200, 200, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
+
+        other_surface
+            .fill_rect(
+                sdl2::rect::Rect::new(150, 150, 50, 50),
+                Color::RGBA(100, 100, 255, 40),
+            )
+            .unwrap();
+
+        let other_texture = texture_creator
+            .create_texture_from_surface(other_surface)
+            .unwrap();
+
+        canvas.set_draw_color(Color::RGBA(0, 255, 0, 100));
+        canvas.clear();
+
+        let sdl2::render::TextureQuery { width, height, .. } = texture.query();
+
+        let sdl2::render::TextureQuery {
+            width: width_2,
+            height: height_2,
+            ..
+        } = other_texture.query();
+
+        canvas
+            .copy(
+                &texture,
+                None,
+                Some(sdl2::rect::Rect::new(100, 100, width, height)),
+            )
+            .unwrap();
+
+        canvas
+            .copy(
+                &other_texture,
+                None,
+                Some(sdl2::rect::Rect::new(100, 100, width_2, height_2)),
+            )
+            .unwrap();
+
+        canvas.present();
+    } */
+
+    // std::thread::sleep(std::time::Duration::from_secs(10));
     engine.main_loop();
 }
 
@@ -176,13 +249,21 @@ impl ComponentSystem for KeyboardInputComponent {
         &mut self,
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
-        _component_map: AllComponents,
-        engine_details: Arc<Mutex<gamezap::EngineDetails>>,
+        component_map: AllComponents,
+        engine_details: Arc<Mutex<EngineDetails>>,
         _engine_systems: Arc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<gamezap::ecs::concepts::ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
+
+        let transform_component =
+            Scene::get_component::<TransformComponent>(component_map.get(&self.parent).unwrap());
+        let camera_rotation_matrix = match transform_component {
+            Some(transform) => transform.create_rotation_matrix(&concept_manager),
+            None => na::Matrix4::identity(),
+        };
+
         let position_concept = concept_manager
             .get_concept_mut::<na::Vector3<f32>>(
                 (self.parent, TypeId::of::<TransformComponent>(), 0),
@@ -193,28 +274,56 @@ impl ComponentSystem for KeyboardInputComponent {
         let details = engine_details.lock().unwrap();
         let speed = 0.1;
 
+        let forward_vector = (camera_rotation_matrix
+            * na::Vector3::new(0.0, 0.0, 1.0).to_homogeneous())
+        .xyz()
+        .normalize();
+
+        let left_vector = forward_vector.cross(&-na::Vector3::y_axis()).normalize();
+
         for scancode in &details.pressed_scancodes {
             match scancode {
                 Scancode::W => {
-                    position_concept.z += speed;
+                    *position_concept += forward_vector * speed;
                 }
                 Scancode::S => {
-                    position_concept.z -= speed;
+                    *position_concept -= forward_vector * speed;
                 }
                 Scancode::A => {
-                    position_concept.x += speed;
+                    *position_concept -= left_vector * speed;
                 }
                 Scancode::D => {
-                    position_concept.x -= speed;
+                    *position_concept += left_vector * speed;
                 }
                 Scancode::LCtrl => {
-                    position_concept.y += speed;
+                    position_concept.y -= speed;
                 }
                 Scancode::Space => {
-                    position_concept.y -= speed;
+                    position_concept.y += speed;
                 }
                 _ => {}
             }
+        }
+    }
+
+    fn on_event(
+        &self,
+        event: &Event,
+        _component_map: &HashMap<EntityId, Vec<Component>>,
+        _concept_manager: &ConceptManager,
+        _active_camera_id: Option<EntityId>,
+        _engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
+    ) {
+        let context = engine_systems.sdl_context.lock().unwrap();
+        if let Event::KeyDown {
+            keycode: Some(Keycode::Escape),
+            ..
+        } = event
+        {
+            let is_cursor_visible = context.mouse().is_cursor_showing();
+            context.mouse().set_relative_mouse_mode(is_cursor_visible);
+            context.mouse().show_cursor(!is_cursor_visible);
         }
     }
 
@@ -262,9 +371,9 @@ impl ComponentSystem for MouseInputComponent {
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
         _component_map: AllComponents,
-        engine_details: Arc<Mutex<gamezap::EngineDetails>>,
+        engine_details: Arc<Mutex<EngineDetails>>,
         engine_systems: Arc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<gamezap::ecs::concepts::ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
@@ -309,6 +418,11 @@ impl ComponentSystem for MouseInputComponent {
                     )
                     .unwrap();
 
+                if ((yaw - std::f32::consts::FRAC_PI_2).abs() <= 0.1 && mouse_state.y() > 0)
+                    || ((yaw + std::f32::consts::FRAC_PI_2).abs() <= 0.1 && mouse_state.y() < 0)
+                {
+                    return;
+                }
                 concept_manager
                     .modify_concept(
                         (
@@ -324,33 +438,10 @@ impl ComponentSystem for MouseInputComponent {
         }
     }
 
-    fn on_event(
-        &self,
-        event: &Event,
-        _component_map: &std::collections::HashMap<
-            EntityId,
-            Vec<gamezap::ecs::component::Component>,
-        >,
-        _concept_manager: &gamezap::ecs::concepts::ConceptManager,
-        _active_camera_id: Option<EntityId>,
-        _engine_details: &EngineDetails,
-        engine_systems: &EngineSystems,
-    ) {
-        if let Event::KeyDown {
-            keycode: Some(Keycode::Escape),
-            ..
-        } = event
-        {
-            let context = engine_systems.sdl_context.lock().unwrap();
-            let is_cursor_showing = context.mouse().is_cursor_showing();
-            context.mouse().show_cursor(!is_cursor_showing);
-            context.mouse().set_relative_mouse_mode(is_cursor_showing);
-        }
-    }
-
     fn get_parent_entity(&self) -> EntityId {
         self.parent
     }
+
     fn get_id(&self) -> ComponentId {
         self.id
     }

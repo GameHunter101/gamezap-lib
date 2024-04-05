@@ -1,6 +1,6 @@
 [package]
 name = "gamezap"
-version = "0.4.3"
+version = "0.5.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -11,7 +11,7 @@ env_logger = "0.10.0"
 log = "0.4.19"
 pollster = "0.3.0"
 raw-window-handle = "0.5.2"
-sdl2 = {git = "https://github.com/Rust-SDL2/rust-sdl2.git", features = ["raw-window-handle"]}
+# sdl2 = {git = "https://github.com/Rust-SDL2/rust-sdl2.git", features = ["raw-window-handle", "ttf"]}
 wgpu = "0.17.0"
 anyhow = "1.0.72"
 nalgebra = "0.32.3"
@@ -24,8 +24,17 @@ futures = "0.3.29"
 tokio = {version = "1.35.1", features = ["full"]}
 cool_utils = {git = "https://github.com/GameHunter101/cool_utils.git"}
 dyn-clone = "1.0.17"
+imgui = "0.11.0"
+imgui-wgpu = "0.24.0"
+imgui-sdl2 = "0.15.3"
 
 [dependencies.image]
 version = "0.24.6"
 default-features = false
 features = ["png", "jpeg"]
+
+[dependencies.sdl2]
+version = "0.36"
+# git = "https://github.com/Rust-SDL2/rust-sdl2.git"
+default-features = false
+features = ["raw-window-handle", "ttf"]
