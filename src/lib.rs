@@ -6,7 +6,6 @@ use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Scancode,
     mouse::RelativeMouseState,
-    ttf::Sdl2TtfContext,
     video::Window,
     EventPump, Sdl, VideoSubsystem,
 };
@@ -89,7 +88,6 @@ pub struct EngineSystems {
     pub sdl_context: Arc<Mutex<Sdl>>,
     pub video_subsystem: Arc<Mutex<VideoSubsystem>>,
     pub event_pump: Arc<Mutex<EventPump>>,
-    pub font_context: Arc<Sdl2TtfContext>,
     pub ui_manager: Arc<Mutex<UiManager>>,
 }
 
@@ -338,7 +336,6 @@ impl GameZapBuilder {
             sdl_context.event_pump().unwrap()
         }));
 
-        let font_context = Arc::new(sdl2::ttf::init().unwrap());
 
         let window = Arc::new(self.window.unwrap());
 
@@ -357,7 +354,6 @@ impl GameZapBuilder {
                 sdl_context: Arc::new(Mutex::new(sdl_context)),
                 video_subsystem,
                 event_pump,
-                font_context,
                 ui_manager,
             })),
             renderer,

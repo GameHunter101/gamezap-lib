@@ -43,7 +43,7 @@ impl ComponentSystem for UiComponent {
         _device: Arc<Device>,
         _queue: Arc<Queue>,
         _component_map: AllComponents,
-        _engine_details: Arc<Mutex<EngineDetails>>,
+        engine_details: Arc<Mutex<EngineDetails>>,
         engine_systems: Arc<Mutex<EngineSystems>>,
         _concept_manager: Arc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
@@ -64,6 +64,8 @@ impl ComponentSystem for UiComponent {
                     "Mouse position: ({:.1}, {:.1})",
                     moues_pos[0], moues_pos[1]
                 ));
+                let details = engine_details.lock().unwrap();
+                ui.text(format!("Frame time: {}", details.last_frame_duration.whole_milliseconds()))
             });
 
         ui.show_demo_window(&mut true);

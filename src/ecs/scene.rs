@@ -261,17 +261,22 @@ impl Scene {
                 }
             }
         }
+        smaa_frame.resolve();
 
         let systems = engine_systems.lock().unwrap();
         let ui_manager = systems.ui_manager.lock().unwrap();
         let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
         let mut context = ui_manager.imgui_context.lock().unwrap();
 
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
         {
             let mut ui_render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &smaa_frame,
+                    view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
@@ -290,7 +295,6 @@ impl Scene {
             );
         }
         queue.submit(std::iter::once(encoder.finish()));
-        smaa_frame.resolve();
         output.present();
     }
 
