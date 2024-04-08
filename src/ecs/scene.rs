@@ -2,7 +2,7 @@ use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
     texture::Texture,
-    EngineSystems, EngineDetails,
+    EngineDetails, EngineSystems,
 };
 use std::{
     any::Any,
@@ -10,8 +10,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use smaa::SmaaTarget;
-use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, Surface, TextureFormat};
+use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, TextureFormat};
 
 use crate::pipeline::Pipeline;
 
@@ -35,6 +34,7 @@ pub struct Scene {
     concept_manager: Arc<Mutex<ConceptManager>>,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl Scene {
     pub fn create_entity(
         &mut self,
@@ -167,10 +167,12 @@ impl Scene {
         &self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        smaa_target: Arc<Mutex<SmaaTarget>>,
-        surface: Arc<Surface>,
         depth_texture: Arc<Texture>,
         window_size: (u32, u32),
+        engine_details: Arc<Mutex<EngineDetails>>,
+        engine_systems: Arc<Mutex<EngineSystems>>,
+        smaa_frame: smaa::SmaaFrame,
+        output: wgpu::SurfaceTexture,
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
@@ -180,14 +182,6 @@ impl Scene {
         let camera_bind_group =
             self.create_camera_bind_group(device.clone(), queue.clone(), window_size);
         let components_arc = self.components.clone();
-
-        let output = surface.get_current_texture().unwrap();
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut smaa_binding = smaa_target.lock().unwrap();
-        let smaa_frame = smaa_binding.start_frame(&device, &queue, &view);
 
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("Scene Encoder"),
@@ -228,31 +222,10 @@ impl Scene {
                     stencil_ops: None,
                 }),
             });
-
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
+
             for (pipeline_id, pipeline) in &self.pipelines {
                 render_pass.set_pipeline(pipeline.pipeline());
-
-                /* entities.iter().for_each(|entity| {
-                    let entity_materials = materials.get(entity.id());
-                    if let Some((materials, active_material_index)) = entity_materials {
-                        components_arc
-                            .get(entity.id())
-                            .unwrap_or(&Vec::<Component>::new())
-                            .iter()
-                            .map(|comp| {
-                                let mut comp_clone = dyn_clone::clone_box(&**comp);
-                                comp_clone.update(
-                                    device.clone(),
-                                    queue.clone(),
-                                    components_arc.clone(),
-                                    engine_details.clone(),
-                                    self.concept_manager.clone(),
-                                );
-                                comp_clone
-                            });
-                    }
-                }); */
 
                 for entity in entities.iter() {
                     let entity_materials = materials.get(entity.id());
@@ -260,12 +233,15 @@ impl Scene {
                         let active_material = &materials[*active_material_index];
                         if active_material.id() == pipeline_id {
                             render_pass.set_bind_group(0, active_material.bind_group(), &[]);
+
                             default_transform.render(
                                 device.clone(),
                                 queue.clone(),
                                 &mut render_pass,
                                 &components_arc,
                                 concept_manager,
+                                engine_details.clone(),
+                                engine_systems.clone(),
                             );
 
                             // render_pass.set_vertex_buffer(1, default_transform_buffer.slice(..));
@@ -276,6 +252,8 @@ impl Scene {
                                     &mut render_pass,
                                     &components_arc,
                                     concept_manager,
+                                    engine_details.clone(),
+                                    engine_systems.clone(),
                                 );
                             }
                         }
@@ -283,9 +261,50 @@ impl Scene {
                 }
             }
         }
+
+        let systems = engine_systems.lock().unwrap();
+        let ui_manager = systems.ui_manager.lock().unwrap();
+        let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
+        let mut context = ui_manager.imgui_context.lock().unwrap();
+
+        {
+            let mut ui_render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &smaa_frame,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            self.render_ui(
+                device,
+                queue.clone(),
+                &mut renderer,
+                &mut context,
+                &mut ui_render_pass,
+            );
+        }
         queue.submit(std::iter::once(encoder.finish()));
         smaa_frame.resolve();
         output.present();
+    }
+
+    fn render_ui<'a: 'b, 'b>(
+        &self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        renderer: &'a mut imgui_wgpu::Renderer,
+        context: &'a mut imgui::Context,
+        rpass: &mut wgpu::RenderPass<'b>,
+    ) {
+        renderer
+            .render(context.render(), &queue, &device, rpass)
+            .unwrap();
     }
 
     pub fn create_camera_bind_group(

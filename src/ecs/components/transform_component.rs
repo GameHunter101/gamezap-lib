@@ -211,6 +211,8 @@ impl ComponentSystem for TransformComponent {
         render_pass: &mut RenderPass<'b>,
         _component_map: &'a HashMap<EntityId, Vec<Component>>,
         _concept_manager: &'a ConceptManager,
+        _engine_details: Arc<Mutex<EngineDetails>>,
+        _engine_systems: Arc<Mutex<EngineSystems>>,
     ) {
         if let Some(buf) = self.buf.as_ref() {
             render_pass.set_vertex_buffer(1, buf.slice(..));

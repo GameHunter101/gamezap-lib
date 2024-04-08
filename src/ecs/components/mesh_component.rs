@@ -13,6 +13,7 @@ use wgpu::{
 use crate::{
     ecs::component::{Component, ComponentId, ComponentSystem},
     model::Vertex,
+    EngineDetails, EngineSystems,
 };
 
 use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
@@ -99,6 +100,8 @@ impl ComponentSystem for MeshComponent {
         render_pass: &mut RenderPass<'b>,
         _component_map: &'a HashMap<EntityId, Vec<Component>>,
         concept_manager: &'a ConceptManager,
+        _engine_details: Arc<Mutex<EngineDetails>>,
+        _engine_systems: Arc<Mutex<EngineSystems>>,
     ) {
         let vertex_buffer = self.vertex_buffer.as_ref();
         if let Some(vertex_buffer) = &vertex_buffer {

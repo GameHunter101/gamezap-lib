@@ -53,6 +53,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         render_pass: &mut RenderPass<'b>,
         component_map: &'a HashMap<EntityId, Vec<Component>>,
         concept_manager: &'a ConceptManager,
+        engine_details: Arc<Mutex<EngineDetails>>,
+        engine_systems: Arc<Mutex<EngineSystems>>,
     ) {
     }
 

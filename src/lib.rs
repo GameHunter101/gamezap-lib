@@ -31,6 +31,7 @@ pub mod ecs {
         pub mod camera_component;
         pub mod mesh_component;
         pub mod transform_component;
+        pub mod ui_component;
     }
 }
 
@@ -70,8 +71,6 @@ pub struct GameZap {
 
     scenes: Vec<Arc<Mutex<Scene>>>,
     active_scene_index: usize,
-
-    pub ui_manager: Arc<Mutex<UiManager>>,
 }
 
 pub struct EngineDetails {
@@ -91,6 +90,7 @@ pub struct EngineSystems {
     pub video_subsystem: Arc<Mutex<VideoSubsystem>>,
     pub event_pump: Arc<Mutex<EventPump>>,
     pub font_context: Arc<Sdl2TtfContext>,
+    pub ui_manager: Arc<Mutex<UiManager>>,
 }
 
 pub trait EngineSettings {
@@ -139,13 +139,13 @@ impl GameZap {
     }
 
     pub fn main_loop(&mut self) {
-        let ui_manager = self.ui_manager.lock().unwrap();
-        let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
         'running: loop {
             let active_scene = &mut self.scenes.get(self.active_scene_index);
-            let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
             {
                 let systems = self.systems.lock().unwrap();
+                let ui_manager = systems.ui_manager.lock().unwrap();
+                let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
+                let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
                 let mut event_pump = systems.event_pump.lock().unwrap();
                 for event in event_pump.poll_iter() {
                     imgui_platform.handle_event(&mut imgui_context, &event);
@@ -188,6 +188,15 @@ impl GameZap {
             }
 
             let renderer = &self.renderer;
+
+            let output = renderer.surface.get_current_texture().unwrap();
+            let view = output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            let mut smaa_binding = renderer.smaa_target.lock().unwrap();
+            let smaa_frame = smaa_binding.start_frame(&renderer.device, &renderer.queue, &view);
+
             if let Some(active_scene_arc) = active_scene {
                 let details = self.details.lock().unwrap();
                 let mut active_scene = active_scene_arc.lock().unwrap();
@@ -208,53 +217,14 @@ impl GameZap {
                 active_scene.render(
                     renderer.device.clone(),
                     renderer.queue.clone(),
-                    renderer.smaa_target.clone(),
-                    renderer.surface.clone(),
                     renderer.depth_texture.clone(),
                     self.window_size,
+                    self.details.clone(),
+                    self.systems.clone(),
+                    smaa_frame,
+                    output,
                 );
             }
-
-            /* let ui = imgui_context.new_frame();
-            ui.show_demo_window(&mut true);
-
-            let draw_data = imgui_context.render();
-
-            let mut encoder = renderer
-                .device
-                .clone()
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-            let frame = renderer.surface.get_current_texture().unwrap();
-
-            let view = frame
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            }); */
-
-            /* imgui_renderer
-            .render(
-                draw_data,
-                &renderer.queue.clone(),
-                &renderer.device.clone(),
-                &mut rpass,
-            )
-            .unwrap(); */
-            /* drop(rpass);
-            renderer.queue.submit(Some(encoder.finish()));
-            frame.present(); */
 
             self.update_details();
         }
@@ -388,6 +358,7 @@ impl GameZapBuilder {
                 video_subsystem,
                 event_pump,
                 font_context,
+                ui_manager,
             })),
             renderer,
             clear_color: self.clear_color,
@@ -406,8 +377,6 @@ impl GameZapBuilder {
             })),
             scenes: self.scenes,
             active_scene_index: self.active_scene_index,
-
-            ui_manager,
         }
     }
 }

@@ -10,6 +10,7 @@ use gamezap::{
         components::{
             camera_component::CameraComponent, mesh_component::MeshComponent,
             transform_component::TransformComponent,
+            ui_component::UiComponent,
         },
         concepts::ConceptManager,
         entity::EntityId,
@@ -152,81 +153,18 @@ async fn main() {
     );
 
     scene_lock.set_active_camera(camera);
+
+    let ui_component = UiComponent::new();
+    
+    let _ui_entity = scene_lock.create_entity(
+        0,
+        true,
+        vec![Box::new(ui_component)],
+        None,
+    );
+
     drop(scene_lock);
 
-    /* {
-        let systems = engine.systems.lock().unwrap();
-        let font_context = systems.font_context.clone();
-        // let mut canvas = engine.canvas.lock().unwrap();
-        let texture_creator = canvas.texture_creator();
-
-        let mut font = font_context
-            .load_font(
-                std::env::current_dir()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-                    + "\\assets\\fonts\\inter.ttf",
-                16,
-            )
-            .unwrap();
-
-        font.set_style(sdl2::ttf::FontStyle::BOLD);
-        let surface = font
-            .render("Hello world!")
-            .blended(Color::RGBA(255, 0, 0, 10))
-            .unwrap();
-
-        let texture = texture_creator
-            .create_texture_from_surface(&surface)
-            .unwrap();
-
-        let mut other_surface =
-            sdl2::surface::Surface::new(200, 200, sdl2::pixels::PixelFormatEnum::RGBA8888).unwrap();
-
-        other_surface
-            .fill_rect(
-                sdl2::rect::Rect::new(150, 150, 50, 50),
-                Color::RGBA(100, 100, 255, 40),
-            )
-            .unwrap();
-
-        let other_texture = texture_creator
-            .create_texture_from_surface(other_surface)
-            .unwrap();
-
-        canvas.set_draw_color(Color::RGBA(0, 255, 0, 100));
-        canvas.clear();
-
-        let sdl2::render::TextureQuery { width, height, .. } = texture.query();
-
-        let sdl2::render::TextureQuery {
-            width: width_2,
-            height: height_2,
-            ..
-        } = other_texture.query();
-
-        canvas
-            .copy(
-                &texture,
-                None,
-                Some(sdl2::rect::Rect::new(100, 100, width, height)),
-            )
-            .unwrap();
-
-        canvas
-            .copy(
-                &other_texture,
-                None,
-                Some(sdl2::rect::Rect::new(100, 100, width_2, height_2)),
-            )
-            .unwrap();
-
-        canvas.present();
-    } */
-
-    // std::thread::sleep(std::time::Duration::from_secs(10));
     engine.main_loop();
 }
 
