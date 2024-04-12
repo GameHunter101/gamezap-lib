@@ -49,12 +49,22 @@ impl ComponentSystem for UiComponent {
         _active_camera_id: Option<EntityId>,
     ) {
         let systems = engine_systems.lock().unwrap();
-        let ui_manager = systems.ui_manager.lock().unwrap();
-        let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
 
-        let ui = imgui_context.new_frame();
+        if systems
+            .sdl_context
+            .lock()
+            .unwrap()
+            .mouse()
+            .is_cursor_showing()
+        {
+            let mut ui_manager = systems.ui_manager.lock().unwrap();
+            ui_manager.set_render_flag();
 
-        ui.window("Hello World")
+            let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
+
+            let ui = imgui_context.new_frame();
+
+            /* ui.window("Hello World")
             .size([300.0, 100.0], imgui::Condition::FirstUseEver)
             .build(|| {
                 ui.text("Heyo");
@@ -65,10 +75,30 @@ impl ComponentSystem for UiComponent {
                     moues_pos[0], moues_pos[1]
                 ));
                 let details = engine_details.lock().unwrap();
-                ui.text(format!("Frame time: {}", details.last_frame_duration.whole_milliseconds()))
-            });
+                ui.text(format!(
+                    "Frame time: {}",
+                    details.last_frame_duration.whole_milliseconds()
+                ));
+                ui.text(format!("FPS: {}", details.fps,));
+            }); */
+            let details = engine_details.lock().unwrap();
+            ui.window(".")
+                .title_bar(false)
+                .draw_background(false)
+                .resizable(false)
+                .movable(false)
+                .always_auto_resize(true)
+                .position([100.0, 100.0], imgui::Condition::Always)
+                .build(|| {
+                    ui.text(format!("FPS: {}", details.fps,));
+                    ui.text(format!(
+                        "Frame time: {}",
+                        details.last_frame_duration.whole_milliseconds()
+                    ));
+                });
 
-        ui.show_demo_window(&mut true);
+            // ui.show_demo_window(&mut true);
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

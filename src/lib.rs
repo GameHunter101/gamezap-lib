@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use ecs::scene::Scene;
-// use module_manager::ModuleManager;
 use sdl2::{
     event::{Event, WindowEvent},
     keyboard::Scancode,
@@ -34,32 +33,6 @@ pub mod ecs {
     }
 }
 
-/// Main struct for the engine, manages all higher-level state
-///
-/// # Example
-///
-/// ```
-/// env_logger::init();
-/// let engine = GameZap::builder().build();
-/// 'running: loop {
-///     for event in engine.event_pump.poll_iter() {
-///         match event {
-///             Event::Quit { .. } => break 'running,
-///
-///             Event::Window {
-///                 win_event: WindowEvent::Resized(width, height),
-///                 ..
-///             } => engine
-///                 .renderer
-///                 .lock()
-///                 .unwrap()
-///                 .resize((width as u32, height as u32)),
-///             _ => {}
-///         }
-///     }
-///     engine.renderer.lock().unwrap().render().unwrap();
-/// }
-/// ```
 pub struct GameZap {
     pub systems: Arc<Mutex<EngineSystems>>,
     pub renderer: Renderer,
@@ -73,15 +46,19 @@ pub struct GameZap {
 }
 
 pub struct EngineDetails {
-    pub frame_number: u32,
+    pub frame_number: u128,
     pub initialized_instant: Instant,
     pub time_elapsed: Duration,
     pub last_frame_duration: Duration,
     pub time_of_last_frame: Instant,
+    time_of_last_fps_calc: Instant,
+    frame_count_at_last_fps_calc: u128,
+    pub fps: u32,
 
     pub mouse_state: (Option<RelativeMouseState>, bool),
     pub pressed_scancodes: Vec<Scancode>,
     pub window_aspect_ratio: f32,
+    pub render_mask: Option<RenderMask>,
 }
 
 pub struct EngineSystems {
@@ -89,6 +66,13 @@ pub struct EngineSystems {
     pub video_subsystem: Arc<Mutex<VideoSubsystem>>,
     pub event_pump: Arc<Mutex<EventPump>>,
     pub ui_manager: Arc<Mutex<UiManager>>,
+}
+
+pub struct RenderMask {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 pub trait EngineSettings {
@@ -113,6 +97,12 @@ impl EngineDetails {
         self.time_elapsed = now - self.initialized_instant;
         self.last_frame_duration = now - self.time_of_last_frame;
         self.time_of_last_frame = now;
+
+        if (now - self.time_of_last_fps_calc).as_seconds_f32() > 1.0 {
+            self.time_of_last_fps_calc = now;
+            self.fps = (self.frame_number - self.frame_count_at_last_fps_calc) as u32;
+            self.frame_count_at_last_fps_calc = self.frame_number;
+        }
 
         self.mouse_state = (
             Some(event_pump.relative_mouse_state()),
@@ -147,6 +137,9 @@ impl GameZap {
                 let mut event_pump = systems.event_pump.lock().unwrap();
                 for event in event_pump.poll_iter() {
                     imgui_platform.handle_event(&mut imgui_context, &event);
+                    if imgui_platform.ignore_event(&event) {
+                        continue;
+                    }
 
                     if let Some(active_scene_arc) = active_scene {
                         let active_scene = active_scene_arc.lock().unwrap();
@@ -177,7 +170,6 @@ impl GameZap {
                         _ => {}
                     }
                 }
-
                 imgui_platform.prepare_frame(
                     imgui_context.io_mut(),
                     &self.window.clone(),
@@ -236,7 +228,7 @@ pub struct GameZapBuilder {
     video_subsystem: Option<VideoSubsystem>,
     event_pump: Option<EventPump>,
     clear_color: wgpu::Color,
-    frame_number: u32,
+    frame_number: u128,
     window: Option<Window>,
     window_size: Option<(u32, u32)>,
     initialized_instant: Instant,
@@ -248,6 +240,8 @@ pub struct GameZapBuilder {
 
     scenes: Vec<Arc<Mutex<Scene>>>,
     active_scene_index: usize,
+
+    render_mask: Option<RenderMask>,
 }
 
 impl GameZapBuilder {
@@ -274,6 +268,8 @@ impl GameZapBuilder {
 
             scenes: vec![Arc::new(Mutex::new(Scene::default()))],
             active_scene_index: 0,
+
+            render_mask: None,
         }
     }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
@@ -318,8 +314,13 @@ impl GameZapBuilder {
         self
     }
 
+    pub fn render_mask(mut self, mask: RenderMask) -> GameZapBuilder {
+        self.render_mask = Some(mask);
+        self
+    }
+
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
-    pub fn build(self) -> GameZap {
+    pub async fn build(self) -> GameZap {
         let sdl_context = if let Some(context) = self.sdl_context {
             context
         } else {
@@ -336,11 +337,10 @@ impl GameZapBuilder {
             sdl_context.event_pump().unwrap()
         }));
 
-
         let window = Arc::new(self.window.unwrap());
 
         let renderer =
-            pollster::block_on(Renderer::new(&window, self.clear_color, self.antialiasing));
+            Renderer::new(&window, self.clear_color, self.antialiasing).await;
 
         let ui_manager = Arc::new(Mutex::new(UiManager::new(
             renderer.surface_format,
@@ -366,10 +366,15 @@ impl GameZapBuilder {
                 time_elapsed: self.time_elapsed,
                 last_frame_duration: self.last_frame_duration,
                 time_of_last_frame: self.time_of_last_frame,
+                time_of_last_fps_calc: self.initialized_instant,
+                frame_count_at_last_fps_calc: self.frame_number,
+                fps: 0,
+
                 mouse_state: (None, true),
                 pressed_scancodes: vec![],
                 window_aspect_ratio: self.window_size.unwrap().0 as f32
                     / self.window_size.unwrap().1 as f32,
+                render_mask: self.render_mask,
             })),
             scenes: self.scenes,
             active_scene_index: self.active_scene_index,

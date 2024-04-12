@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use imgui::Context;
 use imgui_sdl2::ImguiSdl2;
@@ -11,6 +11,7 @@ pub struct UiManager {
     pub imgui_context: Arc<Mutex<Context>>,
     pub imgui_renderer: Arc<Mutex<Renderer>>,
     pub imgui_platform: Arc<Mutex<ImguiSdl2>>,
+    pub render_flag: Arc<AtomicBool>,
 }
 
 impl UiManager {
@@ -40,7 +41,18 @@ impl UiManager {
             imgui_context: Arc::new(Mutex::new(imgui_context)),
             imgui_renderer: Arc::new(Mutex::new(imgui_renderer)),
             imgui_platform: Arc::new(Mutex::new(imgui_platform)),
+            render_flag: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn set_render_flag(&mut self) {
+        self.render_flag
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn clear_render_flag(&mut self) {
+        self.render_flag
+            .store(false, std::sync::atomic::Ordering::Relaxed);
     }
 }
 

@@ -136,13 +136,13 @@ impl Scene {
         let new_components = entities
             .iter()
             .map(|entity| {
-                (
-                    *entity.id(),
-                    self.components
-                        .get(entity.id())
-                        .unwrap_or(&Vec::<Component>::new())
-                        .iter()
-                        .map(|comp| {
+                let components_futures = self
+                    .components
+                    .get(entity.id())
+                    .unwrap_or(&Vec::<Component>::new())
+                    .iter()
+                    .map(|comp| {
+                        tokio::spawn(async move {
                             let mut comp_clone = dyn_clone::clone_box(&**comp);
                             comp_clone.update(
                                 device.clone(),
@@ -155,8 +155,12 @@ impl Scene {
                             );
                             comp_clone
                         })
-                        .collect::<Vec<Component>>(),
-                )
+                    })
+                    .collect::<Vec<_>>();
+                for future in components_futures {
+                    future.await.unwrap();
+                }
+                (*entity.id(), components_futures)
             })
             .collect::<HashMap<EntityId, Vec<Component>>>();
 
@@ -222,6 +226,11 @@ impl Scene {
                     stencil_ops: None,
                 }),
             });
+
+            if let Some(mask) = &engine_details.lock().unwrap().render_mask {
+                render_pass.set_viewport(mask.x, mask.y, mask.width, mask.height, 0.0, 1.0);
+            }
+
             render_pass.set_bind_group(1, &camera_bind_group, &[]);
 
             for (pipeline_id, pipeline) in &self.pipelines {
@@ -264,7 +273,7 @@ impl Scene {
         smaa_frame.resolve();
 
         let systems = engine_systems.lock().unwrap();
-        let ui_manager = systems.ui_manager.lock().unwrap();
+        let mut ui_manager = systems.ui_manager.lock().unwrap();
         let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
         let mut context = ui_manager.imgui_context.lock().unwrap();
 
@@ -286,14 +295,25 @@ impl Scene {
                 depth_stencil_attachment: None,
             });
 
-            self.render_ui(
-                device,
-                queue.clone(),
-                &mut renderer,
-                &mut context,
-                &mut ui_render_pass,
-            );
+            if ui_manager
+                .render_flag
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                self.render_ui(
+                    device,
+                    queue.clone(),
+                    &mut renderer,
+                    &mut context,
+                    &mut ui_render_pass,
+                );
+            }
         }
+
+        drop(renderer);
+        drop(context);
+
+        ui_manager.clear_render_flag();
+
         queue.submit(std::iter::once(encoder.finish()));
         output.present();
     }

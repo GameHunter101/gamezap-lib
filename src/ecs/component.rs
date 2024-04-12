@@ -17,7 +17,7 @@ pub type ComponentId = (EntityId, TypeId, u32);
 pub type Component = Box<dyn ComponentSystem>;
 
 #[allow(unused, clippy::too_many_arguments)]
-pub trait ComponentSystem: Debug + dyn_clone::DynClone {
+pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
     fn register_component(
         &mut self,
         concept_manager: Arc<Mutex<ConceptManager>>,

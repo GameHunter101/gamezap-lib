@@ -9,8 +9,7 @@ use gamezap::{
         component::{Component, ComponentId, ComponentSystem},
         components::{
             camera_component::CameraComponent, mesh_component::MeshComponent,
-            transform_component::TransformComponent,
-            ui_component::UiComponent,
+            transform_component::TransformComponent, ui_component::UiComponent,
         },
         concepts::ConceptManager,
         entity::EntityId,
@@ -63,9 +62,9 @@ async fn main() {
             },
         )
         .antialiasing()
-        // .hide_cursor()
+        .hide_cursor()
         .scenes(scenes, 0)
-        .build();
+        .build().await;
 
     let mut scene_lock = scene.lock().unwrap();
     let concept_manager = scene_lock.get_concept_manager();
@@ -82,8 +81,8 @@ async fn main() {
                 normal: [1.0, 0.0, 0.0],
             },
             Vertex {
-                position: [0.0, 1.0, 0.0],
-                tex_coords: [0.5, 0.0],
+                position: [-1.0, 1.0, 0.0],
+                tex_coords: [0.0, 0.0],
                 normal: [0.0, 1.0, 0.0],
             },
             Vertex {
@@ -91,8 +90,13 @@ async fn main() {
                 tex_coords: [1.0, 1.0],
                 normal: [0.0, 0.0, 1.0],
             },
+            Vertex {
+                position: [1.0, 1.0, 0.0],
+                tex_coords: [1.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+            },
         ],
-        vec![0, 1, 2],
+        vec![0, 1, 2, 1, 2, 3],
     );
 
     let mesh_transform = TransformComponent::new(
@@ -107,12 +111,12 @@ async fn main() {
     let test_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
-        vec![pollster::block_on(Texture::load_texture(
-            "../assets/testing_textures/dude.png",
+        vec![Texture::load_texture(
+            "../assets/testing_textures/texture.png",
             &device.clone(),
             &queue,
             false,
-        ))
+        ).await
         .unwrap()],
         true,
         device,
@@ -155,13 +159,8 @@ async fn main() {
     scene_lock.set_active_camera(camera);
 
     let ui_component = UiComponent::new();
-    
-    let _ui_entity = scene_lock.create_entity(
-        0,
-        true,
-        vec![Box::new(ui_component)],
-        None,
-    );
+
+    let _ui_entity = scene_lock.create_entity(0, true, vec![Box::new(ui_component)], None);
 
     drop(scene_lock);
 
@@ -210,7 +209,7 @@ impl ComponentSystem for KeyboardInputComponent {
             .unwrap();
 
         let details = engine_details.lock().unwrap();
-        let speed = 0.1;
+        let speed = 1.0 / (details.last_frame_duration.whole_milliseconds() as f32 * 10.0);
 
         let forward_vector = (camera_rotation_matrix
             * na::Vector3::new(0.0, 0.0, 1.0).to_homogeneous())
@@ -342,6 +341,8 @@ impl ComponentSystem for MouseInputComponent {
         let mouse = sdl_context.mouse();
         let is_hidden = mouse.relative_mouse_mode();
         let details = engine_details.lock().unwrap();
+
+        let speed = 1.0 / (details.last_frame_duration.whole_milliseconds() as f32 * 75.0);
         if is_hidden {
             if let Some(mouse_state) = details.mouse_state.0 {
                 concept_manager
@@ -352,7 +353,7 @@ impl ComponentSystem for MouseInputComponent {
                             0,
                         ),
                         "pitch".to_string(),
-                        pitch + mouse_state.x() as f32 / 100.0,
+                        pitch + mouse_state.x() as f32 * speed,
                     )
                     .unwrap();
 
@@ -369,7 +370,7 @@ impl ComponentSystem for MouseInputComponent {
                             0,
                         ),
                         "yaw".to_string(),
-                        yaw + mouse_state.y() as f32 / 100.0,
+                        yaw + mouse_state.y() as f32 * speed,
                     )
                     .unwrap();
             }
