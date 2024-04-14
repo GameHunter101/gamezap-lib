@@ -196,8 +196,8 @@ impl ComponentSystem for CameraComponent {
         _device: Arc<Device>,
         queue: Arc<Queue>,
         component_map: &AllComponents,
-        engine_details: &EngineDetails,
-        _engine_systems: &EngineSystems,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
@@ -205,7 +205,7 @@ impl ComponentSystem for CameraComponent {
         let aspect_ratio = concept_manager
             .get_concept_mut::<f32>(self.id, "aspect_ratio".to_string())
             .unwrap();
-        *aspect_ratio = engine_details.window_aspect_ratio;
+        *aspect_ratio = engine_details.lock().unwrap().window_aspect_ratio;
 
         let position = concept_manager
             .get_concept::<na::Vector3<f32>>(

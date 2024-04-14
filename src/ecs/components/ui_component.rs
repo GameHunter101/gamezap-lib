@@ -1,7 +1,8 @@
 use std::{
     any::{Any, TypeId},
     fmt::Debug,
-    sync::{Arc, Mutex}, rc::Rc,
+    rc::Rc,
+    sync::{Arc, Mutex},
 };
 
 use wgpu::{Device, Queue};
@@ -43,19 +44,20 @@ impl ComponentSystem for UiComponent {
         _device: Arc<Device>,
         _queue: Arc<Queue>,
         _component_map: &AllComponents,
-        engine_details: &EngineDetails,
-        engine_systems: &EngineSystems,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         if engine_systems
-            .sdl_context
             .lock()
             .unwrap()
+            .sdl_context
             .mouse()
             .is_cursor_showing()
         {
-            let mut ui_manager = engine_systems.ui_manager.lock().unwrap();
+            let systems = engine_systems.lock().unwrap();
+            let mut ui_manager = systems.ui_manager.lock().unwrap();
             ui_manager.set_render_flag();
 
             let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
@@ -87,10 +89,14 @@ impl ComponentSystem for UiComponent {
                 .always_auto_resize(true)
                 .position([100.0, 100.0], imgui::Condition::Always)
                 .build(|| {
-                    ui.text(format!("FPS: {}", engine_details.fps,));
+                    ui.text(format!("FPS: {}", engine_details.lock().unwrap().fps,));
                     ui.text(format!(
-                        "Frame time: {}",
-                        engine_details.last_frame_duration.whole_milliseconds()
+                        "Frame time (μs): {}",
+                        engine_details
+                            .lock()
+                            .unwrap()
+                            .last_frame_duration
+                            .as_micros()
                     ));
                 });
 

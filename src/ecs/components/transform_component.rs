@@ -193,8 +193,8 @@ impl ComponentSystem for TransformComponent {
         device: Arc<Device>,
         _queue: Arc<Queue>,
         _component_map: &AllComponents,
-        _engine_details: &EngineDetails,
-        _engine_systems: &EngineSystems,
+        _engine_details: Rc<Mutex<EngineDetails>>,
+        _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {

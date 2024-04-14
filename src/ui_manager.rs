@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::{sync::{atomic::AtomicBool, Mutex, Arc}, rc::Rc};
 
 use imgui::Context;
 use imgui_sdl2::ImguiSdl2;
@@ -8,17 +8,17 @@ use wgpu::{Device, Queue, TextureFormat};
 
 #[allow(unused)]
 pub struct UiManager {
-    pub imgui_context: Arc<Mutex<Context>>,
-    pub imgui_renderer: Arc<Mutex<Renderer>>,
-    pub imgui_platform: Arc<Mutex<ImguiSdl2>>,
-    pub render_flag: Arc<AtomicBool>,
+    pub imgui_context: Rc<Mutex<Context>>,
+    pub imgui_renderer: Rc<Mutex<Renderer>>,
+    pub imgui_platform: Rc<Mutex<ImguiSdl2>>,
+    pub render_flag: Rc<AtomicBool>,
 }
 
 impl UiManager {
     pub fn new(
         texture_format: TextureFormat,
         device: Arc<Device>,
-        queue: Arc<Queue>,
+        queue:  Arc<Queue>,
         window: &Window,
     ) -> Self {
         let config = RendererConfig {
@@ -38,10 +38,10 @@ impl UiManager {
         let imgui_platform = ImguiSdl2::new(&mut imgui_context, window);
 
         UiManager {
-            imgui_context: Arc::new(Mutex::new(imgui_context)),
-            imgui_renderer: Arc::new(Mutex::new(imgui_renderer)),
-            imgui_platform: Arc::new(Mutex::new(imgui_platform)),
-            render_flag: Arc::new(AtomicBool::new(false)),
+            imgui_context: Rc::new(Mutex::new(imgui_context)),
+            imgui_renderer: Rc::new(Mutex::new(imgui_renderer)),
+            imgui_platform: Rc::new(Mutex::new(imgui_platform)),
+            render_flag: Rc::new(AtomicBool::new(false)),
         }
     }
 

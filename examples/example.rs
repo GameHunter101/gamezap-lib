@@ -108,7 +108,7 @@ async fn main() {
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
         vec![Texture::load_texture(
-            "../assets/testing_textures/texture.png",
+            "assets/testing_textures/texture.png",
             &device.clone(),
             &queue,
             false,
@@ -182,8 +182,8 @@ impl ComponentSystem for KeyboardInputComponent {
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
         component_map: &AllComponents,
-        engine_details:  &EngineDetails,
-        _engine_systems: &EngineSystems,
+        engine_details:  Rc<Mutex<EngineDetails>>,
+        _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
@@ -202,7 +202,9 @@ impl ComponentSystem for KeyboardInputComponent {
             )
             .unwrap();
 
-        let speed = 1.0 / (engine_details.last_frame_duration.whole_milliseconds() as f32 * 10.0);
+        let details = engine_details.lock().unwrap();
+        
+        let speed = 5.0 / (details.last_frame_duration.as_micros() as f32);
 
         let forward_vector = (camera_rotation_matrix
             * na::Vector3::new(0.0, 0.0, 1.0).to_homogeneous())
@@ -211,7 +213,7 @@ impl ComponentSystem for KeyboardInputComponent {
 
         let left_vector = forward_vector.cross(&-na::Vector3::y_axis()).normalize();
 
-        for scancode in &engine_details.pressed_scancodes {
+        for scancode in &details.pressed_scancodes {
             match scancode {
                 Scancode::W => {
                     *position_concept += forward_vector * speed;
@@ -242,10 +244,11 @@ impl ComponentSystem for KeyboardInputComponent {
         _component_map: &HashMap<EntityId, Vec<Component>>,
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _engine_details: &EngineDetails,
-        engine_systems: &EngineSystems,
+        _engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
     ) {
-        let context = engine_systems.sdl_context.lock().unwrap();
+        let systems = engine_systems.lock().unwrap();
+        let context = &systems.sdl_context;
         if let Event::KeyDown {
             keycode: Some(Keycode::Escape),
             ..
@@ -301,8 +304,8 @@ impl ComponentSystem for MouseInputComponent {
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
         _component_map: &AllComponents,
-        engine_details: &EngineDetails,
-        engine_systems: &EngineSystems,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
@@ -329,13 +332,16 @@ impl ComponentSystem for MouseInputComponent {
             )
             .unwrap();
 
-        let sdl_context = engine_systems.sdl_context.lock().unwrap();
+        let systems = engine_systems.lock().unwrap();
+        let details = engine_details.lock().unwrap();
+
+        let sdl_context = &systems.sdl_context;
         let mouse = sdl_context.mouse();
         let is_hidden = mouse.relative_mouse_mode();
 
-        let speed = 1.0 / (engine_details.last_frame_duration.whole_milliseconds() as f32 * 75.0);
+        let speed = 5.0 / (details.last_frame_duration.as_micros() as f32);
         if is_hidden {
-            if let Some(mouse_state) = engine_details.mouse_state.0 {
+            if let Some(mouse_state) = details.mouse_state.0 {
                 concept_manager
                     .modify_concept(
                         (

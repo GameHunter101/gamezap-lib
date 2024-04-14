@@ -1,4 +1,8 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    rc::Rc,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
 use ecs::scene::Scene;
 use sdl2::{
@@ -8,7 +12,6 @@ use sdl2::{
     video::Window,
     EventPump, Sdl, VideoSubsystem,
 };
-use time::{Duration, Instant};
 use ui_manager::UiManager;
 
 use crate::renderer::Renderer;
@@ -34,12 +37,12 @@ pub mod ecs {
 }
 
 pub struct GameZap {
-    pub systems: EngineSystems,
+    pub systems: Rc<Mutex<EngineSystems>>,
     pub renderer: Renderer,
     pub clear_color: wgpu::Color,
-    pub window: Arc<Window>,
+    pub window: Window,
     pub window_size: (u32, u32),
-    pub details: EngineDetails,
+    pub details: Rc<Mutex<EngineDetails>>,
 
     scenes: Vec<Scene>,
     active_scene_index: usize,
@@ -62,10 +65,10 @@ pub struct EngineDetails {
 }
 
 pub struct EngineSystems {
-    pub sdl_context: Arc<Mutex<Sdl>>,
-    pub video_subsystem: Arc<Mutex<VideoSubsystem>>,
-    pub event_pump: Arc<Mutex<EventPump>>,
-    pub ui_manager: Arc<Mutex<UiManager>>,
+    pub sdl_context: Sdl,
+    pub video_subsystem: VideoSubsystem,
+    pub event_pump: EventPump,
+    pub ui_manager: Rc<Mutex<UiManager>>,
 }
 
 pub struct RenderMask {
@@ -87,18 +90,14 @@ impl EngineSettings for Sdl {
 }
 
 impl EngineDetails {
-    pub fn update_details(
-        &mut self,
-        event_pump: MutexGuard<EventPump>,
-        sdl_context: MutexGuard<Sdl>,
-    ) {
+    pub fn update_details(&mut self, event_pump: &EventPump, sdl_context: &Sdl) {
         let now = Instant::now();
         self.frame_number += 1;
         self.time_elapsed = now - self.initialized_instant;
         self.last_frame_duration = now - self.time_of_last_frame;
         self.time_of_last_frame = now;
 
-        if (now - self.time_of_last_fps_calc).as_seconds_f32() > 1.0 {
+        if (now - self.time_of_last_fps_calc).as_secs_f32() > 1.0 {
             self.time_of_last_fps_calc = now;
             self.fps = (self.frame_number - self.frame_count_at_last_fps_calc) as u32;
             self.frame_count_at_last_fps_calc = self.frame_number;
@@ -119,25 +118,19 @@ impl GameZap {
     }
 
     pub fn update_details(&mut self) {
-        let event_pump = self.systems.event_pump.lock().unwrap();
-        let sdl_context = self.systems.sdl_context.lock().unwrap();
-        self.details.update_details(event_pump, sdl_context);
+        let mut details = self.details.lock().unwrap();
+        let systems = self.systems.lock().unwrap();
+        details.update_details(&systems.event_pump, &systems.sdl_context);
     }
 
     pub fn main_loop(&mut self) {
         'running: loop {
             let active_scene_opt = self.scenes.get_mut(self.active_scene_index);
             {
-                let ui_manager = self.systems.ui_manager.lock().unwrap();
-                let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
-                let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
-                let mut event_pump = self.systems.event_pump.lock().unwrap();
-                for event in event_pump.poll_iter() {
-                    imgui_platform.handle_event(&mut imgui_context, &event);
-                    if imgui_platform.ignore_event(&event) {
-                        continue;
-                    }
+                let mut systems = self.systems.lock().unwrap();
+                let mut details = self.details.lock().unwrap();
 
+                for event in systems.event_pump.poll_iter() {
                     if let Some(active_scene) = &active_scene_opt {
                         let component_map = active_scene.get_components();
                         for component in component_map.values().flatten() {
@@ -146,8 +139,8 @@ impl GameZap {
                                 component_map,
                                 active_scene.get_concept_manager(),
                                 active_scene.get_active_camera(),
-                                &self.details,
-                                &self.systems,
+                                self.details.clone(),
+                                self.systems.clone(),
                             );
                         }
                     }
@@ -159,15 +152,18 @@ impl GameZap {
                             ..
                         } => {
                             self.renderer.resize((width as u32, height as u32));
-                            self.details.window_aspect_ratio = width as f32 / height as f32;
+                            details.window_aspect_ratio = width as f32 / height as f32;
                         }
                         _ => {}
                     }
                 }
+                let ui_manager = systems.ui_manager.lock().unwrap();
+                let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
+                let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
                 imgui_platform.prepare_frame(
                     imgui_context.io_mut(),
-                    &self.window.clone(),
-                    &event_pump.mouse_state(),
+                    &self.window,
+                    &systems.event_pump.mouse_state(),
                 );
             }
 
@@ -183,7 +179,7 @@ impl GameZap {
                 let smaa_frame = smaa_binding.start_frame(&renderer.device, &renderer.queue, &view);
 
                 if let Some(active_scene) = active_scene_opt {
-                    if self.details.frame_number == 0 {
+                    if self.details.lock().unwrap().frame_number == 0 {
                         active_scene.initialize(
                             renderer.device.clone(),
                             renderer.queue.clone(),
@@ -193,16 +189,16 @@ impl GameZap {
                     active_scene.update(
                         renderer.device.clone(),
                         renderer.queue.clone(),
-                        &self.details,
-                        &self.systems,
+                        self.details.clone(),
+                        self.systems.clone(),
                     );
                     active_scene.render(
                         renderer.device.clone(),
                         renderer.queue.clone(),
                         renderer.depth_texture.clone(),
                         self.window_size,
-                        &self.details,
-                        &self.systems,
+                        &self.details.lock().unwrap(),
+                        &self.systems.lock().unwrap(),
                         smaa_frame,
                         output,
                     );
@@ -311,22 +307,22 @@ impl GameZapBuilder {
         } else {
             sdl2::init().unwrap()
         };
-        let video_subsystem = Arc::new(Mutex::new(if let Some(video) = self.video_subsystem {
+        let video_subsystem = if let Some(video) = self.video_subsystem {
             video
         } else {
             sdl_context.video().unwrap()
-        }));
-        let event_pump = Arc::new(Mutex::new(if let Some(pump) = self.event_pump {
+        };
+        let event_pump = if let Some(pump) = self.event_pump {
             pump
         } else {
             sdl_context.event_pump().unwrap()
-        }));
+        };
 
-        let window = Arc::new(self.window.unwrap());
+        let window = self.window.unwrap();
 
         let renderer = Renderer::new(&window, self.clear_color, self.antialiasing).await;
 
-        let ui_manager = Arc::new(Mutex::new(UiManager::new(
+        let ui_manager = Rc::new(Mutex::new(UiManager::new(
             renderer.surface_format,
             renderer.device.clone(),
             renderer.queue.clone(),
@@ -334,17 +330,17 @@ impl GameZapBuilder {
         )));
 
         GameZap {
-            systems: EngineSystems {
-                sdl_context: Arc::new(Mutex::new(sdl_context)),
+            systems: Rc::new(Mutex::new(EngineSystems {
+                sdl_context,
                 video_subsystem,
                 event_pump,
                 ui_manager,
-            },
+            })),
             renderer,
             clear_color: self.clear_color,
             window,
             window_size: self.window_size.unwrap(),
-            details: EngineDetails {
+            details: Rc::new(Mutex::new(EngineDetails {
                 frame_number: self.frame_number,
                 initialized_instant: self.initialized_instant,
                 time_elapsed: self.time_elapsed,
@@ -359,7 +355,7 @@ impl GameZapBuilder {
                 window_aspect_ratio: self.window_size.unwrap().0 as f32
                     / self.window_size.unwrap().1 as f32,
                 render_mask: self.render_mask,
-            },
+            })),
             scenes: Vec::new(),
             active_scene_index: self.active_scene_index,
         }

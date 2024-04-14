@@ -39,8 +39,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         device: Arc<Device>,
         queue: Arc<Queue>,
         component_map: &AllComponents,
-        engine_details: &EngineDetails,
-        engine_systems: &EngineSystems,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
@@ -64,8 +64,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         component_map: &HashMap<EntityId, Vec<Component>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
-        engine_details: &EngineDetails,
-        engine_systems: &EngineSystems,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
     ) {
     }
 

@@ -87,13 +87,12 @@ impl Scene {
                     self.pipelines
                         .entry(active_material_id.clone())
                         .or_insert_with(|| {
-                            let new_pipeline = Pipeline::new(
+                            Pipeline::new(
                                 device.clone(),
                                 color_format,
                                 &[Vertex::desc(), TransformComponent::desc()],
                                 &active_material_id,
-                            );
-                            new_pipeline
+                            )
                         });
                 }
                 (
@@ -124,8 +123,8 @@ impl Scene {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        engine_details: &EngineDetails,
-        engine_systems: &EngineSystems,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
@@ -144,8 +143,8 @@ impl Scene {
                             device.clone(),
                             queue.clone(),
                             &self.components,
-                            engine_details,
-                            engine_systems,
+                            engine_details.clone(),
+                            engine_systems.clone(),
                             self.concept_manager.clone(),
                             self.active_camera_id,
                         );

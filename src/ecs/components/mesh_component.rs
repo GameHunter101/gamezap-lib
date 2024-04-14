@@ -73,7 +73,8 @@ impl MeshComponent {
                 ..Default::default()
             },
             |p| async move { tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(p))) },
-        ).await;
+        )
+        .await;
 
         if let Ok((models, materials_res)) = obj_load_res {
             if materials_res.is_err() && expect_material {
