@@ -34,14 +34,14 @@ pub mod ecs {
 }
 
 pub struct GameZap {
-    pub systems: Arc<Mutex<EngineSystems>>,
+    pub systems: EngineSystems,
     pub renderer: Renderer,
     pub clear_color: wgpu::Color,
     pub window: Arc<Window>,
     pub window_size: (u32, u32),
-    pub details: Arc<Mutex<EngineDetails>>,
+    pub details: EngineDetails,
 
-    scenes: Vec<Arc<Mutex<Scene>>>,
+    scenes: Vec<Scene>,
     active_scene_index: usize,
 }
 
@@ -118,40 +118,36 @@ impl GameZap {
         GameZapBuilder::init()
     }
 
-    pub fn update_details(&self) {
-        let mut engine_details = self.details.lock().unwrap();
-        let systems = self.systems.lock().unwrap();
-        let event_pump = systems.event_pump.lock().unwrap();
-        let sdl_context = systems.sdl_context.lock().unwrap();
-        engine_details.update_details(event_pump, sdl_context);
+    pub fn update_details(&mut self) {
+        let event_pump = self.systems.event_pump.lock().unwrap();
+        let sdl_context = self.systems.sdl_context.lock().unwrap();
+        self.details.update_details(event_pump, sdl_context);
     }
 
     pub fn main_loop(&mut self) {
         'running: loop {
-            let active_scene = &mut self.scenes.get(self.active_scene_index);
+            let active_scene_opt = self.scenes.get_mut(self.active_scene_index);
             {
-                let systems = self.systems.lock().unwrap();
-                let ui_manager = systems.ui_manager.lock().unwrap();
+                let ui_manager = self.systems.ui_manager.lock().unwrap();
                 let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
                 let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
-                let mut event_pump = systems.event_pump.lock().unwrap();
+                let mut event_pump = self.systems.event_pump.lock().unwrap();
                 for event in event_pump.poll_iter() {
                     imgui_platform.handle_event(&mut imgui_context, &event);
                     if imgui_platform.ignore_event(&event) {
                         continue;
                     }
 
-                    if let Some(active_scene_arc) = active_scene {
-                        let active_scene = active_scene_arc.lock().unwrap();
+                    if let Some(active_scene) = &active_scene_opt {
                         let component_map = active_scene.get_components();
-                        for component in component_map.clone().values().flatten() {
+                        for component in component_map.values().flatten() {
                             component.on_event(
                                 &event,
-                                &component_map.clone(),
-                                &active_scene.get_concept_manager().lock().unwrap(),
+                                component_map,
+                                active_scene.get_concept_manager(),
                                 active_scene.get_active_camera(),
-                                &self.details.lock().unwrap(),
-                                &systems,
+                                &self.details,
+                                &self.systems,
                             );
                         }
                     }
@@ -163,9 +159,7 @@ impl GameZap {
                             ..
                         } => {
                             self.renderer.resize((width as u32, height as u32));
-                            let details_clone = self.details.clone();
-                            let mut details = details_clone.lock().unwrap();
-                            details.window_aspect_ratio = width as f32 / height as f32;
+                            self.details.window_aspect_ratio = width as f32 / height as f32;
                         }
                         _ => {}
                     }
@@ -177,47 +171,50 @@ impl GameZap {
                 );
             }
 
-            let renderer = &self.renderer;
+            {
+                let renderer = &self.renderer;
 
-            let output = renderer.surface.get_current_texture().unwrap();
-            let view = output
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
+                let output = renderer.surface.get_current_texture().unwrap();
+                let view = output
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
 
-            let mut smaa_binding = renderer.smaa_target.lock().unwrap();
-            let smaa_frame = smaa_binding.start_frame(&renderer.device, &renderer.queue, &view);
+                let mut smaa_binding = renderer.smaa_target.lock().unwrap();
+                let smaa_frame = smaa_binding.start_frame(&renderer.device, &renderer.queue, &view);
 
-            if let Some(active_scene_arc) = active_scene {
-                let details = self.details.lock().unwrap();
-                let mut active_scene = active_scene_arc.lock().unwrap();
-                if details.frame_number == 0 {
-                    active_scene.initialize(
+                if let Some(active_scene) = active_scene_opt {
+                    if self.details.frame_number == 0 {
+                        active_scene.initialize(
+                            renderer.device.clone(),
+                            renderer.queue.clone(),
+                            renderer.config.format,
+                        );
+                    }
+                    active_scene.update(
                         renderer.device.clone(),
                         renderer.queue.clone(),
-                        renderer.config.format,
+                        &self.details,
+                        &self.systems,
+                    );
+                    active_scene.render(
+                        renderer.device.clone(),
+                        renderer.queue.clone(),
+                        renderer.depth_texture.clone(),
+                        self.window_size,
+                        &self.details,
+                        &self.systems,
+                        smaa_frame,
+                        output,
                     );
                 }
-                drop(details);
-                active_scene.update(
-                    renderer.device.clone(),
-                    renderer.queue.clone(),
-                    self.details.clone(),
-                    self.systems.clone(),
-                );
-                active_scene.render(
-                    renderer.device.clone(),
-                    renderer.queue.clone(),
-                    renderer.depth_texture.clone(),
-                    self.window_size,
-                    self.details.clone(),
-                    self.systems.clone(),
-                    smaa_frame,
-                    output,
-                );
             }
 
             self.update_details();
         }
+    }
+
+    pub fn create_scene(&mut self, scene: Scene) {
+        self.scenes.push(scene);
     }
 }
 
@@ -238,7 +235,6 @@ pub struct GameZapBuilder {
 
     antialiasing: bool,
 
-    scenes: Vec<Arc<Mutex<Scene>>>,
     active_scene_index: usize,
 
     render_mask: Option<RenderMask>,
@@ -266,7 +262,6 @@ impl GameZapBuilder {
 
             antialiasing: false,
 
-            scenes: vec![Arc::new(Mutex::new(Scene::default()))],
             active_scene_index: 0,
 
             render_mask: None,
@@ -304,16 +299,6 @@ impl GameZapBuilder {
         self
     }
 
-    pub fn scenes(
-        mut self,
-        scenes: Vec<Arc<Mutex<Scene>>>,
-        active_scene_index: usize,
-    ) -> GameZapBuilder {
-        self.scenes = scenes;
-        self.active_scene_index = active_scene_index;
-        self
-    }
-
     pub fn render_mask(mut self, mask: RenderMask) -> GameZapBuilder {
         self.render_mask = Some(mask);
         self
@@ -339,8 +324,7 @@ impl GameZapBuilder {
 
         let window = Arc::new(self.window.unwrap());
 
-        let renderer =
-            Renderer::new(&window, self.clear_color, self.antialiasing).await;
+        let renderer = Renderer::new(&window, self.clear_color, self.antialiasing).await;
 
         let ui_manager = Arc::new(Mutex::new(UiManager::new(
             renderer.surface_format,
@@ -350,17 +334,17 @@ impl GameZapBuilder {
         )));
 
         GameZap {
-            systems: Arc::new(Mutex::new(EngineSystems {
+            systems: EngineSystems {
                 sdl_context: Arc::new(Mutex::new(sdl_context)),
                 video_subsystem,
                 event_pump,
                 ui_manager,
-            })),
+            },
             renderer,
             clear_color: self.clear_color,
             window,
             window_size: self.window_size.unwrap(),
-            details: Arc::new(Mutex::new(EngineDetails {
+            details: EngineDetails {
                 frame_number: self.frame_number,
                 initialized_instant: self.initialized_instant,
                 time_elapsed: self.time_elapsed,
@@ -375,8 +359,8 @@ impl GameZapBuilder {
                 window_aspect_ratio: self.window_size.unwrap().0 as f32
                     / self.window_size.unwrap().1 as f32,
                 render_mask: self.render_mask,
-            })),
-            scenes: self.scenes,
+            },
+            scenes: Vec::new(),
             active_scene_index: self.active_scene_index,
         }
     }

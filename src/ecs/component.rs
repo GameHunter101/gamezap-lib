@@ -2,7 +2,7 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, rc::Rc,
 };
 
 use sdl2::event::Event;
@@ -20,7 +20,7 @@ pub type Component = Box<dyn ComponentSystem>;
 pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
     fn register_component(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
     }
@@ -29,8 +29,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        component_map: AllComponents,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        component_map: &AllComponents,
+        concept_manager: Rc<Mutex<ConceptManager>>,
     ) {
     }
 
@@ -38,10 +38,10 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        component_map: AllComponents,
-        engine_details: Arc<Mutex<EngineDetails>>,
-        engine_systems: Arc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        component_map: &AllComponents,
+        engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
     }
@@ -52,9 +52,9 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         queue: Arc<Queue>,
         render_pass: &mut RenderPass<'b>,
         component_map: &'a HashMap<EntityId, Vec<Component>>,
-        concept_manager: &'a ConceptManager,
-        engine_details: Arc<Mutex<EngineDetails>>,
-        engine_systems: Arc<Mutex<EngineSystems>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
+        engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
     ) {
     }
 
@@ -62,7 +62,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         &self,
         event: &Event,
         component_map: &HashMap<EntityId, Vec<Component>>,
-        concept_manager: &ConceptManager,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
         engine_details: &EngineDetails,
         engine_systems: &EngineSystems,

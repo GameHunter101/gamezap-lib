@@ -1,7 +1,7 @@
 use std::{
     any::{Any, TypeId},
     fmt::Debug,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, rc::Rc,
 };
 
 use wgpu::{Device, Queue};
@@ -42,22 +42,20 @@ impl ComponentSystem for UiComponent {
         &mut self,
         _device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: AllComponents,
-        engine_details: Arc<Mutex<EngineDetails>>,
-        engine_systems: Arc<Mutex<EngineSystems>>,
-        _concept_manager: Arc<Mutex<ConceptManager>>,
+        _component_map: &AllComponents,
+        engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
-        let systems = engine_systems.lock().unwrap();
-
-        if systems
+        if engine_systems
             .sdl_context
             .lock()
             .unwrap()
             .mouse()
             .is_cursor_showing()
         {
-            let mut ui_manager = systems.ui_manager.lock().unwrap();
+            let mut ui_manager = engine_systems.ui_manager.lock().unwrap();
             ui_manager.set_render_flag();
 
             let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
@@ -81,7 +79,6 @@ impl ComponentSystem for UiComponent {
                 ));
                 ui.text(format!("FPS: {}", details.fps,));
             }); */
-            let details = engine_details.lock().unwrap();
             ui.window(".")
                 .title_bar(false)
                 .draw_background(false)
@@ -90,10 +87,10 @@ impl ComponentSystem for UiComponent {
                 .always_auto_resize(true)
                 .position([100.0, 100.0], imgui::Condition::Always)
                 .build(|| {
-                    ui.text(format!("FPS: {}", details.fps,));
+                    ui.text(format!("FPS: {}", engine_details.fps,));
                     ui.text(format!(
                         "Frame time: {}",
-                        details.last_frame_duration.whole_milliseconds()
+                        engine_details.last_frame_duration.whole_milliseconds()
                     ));
                 });
 

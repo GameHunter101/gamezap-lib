@@ -2,7 +2,7 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, rc::Rc,
 };
 
 use bytemuck::{Pod, Zeroable};
@@ -53,7 +53,7 @@ pub struct CameraComponent {
 }
 
 impl CameraComponent {
-    pub fn new_2d(concept_manager: Arc<Mutex<ConceptManager>>, window_size: (u32, u32)) -> Self {
+    pub fn new_2d(concept_manager: Rc<Mutex<ConceptManager>>, window_size: (u32, u32)) -> Self {
         let mut component = CameraComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
@@ -81,7 +81,7 @@ impl CameraComponent {
     }
 
     pub fn new_3d(
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         window_size: (u32, u32),
         fov: f32,
         near_plane: f32,
@@ -163,22 +163,20 @@ impl CameraComponent {
 impl ComponentSystem for CameraComponent {
     fn register_component(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
         self.concept_ids = data.keys().cloned().collect();
 
-        let mut concept_manager = concept_manager.lock().unwrap();
-
-        concept_manager.register_component_concepts(self.id, data);
+        concept_manager.lock().unwrap().register_component_concepts(self.id, data);
     }
 
     fn initialize(
         &mut self,
         device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: AllComponents,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        _component_map: &AllComponents,
+        concept_manager: Rc<Mutex<ConceptManager>>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let position_concept = concept_manager.get_concept::<na::Vector3<f32>>(
@@ -197,18 +195,17 @@ impl ComponentSystem for CameraComponent {
         &mut self,
         _device: Arc<Device>,
         queue: Arc<Queue>,
-        component_map: AllComponents,
-        engine_details: Arc<Mutex<EngineDetails>>,
-        _engine_systems: Arc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        component_map: &AllComponents,
+        engine_details: &EngineDetails,
+        _engine_systems: &EngineSystems,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
-        let details = engine_details.lock().unwrap();
         let mut concept_manager = concept_manager.lock().unwrap();
         let aspect_ratio = concept_manager
             .get_concept_mut::<f32>(self.id, "aspect_ratio".to_string())
             .unwrap();
-        *aspect_ratio = details.window_aspect_ratio;
+        *aspect_ratio = engine_details.window_aspect_ratio;
 
         let position = concept_manager
             .get_concept::<na::Vector3<f32>>(

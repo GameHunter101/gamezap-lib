@@ -2,7 +2,7 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex, MutexGuard}, rc::Rc,
 };
 
 use wgpu::{
@@ -68,7 +68,7 @@ impl VertexData for TransformComponent {
 
 impl TransformComponent {
     pub fn new(
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         position: na::Vector3<f32>,
         roll: f32,
         pitch: f32,
@@ -106,7 +106,7 @@ impl TransformComponent {
         component
     }
 
-    pub fn default(concept_manager: Arc<Mutex<ConceptManager>>) -> Self {
+    pub fn default(concept_manager: Rc<Mutex<ConceptManager>>) -> Self {
         let mut component = Self {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
@@ -139,7 +139,7 @@ impl TransformComponent {
 
     pub fn update_buffer(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         device: Arc<Device>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
@@ -161,29 +161,26 @@ impl TransformComponent {
 impl ComponentSystem for TransformComponent {
     fn register_component(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
         self.concept_ids = data.keys().cloned().collect();
 
-        let mut concept_manager = concept_manager.lock().unwrap();
-
-        concept_manager.register_component_concepts(self.id, data);
+        concept_manager.lock().unwrap().register_component_concepts(self.id, data);
     }
 
     fn initialize(
         &mut self,
         device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: AllComponents,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        _component_map: &AllComponents,
+        concept_manager: Rc<Mutex<ConceptManager>>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let matrix = concept_manager
             .get_concept::<na::Matrix4<f32>>(self.id, "matrix".to_string())
             .unwrap();
         let matrix_as_arr: [[f32; 4]; 4] = matrix.clone_owned().into();
-
         self.buf = Arc::new(Some(device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Transform Component Buffer"),
             contents: bytemuck::cast_slice(&matrix_as_arr),
@@ -195,10 +192,10 @@ impl ComponentSystem for TransformComponent {
         &mut self,
         device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: AllComponents,
-        _engine_details: Arc<Mutex<EngineDetails>>,
-        _engine_systems: Arc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        _component_map: &AllComponents,
+        _engine_details: &EngineDetails,
+        _engine_systems: &EngineSystems,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         self.update_buffer(concept_manager, device);
@@ -210,9 +207,9 @@ impl ComponentSystem for TransformComponent {
         _queue: Arc<Queue>,
         render_pass: &mut RenderPass<'b>,
         _component_map: &'a HashMap<EntityId, Vec<Component>>,
-        _concept_manager: &'a ConceptManager,
-        _engine_details: Arc<Mutex<EngineDetails>>,
-        _engine_systems: Arc<Mutex<EngineSystems>>,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
+        _engine_details: &EngineDetails,
+        _engine_systems: &EngineSystems,
     ) {
         if let Some(buf) = self.buf.as_ref() {
             render_pass.set_vertex_buffer(1, buf.slice(..));

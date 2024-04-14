@@ -2,6 +2,8 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
+    io::{BufReader, Cursor},
+    rc::Rc,
     sync::{Arc, Mutex},
 };
 
@@ -18,6 +20,12 @@ use crate::{
 
 use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
 
+#[derive(Debug)]
+pub enum MeshComponentError {
+    FailedToLoadObj,
+    FailedToLoadMtl,
+}
+
 #[derive(Debug, Clone)]
 pub struct MeshComponent {
     parent: EntityId,
@@ -29,7 +37,7 @@ pub struct MeshComponent {
 
 impl MeshComponent {
     pub fn new(
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         vertices: Vec<Vertex>,
         indices: Vec<u32>,
     ) -> Self {
@@ -49,27 +57,66 @@ impl MeshComponent {
 
         component
     }
+
+    pub async fn from_obj(
+        concept_manager: Rc<Mutex<ConceptManager>>,
+        obj_path: &str,
+        expect_material: bool,
+    ) -> Result<(), MeshComponentError> {
+        let obj_cursor = Cursor::new(obj_path);
+        let mut obj_reader = BufReader::new(obj_cursor);
+        let obj_load_res = tobj::load_obj_buf_async(
+            &mut obj_reader,
+            &tobj::LoadOptions {
+                triangulate: true,
+                single_index: true,
+                ..Default::default()
+            },
+            |p| async move { tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(p))) },
+        ).await;
+
+        if let Ok((models, materials_res)) = obj_load_res {
+            if materials_res.is_err() && expect_material {
+                return Err(MeshComponentError::FailedToLoadMtl);
+            }
+
+            let materials = materials_res.unwrap_or(vec![tobj::Material::default()]);
+
+            for (i, m) in models.iter().enumerate() {
+                let mesh = &m.mesh;
+
+                // let mut verts = Vec::with_capacity(mesh.positions.len());
+                /* for index in &mesh.positions {
+                    verts.push(vert)
+                } */
+            }
+
+            return Ok(());
+        }
+        Err(MeshComponentError::FailedToLoadObj)
+    }
 }
 
 impl ComponentSystem for MeshComponent {
     fn register_component(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
         self.concept_ids = data.keys().cloned().collect();
 
-        let mut concept_manager = concept_manager.lock().unwrap();
-
-        concept_manager.register_component_concepts(self.id, data);
+        concept_manager
+            .lock()
+            .unwrap()
+            .register_component_concepts(self.id, data);
     }
 
     fn initialize(
         &mut self,
         device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: AllComponents,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        _component_map: &AllComponents,
+        concept_manager: Rc<Mutex<ConceptManager>>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let vertices = concept_manager
@@ -99,10 +146,12 @@ impl ComponentSystem for MeshComponent {
         _queue: Arc<Queue>,
         render_pass: &mut RenderPass<'b>,
         _component_map: &'a HashMap<EntityId, Vec<Component>>,
-        concept_manager: &'a ConceptManager,
-        _engine_details: Arc<Mutex<EngineDetails>>,
-        _engine_systems: Arc<Mutex<EngineSystems>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
+        _engine_details: &EngineDetails,
+        _engine_systems: &EngineSystems,
     ) {
+        let concept_manager = concept_manager.lock().unwrap();
+
         let vertex_buffer = self.vertex_buffer.as_ref();
         if let Some(vertex_buffer) = &vertex_buffer {
             render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));

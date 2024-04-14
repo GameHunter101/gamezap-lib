@@ -1,7 +1,7 @@
 use std::{
     any::TypeId,
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, rc::Rc,
 };
 
 use gamezap::{
@@ -44,9 +44,6 @@ async fn main() {
         .build()
         .unwrap();
 
-    let scene = Arc::new(Mutex::new(Scene::default()));
-
-    let scenes = vec![scene.clone()];
 
     let mut engine = GameZap::builder()
         .window_and_renderer(
@@ -63,11 +60,10 @@ async fn main() {
         )
         .antialiasing()
         .hide_cursor()
-        .scenes(scenes, 0)
         .build().await;
 
-    let mut scene_lock = scene.lock().unwrap();
-    let concept_manager = scene_lock.get_concept_manager();
+    let mut scene = Scene::default();
+    let concept_manager = scene.get_concept_manager();
 
     let device = engine.renderer.device.clone();
     let queue = engine.renderer.queue.clone();
@@ -122,7 +118,7 @@ async fn main() {
         device,
     );
 
-    scene_lock.create_entity(
+    scene.create_entity(
         0,
         true,
         vec![Box::new(mesh_component), Box::new(mesh_transform)],
@@ -131,9 +127,8 @@ async fn main() {
 
     let camera_component =
         CameraComponent::new_3d(concept_manager.clone(), (800, 600), 60.0, 0.1, 200.0);
-    // let camera_component = CameraComponent::new_2d((800, 600));
     let camera_transform = TransformComponent::new(
-        concept_manager,
+        concept_manager.clone(),
         na::Vector3::new(0.1, 0.0, -1.0),
         0.0,
         0.0,
@@ -144,7 +139,7 @@ async fn main() {
     let camera_keyboard_controller = KeyboardInputComponent::new();
     let camera_mouse_controller = MouseInputComponent::new();
 
-    let camera = scene_lock.create_entity(
+    let camera = scene.create_entity(
         0,
         true,
         vec![
@@ -156,13 +151,13 @@ async fn main() {
         None,
     );
 
-    scene_lock.set_active_camera(camera);
+    scene.set_active_camera(camera);
 
     let ui_component = UiComponent::new();
 
-    let _ui_entity = scene_lock.create_entity(0, true, vec![Box::new(ui_component)], None);
+    let _ui_entity = scene.create_entity(0, true, vec![Box::new(ui_component)], None);
 
-    drop(scene_lock);
+    engine.create_scene(scene);
 
     engine.main_loop();
 }
@@ -186,14 +181,13 @@ impl ComponentSystem for KeyboardInputComponent {
         &mut self,
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
-        component_map: AllComponents,
-        engine_details: Arc<Mutex<EngineDetails>>,
-        _engine_systems: Arc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        component_map: &AllComponents,
+        engine_details:  &EngineDetails,
+        _engine_systems: &EngineSystems,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
-
         let transform_component =
             Scene::get_component::<TransformComponent>(component_map.get(&self.parent).unwrap());
         let camera_rotation_matrix = match transform_component {
@@ -208,8 +202,7 @@ impl ComponentSystem for KeyboardInputComponent {
             )
             .unwrap();
 
-        let details = engine_details.lock().unwrap();
-        let speed = 1.0 / (details.last_frame_duration.whole_milliseconds() as f32 * 10.0);
+        let speed = 1.0 / (engine_details.last_frame_duration.whole_milliseconds() as f32 * 10.0);
 
         let forward_vector = (camera_rotation_matrix
             * na::Vector3::new(0.0, 0.0, 1.0).to_homogeneous())
@@ -218,7 +211,7 @@ impl ComponentSystem for KeyboardInputComponent {
 
         let left_vector = forward_vector.cross(&-na::Vector3::y_axis()).normalize();
 
-        for scancode in &details.pressed_scancodes {
+        for scancode in &engine_details.pressed_scancodes {
             match scancode {
                 Scancode::W => {
                     *position_concept += forward_vector * speed;
@@ -247,7 +240,7 @@ impl ComponentSystem for KeyboardInputComponent {
         &self,
         event: &Event,
         _component_map: &HashMap<EntityId, Vec<Component>>,
-        _concept_manager: &ConceptManager,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _engine_details: &EngineDetails,
         engine_systems: &EngineSystems,
@@ -307,10 +300,10 @@ impl ComponentSystem for MouseInputComponent {
         &mut self,
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
-        _component_map: AllComponents,
-        engine_details: Arc<Mutex<EngineDetails>>,
-        engine_systems: Arc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        _component_map: &AllComponents,
+        engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
@@ -336,15 +329,13 @@ impl ComponentSystem for MouseInputComponent {
             )
             .unwrap();
 
-        let systems = engine_systems.lock().unwrap();
-        let sdl_context = systems.sdl_context.lock().unwrap();
+        let sdl_context = engine_systems.sdl_context.lock().unwrap();
         let mouse = sdl_context.mouse();
         let is_hidden = mouse.relative_mouse_mode();
-        let details = engine_details.lock().unwrap();
 
-        let speed = 1.0 / (details.last_frame_duration.whole_milliseconds() as f32 * 75.0);
+        let speed = 1.0 / (engine_details.last_frame_duration.whole_milliseconds() as f32 * 75.0);
         if is_hidden {
-            if let Some(mouse_state) = details.mouse_state.0 {
+            if let Some(mouse_state) = engine_details.mouse_state.0 {
                 concept_manager
                     .modify_concept(
                         (
