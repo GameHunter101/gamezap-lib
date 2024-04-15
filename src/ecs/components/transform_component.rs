@@ -175,6 +175,8 @@ impl ComponentSystem for TransformComponent {
         _queue: Arc<Queue>,
         _component_map: &AllComponents,
         concept_manager: Rc<Mutex<ConceptManager>>,
+        _engine_details: Option<Rc<Mutex<EngineDetails>>>,
+        _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let matrix = concept_manager

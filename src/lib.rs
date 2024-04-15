@@ -1,7 +1,7 @@
 use std::{
     rc::Rc,
     sync::Mutex,
-    time::{Duration, Instant},
+    time::{Duration, Instant}, cell::{RefCell, Ref},
 };
 
 use ecs::scene::Scene;
@@ -67,7 +67,7 @@ pub struct EngineDetails {
 pub struct EngineSystems {
     pub sdl_context: Sdl,
     pub video_subsystem: VideoSubsystem,
-    pub event_pump: EventPump,
+    pub event_pump: RefCell<EventPump>,
     pub ui_manager: Rc<Mutex<UiManager>>,
 }
 
@@ -90,7 +90,7 @@ impl EngineSettings for Sdl {
 }
 
 impl EngineDetails {
-    pub fn update_details(&mut self, event_pump: &EventPump, sdl_context: &Sdl) {
+    pub fn update_details(&mut self, event_pump: Ref<EventPump>, sdl_context: &Sdl) {
         let now = Instant::now();
         self.frame_number += 1;
         self.time_elapsed = now - self.initialized_instant;
@@ -120,17 +120,27 @@ impl GameZap {
     pub fn update_details(&mut self) {
         let mut details = self.details.lock().unwrap();
         let systems = self.systems.lock().unwrap();
-        details.update_details(&systems.event_pump, &systems.sdl_context);
+        details.update_details(systems.event_pump.borrow(), &systems.sdl_context);
     }
 
     pub fn main_loop(&mut self) {
         'running: loop {
             let active_scene_opt = self.scenes.get_mut(self.active_scene_index);
             {
-                let mut systems = self.systems.lock().unwrap();
-                let mut details = self.details.lock().unwrap();
+                let systems = self.systems.lock().unwrap();
 
-                for event in systems.event_pump.poll_iter() {
+                let mut event_pump = systems.event_pump.borrow_mut();
+
+                let ui_manager = systems.ui_manager.lock().unwrap();
+                let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
+                let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
+
+                for event in event_pump.poll_iter() {
+                    imgui_platform.handle_event(&mut imgui_context, &event);
+                    if imgui_platform.ignore_event(&event){
+                        continue;
+                    }
+
                     if let Some(active_scene) = &active_scene_opt {
                         let component_map = active_scene.get_components();
                         for component in component_map.values().flatten() {
@@ -139,12 +149,12 @@ impl GameZap {
                                 component_map,
                                 active_scene.get_concept_manager(),
                                 active_scene.get_active_camera(),
-                                self.details.clone(),
-                                self.systems.clone(),
+                                &self.details.lock().unwrap(),
+                                &systems,
                             );
                         }
                     }
-                    // for component in active_scene
+
                     match event {
                         Event::Quit { .. } => break 'running,
                         Event::Window {
@@ -152,18 +162,17 @@ impl GameZap {
                             ..
                         } => {
                             self.renderer.resize((width as u32, height as u32));
-                            details.window_aspect_ratio = width as f32 / height as f32;
+                            self.details.lock().unwrap().window_aspect_ratio =
+                                width as f32 / height as f32;
                         }
                         _ => {}
                     }
                 }
-                let ui_manager = systems.ui_manager.lock().unwrap();
-                let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
-                let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
+
                 imgui_platform.prepare_frame(
                     imgui_context.io_mut(),
                     &self.window,
-                    &systems.event_pump.mouse_state(),
+                    &event_pump.mouse_state(),
                 );
             }
 
@@ -184,6 +193,8 @@ impl GameZap {
                             renderer.device.clone(),
                             renderer.queue.clone(),
                             renderer.config.format,
+                            self.details.clone(),
+                            self.systems.clone(),
                         );
                     }
                     active_scene.update(
@@ -312,11 +323,11 @@ impl GameZapBuilder {
         } else {
             sdl_context.video().unwrap()
         };
-        let event_pump = if let Some(pump) = self.event_pump {
+        let event_pump = RefCell::new(if let Some(pump) = self.event_pump {
             pump
         } else {
             sdl_context.event_pump().unwrap()
-        };
+        });
 
         let window = self.window.unwrap();
 

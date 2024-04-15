@@ -1,10 +1,22 @@
-use std::{sync::{atomic::AtomicBool, Mutex, Arc}, rc::Rc};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Read,
+    path::Path,
+    rc::Rc,
+    sync::{atomic::AtomicBool, Arc, Mutex},
+};
 
-use imgui::Context;
+use imgui::{Context, FontId};
 use imgui_sdl2::ImguiSdl2;
 use imgui_wgpu::{Renderer, RendererConfig};
 use sdl2::video::Window;
 use wgpu::{Device, Queue, TextureFormat};
+
+#[derive(Debug)]
+pub enum UiError {
+    FontFileLoadingError,
+}
 
 #[allow(unused)]
 pub struct UiManager {
@@ -12,13 +24,15 @@ pub struct UiManager {
     pub imgui_renderer: Rc<Mutex<Renderer>>,
     pub imgui_platform: Rc<Mutex<ImguiSdl2>>,
     pub render_flag: Rc<AtomicBool>,
+
+    pub font_ids: HashMap<String, FontId>,
 }
 
 impl UiManager {
     pub fn new(
         texture_format: TextureFormat,
         device: Arc<Device>,
-        queue:  Arc<Queue>,
+        queue: Arc<Queue>,
         window: &Window,
     ) -> Self {
         let config = RendererConfig {
@@ -42,6 +56,7 @@ impl UiManager {
             imgui_renderer: Rc::new(Mutex::new(imgui_renderer)),
             imgui_platform: Rc::new(Mutex::new(imgui_platform)),
             render_flag: Rc::new(AtomicBool::new(false)),
+            font_ids: HashMap::new(),
         }
     }
 
@@ -53,6 +68,46 @@ impl UiManager {
     pub fn clear_render_flag(&mut self) {
         self.render_flag
             .store(false, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn load_font(
+        &mut self,
+        font_name: &str,
+        path: String,
+        size_pixels: f32,
+    ) -> Result<FontId, UiError> {
+        let mut imgui_context = self.imgui_context.lock().unwrap();
+        let bytes = Self::read_ttf_bytes(path)?;
+        let font_id = imgui_context
+            .fonts()
+            .add_font(&[imgui::FontSource::TtfData {
+                data: &bytes,
+                size_pixels,
+                config: None,
+            }]);
+        self.font_ids.insert(font_name.to_string(), font_id);
+        Ok(font_id)
+    }
+
+    pub fn read_ttf_bytes(path: String) -> Result<Vec<u8>, UiError> {
+        let path = Path::new(&std::env::current_dir().unwrap())
+            .join(path);
+        match File::open(&path) {
+            Ok(mut file) => {
+                let mut buffer = Vec::new();
+                match file.read_to_end(&mut buffer) {
+                    Ok(_) => return Ok(buffer),
+                    Err(err) => {
+                        dbg!(err);
+                    }
+                }
+            }
+            Err(err) => {
+                dbg!(path);
+                dbg!(err);
+            }
+        };
+        Err(UiError::FontFileLoadingError)
     }
 }
 

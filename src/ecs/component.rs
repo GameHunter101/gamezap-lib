@@ -17,7 +17,7 @@ pub type ComponentId = (EntityId, TypeId, u32);
 pub type Component = Box<dyn ComponentSystem>;
 
 #[allow(unused, clippy::too_many_arguments)]
-pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
+pub trait ComponentSystem: Debug + dyn_clone::DynClone {
     fn register_component(
         &mut self,
         concept_manager: Rc<Mutex<ConceptManager>>,
@@ -31,6 +31,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         queue: Arc<Queue>,
         component_map: &AllComponents,
         concept_manager: Rc<Mutex<ConceptManager>>,
+        engine_details: Option<Rc<Mutex<EngineDetails>>>,
+        engine_systems: Option<Rc<Mutex<EngineSystems>>>,
     ) {
     }
 
@@ -64,8 +66,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + Send {
         component_map: &HashMap<EntityId, Vec<Component>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
-        engine_details: Rc<Mutex<EngineDetails>>,
-        engine_systems: Rc<Mutex<EngineSystems>>,
+        engine_details: &EngineDetails,
+        engine_systems: &EngineSystems,
     ) {
     }
 

@@ -73,6 +73,8 @@ impl Scene {
         device: Arc<Device>,
         queue: Arc<Queue>,
         color_format: TextureFormat,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
@@ -108,6 +110,8 @@ impl Scene {
                                 queue.clone(),
                                 &self.components,
                                 self.concept_manager.clone(),
+                                Some(engine_details.clone()),
+                                Some(engine_systems.clone()),
                             );
                             comp_clone
                         })
@@ -185,6 +189,8 @@ impl Scene {
             queue.clone(),
             &self.components,
             self.concept_manager.clone(),
+            None,
+            None,
         );
 
         {
@@ -335,6 +341,8 @@ impl Scene {
             queue,
             &self.components,
             self.concept_manager.clone(),
+            None,
+            None,
         );
         cam.create_camera_bind_group(device)
     }

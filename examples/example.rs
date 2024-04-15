@@ -153,7 +153,7 @@ async fn main() {
 
     scene.set_active_camera(camera);
 
-    let ui_component = UiComponent::new();
+    let ui_component = UiComponent::new("assets/fonts/inter.ttf");
 
     let _ui_entity = scene.create_entity(0, true, vec![Box::new(ui_component)], None);
 
@@ -244,11 +244,10 @@ impl ComponentSystem for KeyboardInputComponent {
         _component_map: &HashMap<EntityId, Vec<Component>>,
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _engine_details: Rc<Mutex<EngineDetails>>,
-        engine_systems: Rc<Mutex<EngineSystems>>,
+        _engine_details: &EngineDetails,
+        engine_systems:  &EngineSystems,
     ) {
-        let systems = engine_systems.lock().unwrap();
-        let context = &systems.sdl_context;
+        let context = &engine_systems.sdl_context;
         if let Event::KeyDown {
             keycode: Some(Keycode::Escape),
             ..

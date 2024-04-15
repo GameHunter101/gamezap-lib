@@ -21,24 +21,41 @@ use super::super::{concepts::ConceptManager, entity::EntityId};
 pub struct UiComponent {
     parent: EntityId,
     id: ComponentId,
+    font_path: String,
+    font_id: Option<imgui::FontId>,
 }
 
 impl UiComponent {
-    pub fn new() -> UiComponent {
+    pub fn new(font_path: &str) -> UiComponent {
         UiComponent {
             parent: 0,
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
+            font_path: font_path.to_string(),
+            font_id: None,
         }
     }
 }
 
-impl Default for UiComponent {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ComponentSystem for UiComponent {
+    fn initialize(
+        &mut self,
+        _device: Arc<Device>,
+        _queue: Arc<Queue>,
+        _component_map: &AllComponents,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
+        _engine_details: Option<Rc<Mutex<EngineDetails>>>,
+        engine_systems: Option<Rc<Mutex<EngineSystems>>>,
+    ) {
+        let systems_arc = engine_systems.unwrap();
+        let systems = systems_arc.lock().unwrap();
+        let mut ui_manager = systems.ui_manager.lock().unwrap();
+        self.font_id = Some(
+            ui_manager
+                .load_font("Inter", self.font_path.clone(), 12.0)
+                .unwrap(),
+        );
+    }
+
     fn update(
         &mut self,
         _device: Arc<Device>,
@@ -81,6 +98,7 @@ impl ComponentSystem for UiComponent {
                 ));
                 ui.text(format!("FPS: {}", details.fps,));
             }); */
+            let _inter = ui.push_font(self.font_id.unwrap());
             ui.window(".")
                 .title_bar(false)
                 .draw_background(false)
@@ -99,6 +117,7 @@ impl ComponentSystem for UiComponent {
                             .as_micros()
                     ));
                 });
+            _inter.pop();
 
             // ui.show_demo_window(&mut true);
         }
