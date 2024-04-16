@@ -1,7 +1,8 @@
 use std::{
     any::TypeId,
     collections::HashMap,
-    sync::{Arc, Mutex}, rc::Rc,
+    rc::Rc,
+    sync::{Arc, Mutex},
 };
 
 use gamezap::{
@@ -44,7 +45,6 @@ async fn main() {
         .build()
         .unwrap();
 
-
     let mut engine = GameZap::builder()
         .window_and_renderer(
             sdl_context,
@@ -60,7 +60,8 @@ async fn main() {
         )
         .antialiasing()
         .hide_cursor()
-        .build().await;
+        .build()
+        .await;
 
     let mut scene = Scene::default();
     let concept_manager = scene.get_concept_manager();
@@ -112,7 +113,44 @@ async fn main() {
             &device.clone(),
             &queue,
             false,
-        ).await
+        )
+        .await
+        .unwrap()],
+        true,
+        device.clone(),
+    );
+
+    scene.create_entity(
+        0,
+        true,
+        vec![Box::new(mesh_component), Box::new(mesh_transform)],
+        Some((vec![test_material], 0)),
+    );
+
+    let mesh_component_obj =
+        MeshComponent::from_obj(concept_manager.clone(), "assets/models/basic_cube.obj", false)
+            .await
+            .unwrap();
+
+    let mesh_transform_obj = TransformComponent::new(
+        concept_manager.clone(),
+        na::Vector3::new(2.0, 0.0, 1.0),
+        0.0,
+        0.0,
+        0.0,
+        na::Vector3::new(1.0, 1.0, 1.0),
+    );
+
+    let test_material_obj = Material::new(
+        "examples/shaders/vert.wgsl",
+        "examples/shaders/frag.wgsl",
+        vec![Texture::load_texture(
+            "assets/testing_textures/dude.png",
+            &device.clone(),
+            &queue,
+            false,
+        )
+        .await
         .unwrap()],
         true,
         device,
@@ -121,8 +159,8 @@ async fn main() {
     scene.create_entity(
         0,
         true,
-        vec![Box::new(mesh_component), Box::new(mesh_transform)],
-        Some((vec![test_material], 0)),
+        vec![Box::new(mesh_component_obj), Box::new(mesh_transform_obj)],
+        Some((vec![test_material_obj], 0)),
     );
 
     let camera_component =
@@ -182,7 +220,7 @@ impl ComponentSystem for KeyboardInputComponent {
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
         component_map: &AllComponents,
-        engine_details:  Rc<Mutex<EngineDetails>>,
+        engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
@@ -203,8 +241,8 @@ impl ComponentSystem for KeyboardInputComponent {
             .unwrap();
 
         let details = engine_details.lock().unwrap();
-        
-        let speed = 5.0 / (details.last_frame_duration.as_micros() as f32);
+
+        let speed = 10.0 / (details.last_frame_duration.as_micros() as f32);
 
         let forward_vector = (camera_rotation_matrix
             * na::Vector3::new(0.0, 0.0, 1.0).to_homogeneous())
@@ -245,7 +283,7 @@ impl ComponentSystem for KeyboardInputComponent {
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _engine_details: &EngineDetails,
-        engine_systems:  &EngineSystems,
+        engine_systems: &EngineSystems,
     ) {
         let context = &engine_systems.sdl_context;
         if let Event::KeyDown {

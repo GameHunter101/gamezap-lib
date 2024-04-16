@@ -31,8 +31,9 @@ pub struct MeshComponent {
     parent: EntityId,
     concept_ids: Vec<String>,
     id: ComponentId,
-    vertex_buffer: Arc<Option<Buffer>>,
-    index_buffer: Arc<Option<Buffer>>,
+    mesh_count: usize,
+    vertex_buffers: Arc<[Option<Buffer>]>,
+    index_buffers: Arc<[Option<Buffer>]>,
 }
 
 impl MeshComponent {
@@ -45,13 +46,14 @@ impl MeshComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-            vertex_buffer: Arc::new(None),
-            index_buffer: Arc::new(None),
+            mesh_count: 1,
+            vertex_buffers: Arc::from(vec![None].into_boxed_slice()),
+            index_buffers: Arc::from(vec![None].into_boxed_slice()),
         };
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
-        concepts.insert("vertices".to_string(), Box::new(vertices));
-        concepts.insert("indices".to_string(), Box::new(indices));
+        concepts.insert("vertices".to_string(), Box::new(vec![vertices]));
+        concepts.insert("indices".to_string(), Box::new(vec![indices]));
 
         component.register_component(concept_manager, concepts);
 
@@ -62,7 +64,7 @@ impl MeshComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         obj_path: &str,
         expect_material: bool,
-    ) -> Result<(), MeshComponentError> {
+    ) -> Result<Self, MeshComponentError> {
         let obj_cursor = Cursor::new(obj_path);
         let mut obj_reader = BufReader::new(obj_cursor);
         let obj_load_res = tobj::load_obj_buf_async(
@@ -81,18 +83,48 @@ impl MeshComponent {
                 return Err(MeshComponentError::FailedToLoadMtl);
             }
 
-            let materials = materials_res.unwrap_or(vec![tobj::Material::default()]);
+            // let materials = materials_res.unwrap_or(vec![tobj::Material::default()]);
 
-            for (i, m) in models.iter().enumerate() {
-                let mesh = &m.mesh;
+            let meshes = models.into_iter().map(|m| {
+                let vertices = (0..m.mesh.positions.len() / 3)
+                    .map(|i| Vertex {
+                        position: [
+                            m.mesh.positions[i * 3],
+                            m.mesh.positions[i * 3 + 1],
+                            m.mesh.positions[i * 3 + 2],
+                        ],
+                        normal: [
+                            m.mesh.normals[i * 3],
+                            m.mesh.normals[i * 3 + 1],
+                            m.mesh.normals[i * 3 + 2],
+                        ],
+                        tex_coords: [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]],
+                    })
+                    .collect::<Vec<_>>();
 
-                // let mut verts = Vec::with_capacity(mesh.positions.len());
-                /* for index in &mesh.positions {
-                    verts.push(vert)
-                } */
-            }
+                dbg!(m.name);
 
-            return Ok(());
+                (vertices, m.mesh.indices)
+            });
+
+            let (vertices, indices): (Vec<_>, Vec<_>) = meshes.unzip();
+
+            let mut component = MeshComponent {
+                parent: EntityId::MAX,
+                concept_ids: Vec::new(),
+                id: (EntityId::MAX, TypeId::of::<Self>(), 0),
+                mesh_count: 1,
+                vertex_buffers: Arc::from(vec![None].into_boxed_slice()),
+                index_buffers: Arc::from(vec![None].into_boxed_slice()),
+            };
+
+            let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
+            concepts.insert("vertices".to_string(), Box::new(vertices));
+            concepts.insert("indices".to_string(), Box::new(indices));
+
+            component.register_component(concept_manager, concepts);
+
+            return Ok(component);
         }
         Err(MeshComponentError::FailedToLoadObj)
     }
@@ -123,24 +155,35 @@ impl ComponentSystem for MeshComponent {
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let vertices = concept_manager
-            .get_concept::<Vec<Vertex>>(self.id, "vertices".to_string())
+            .get_concept::<Vec<Vec<Vertex>>>(self.id, "vertices".to_string())
             .unwrap();
-
-        self.vertex_buffer = Arc::new(Some(device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Entity Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        })));
 
         let indices = concept_manager
-            .get_concept::<Vec<u32>>(self.id, "indices".to_string())
+            .get_concept::<Vec<Vec<u32>>>(self.id, "indices".to_string())
             .unwrap();
 
-        self.index_buffer = Arc::new(Some(device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Entity Index Buffer"),
-            contents: bytemuck::cast_slice(indices),
-            usage: wgpu::BufferUsages::INDEX,
-        })));
+        let buffers = (0..self.mesh_count).map(|i| {
+            let current_vertices = &vertices[i];
+            let current_indices = &indices[i];
+
+            let vert_buf = device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Entity Vertex Buffer"),
+                contents: bytemuck::cast_slice(current_vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+            let ind_buf = device.create_buffer_init(&BufferInitDescriptor {
+                label: Some("Entity Index Buffer"),
+                contents: bytemuck::cast_slice(current_indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+            (Some(vert_buf), Some(ind_buf))
+        });
+
+        let (vert_bufs, ind_bufs): (Vec<_>, Vec<_>) = buffers.unzip();
+        self.vertex_buffers = Arc::from(vert_bufs.into_boxed_slice());
+        self.index_buffers = Arc::from(ind_bufs.into_boxed_slice());
     }
 
     fn render<'a: 'b, 'b>(
@@ -155,19 +198,21 @@ impl ComponentSystem for MeshComponent {
     ) {
         let concept_manager = concept_manager.lock().unwrap();
 
-        let vertex_buffer = self.vertex_buffer.as_ref();
-        if let Some(vertex_buffer) = &vertex_buffer {
-            render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        }
+        for i in 0..self.mesh_count {
+            let vertex_buffer_opt = self.vertex_buffers[i].as_ref();
+            if let Some(vertex_buffer) = &vertex_buffer_opt {
+                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+            }
 
-        let index_buffer = self.index_buffer.as_ref();
-        let indices = concept_manager
-            .get_concept::<Vec<u32>>(self.id, "indices".to_string())
-            .unwrap();
+            let index_buffer_opt = self.index_buffers[i].as_ref();
+            let indices = &concept_manager
+                .get_concept::<Vec<Vec<u32>>>(self.id, "indices".to_string())
+                .unwrap()[i];
 
-        if let Some(index_buffer) = index_buffer {
-            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+            if let Some(index_buffer) = index_buffer_opt {
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+            }
         }
     }
 

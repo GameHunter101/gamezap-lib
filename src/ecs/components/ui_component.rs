@@ -51,7 +51,7 @@ impl ComponentSystem for UiComponent {
         let mut ui_manager = systems.ui_manager.lock().unwrap();
         self.font_id = Some(
             ui_manager
-                .load_font("Inter", self.font_path.clone(), 12.0)
+                .load_font("Inter", self.font_path.clone(), 20.0)
                 .unwrap(),
         );
     }
@@ -109,7 +109,7 @@ impl ComponentSystem for UiComponent {
                 .build(|| {
                     ui.text(format!("FPS: {}", engine_details.lock().unwrap().fps,));
                     ui.text(format!(
-                        "Frame time (μs): {}",
+                        "Frame time (us): {}",
                         engine_details
                             .lock()
                             .unwrap()

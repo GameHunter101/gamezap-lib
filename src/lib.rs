@@ -1,7 +1,8 @@
 use std::{
+    cell::{Ref, RefCell},
     rc::Rc,
     sync::Mutex,
-    time::{Duration, Instant}, cell::{RefCell, Ref},
+    time::{Duration, Instant},
 };
 
 use ecs::scene::Scene;
@@ -137,7 +138,7 @@ impl GameZap {
 
                 for event in event_pump.poll_iter() {
                     imgui_platform.handle_event(&mut imgui_context, &event);
-                    if imgui_platform.ignore_event(&event){
+                    if imgui_platform.ignore_event(&event) {
                         continue;
                     }
 
@@ -195,6 +196,15 @@ impl GameZap {
                             renderer.config.format,
                             self.details.clone(),
                             self.systems.clone(),
+                        );
+                        let systems = self.systems.lock().unwrap();
+                        let ui_manager = systems.ui_manager.lock().unwrap();
+                        let mut imgui_renderer = ui_manager.imgui_renderer.lock().unwrap();
+                        let mut context = ui_manager.imgui_context.lock().unwrap();
+                        imgui_renderer.reload_font_texture(
+                            &mut context,
+                            &renderer.device.clone(),
+                            &renderer.queue.clone(),
                         );
                     }
                     active_scene.update(
