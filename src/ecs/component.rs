@@ -78,4 +78,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
     fn get_parent_entity(&self) -> EntityId;
 
     fn get_id(&self) -> ComponentId;
+
+    fn render_order(&self) -> usize {
+        0
+    }
 }

@@ -8,14 +8,14 @@ use std::{
 use wgpu::{Device, Queue};
 
 use crate::{
-    ecs::{
+    gamezap::ecs::{
         component::{ComponentId, ComponentSystem},
         scene::AllComponents,
     },
     EngineDetails, EngineSystems,
 };
 
-use super::super::{concepts::ConceptManager, entity::EntityId};
+use super::super::{gamezap::ecs::concepts::ConceptManager, gamezap::ecs::entity::EntityId};
 
 #[derive(Debug, Clone)]
 pub struct UiComponent {

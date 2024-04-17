@@ -2,7 +2,6 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
-    io::{BufReader, Cursor},
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -60,23 +59,20 @@ impl MeshComponent {
         component
     }
 
-    pub async fn from_obj(
+    pub fn from_obj(
         concept_manager: Rc<Mutex<ConceptManager>>,
         obj_path: &str,
         expect_material: bool,
     ) -> Result<Self, MeshComponentError> {
-        let obj_cursor = Cursor::new(obj_path);
-        let mut obj_reader = BufReader::new(obj_cursor);
-        let obj_load_res = tobj::load_obj_buf_async(
-            &mut obj_reader,
+        let path = std::path::Path::new(&std::env::current_dir().unwrap()).join(obj_path);
+        let obj_load_res = tobj::load_obj(
+            path,
             &tobj::LoadOptions {
-                triangulate: true,
                 single_index: true,
+                triangulate: true,
                 ..Default::default()
             },
-            |p| async move { tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(p))) },
-        )
-        .await;
+        );
 
         if let Ok((models, materials_res)) = obj_load_res {
             if materials_res.is_err() && expect_material {
@@ -102,8 +98,6 @@ impl MeshComponent {
                     })
                     .collect::<Vec<_>>();
 
-                dbg!(m.name);
-
                 (vertices, m.mesh.indices)
             });
 
@@ -113,7 +107,7 @@ impl MeshComponent {
                 parent: EntityId::MAX,
                 concept_ids: Vec::new(),
                 id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-                mesh_count: 1,
+                mesh_count: vertices.len(),
                 vertex_buffers: Arc::from(vec![None].into_boxed_slice()),
                 index_buffers: Arc::from(vec![None].into_boxed_slice()),
             };
@@ -236,5 +230,9 @@ impl ComponentSystem for MeshComponent {
 
     fn get_id(&self) -> ComponentId {
         self.id
+    }
+
+    fn render_order(&self) -> usize {
+        usize::MAX
     }
 }

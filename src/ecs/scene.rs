@@ -246,16 +246,20 @@ impl Scene {
                             );
 
                             // render_pass.set_vertex_buffer(1, default_transform_buffer.slice(..));
-                            for component in self.components.get(entity.id()).unwrap().iter() {
-                                component.render(
-                                    device.clone(),
-                                    queue.clone(),
-                                    &mut render_pass,
-                                    &self.components,
-                                    self.concept_manager.clone(),
-                                    engine_details,
-                                    engine_systems,
-                                );
+                            let components_opt = self.components.get(entity.id());
+                            if let Some(components) = components_opt {
+                                let ordered_components = Self::get_component_render_order(components);
+                                for component in ordered_components.iter() {
+                                    component.render(
+                                        device.clone(),
+                                        queue.clone(),
+                                        &mut render_pass,
+                                        &self.components,
+                                        self.concept_manager.clone(),
+                                        engine_details,
+                                        engine_systems,
+                                    );
+                                }
                             }
                         }
                     }
@@ -307,6 +311,20 @@ impl Scene {
 
         queue.submit(std::iter::once(encoder.finish()));
         output.present();
+    }
+
+    fn get_component_render_order(components: &[Component]) -> Vec<&Component> {
+        let mut render_orders = components
+            .iter()
+            .enumerate()
+            .map(|(i, comp)| (i, comp.render_order()))
+            .collect::<Vec<_>>();
+        render_orders.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        render_orders
+            .iter()
+            .map(|(i, _)| &components[*i])
+            .collect::<Vec<_>>()
     }
 
     fn render_ui<'a: 'b, 'b>(

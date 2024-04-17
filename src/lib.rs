@@ -33,7 +33,6 @@ pub mod ecs {
         pub mod camera_component;
         pub mod mesh_component;
         pub mod transform_component;
-        pub mod ui_component;
     }
 }
 
