@@ -38,7 +38,7 @@ impl ComponentSystem for MouseInputComponent {
         _component_map: &AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
-        concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();

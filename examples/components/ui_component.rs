@@ -42,7 +42,7 @@ impl ComponentSystem for UiComponent {
         _device: Arc<Device>,
         _queue: Arc<Queue>,
         _component_map: &AllComponents,
-        _concept_manager: Rc<Mutex<ConceptManager>>,
+        _concept_manager: Arc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         engine_systems: Option<Rc<Mutex<EngineSystems>>>,
     ) {
@@ -63,7 +63,7 @@ impl ComponentSystem for UiComponent {
         _component_map: &AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
-        _concept_manager: Rc<Mutex<ConceptManager>>,
+        _concept_manager: Arc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         if engine_systems

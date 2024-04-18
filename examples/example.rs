@@ -1,11 +1,15 @@
-use components::{ui_component::UiComponent, keyboard_input_component::KeyboardInputComponent, mouse_input_component::MouseInputComponent};
+use components::{
+    keyboard_input_component::KeyboardInputComponent, mouse_input_component::MouseInputComponent,
+    ui_component::UiComponent,
+};
 use gamezap::{
     ecs::{
         components::{
             camera_component::CameraComponent, mesh_component::MeshComponent,
-            transform_component::TransformComponent,
+            physics_component::PhysicsComponent, transform_component::TransformComponent,
         },
-        material::Material, scene::Scene,
+        material::Material,
+        scene::Scene,
     },
     model::Vertex,
     texture::Texture,
@@ -17,9 +21,9 @@ use nalgebra as na;
 extern crate gamezap;
 
 pub mod components {
-    pub mod ui_component;
     pub mod keyboard_input_component;
     pub mod mouse_input_component;
+    pub mod ui_component;
 }
 
 #[tokio::main]
@@ -119,20 +123,20 @@ async fn main() {
         Some((vec![test_material], 0)),
     );
 
-    let mesh_component_obj =
+    let sword_mesh =
         MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\blade.obj", false)
             .unwrap();
 
-    let mesh_transform_obj = TransformComponent::new(
+    let sword_transform = TransformComponent::new(
         concept_manager.clone(),
-        na::Vector3::new(2.0, 1.0, 1.0),
+        na::Vector3::new(0.0, 0.0, 0.0),
         std::f32::consts::FRAC_PI_2,
         0.0,
         0.0,
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
-    let test_material_obj = Material::new(
+    let sword_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
         vec![Texture::load_texture(
@@ -147,11 +151,22 @@ async fn main() {
         device,
     );
 
+    let sword_physics = PhysicsComponent::new(
+        concept_manager.clone(),
+        na::Vector3::new(0.0, 0.0003, 0.0),
+        na::Vector3::new(0.0000003, 0.0, 0.0),
+        1.0,
+    );
+
     scene.create_entity(
         0,
         true,
-        vec![Box::new(mesh_component_obj), Box::new(mesh_transform_obj)],
-        Some((vec![test_material_obj], 0)),
+        vec![
+            Box::new(sword_mesh),
+            Box::new(sword_transform),
+            Box::new(sword_physics),
+        ],
+        Some((vec![sword_material], 0)),
     );
 
     let camera_component =

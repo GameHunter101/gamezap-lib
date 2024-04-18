@@ -33,7 +33,7 @@ pub struct Scene {
     components: AllComponents,
     materials: Materials,
     active_camera_id: Option<EntityId>,
-    concept_manager: Rc<Mutex<ConceptManager>>,
+    concept_manager: Arc<Mutex<ConceptManager>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -397,7 +397,7 @@ impl Scene {
         self.active_camera_id
     }
 
-    pub fn get_concept_manager(&self) -> Rc<Mutex<ConceptManager>> {
+    pub fn get_concept_manager(&self) -> Arc<Mutex<ConceptManager>> {
         self.concept_manager.clone()
     }
 }
@@ -411,7 +411,7 @@ impl Default for Scene {
             components: HashMap::new(),
             materials: HashMap::new(),
             active_camera_id: None,
-            concept_manager: Rc::new(Mutex::new(ConceptManager::default())),
+            concept_manager: Arc::new(Mutex::new(ConceptManager::default())),
         }
     }
 }

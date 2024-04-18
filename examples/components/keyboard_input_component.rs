@@ -44,7 +44,7 @@ impl ComponentSystem for KeyboardInputComponent {
         component_map: &AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
-        concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
@@ -102,7 +102,7 @@ impl ComponentSystem for KeyboardInputComponent {
         &self,
         event: &Event,
         _component_map: &HashMap<EntityId, Vec<Component>>,
-        _concept_manager: Rc<Mutex<ConceptManager>>,
+        _concept_manager: Arc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _engine_details: &EngineDetails,
         engine_systems: &EngineSystems,

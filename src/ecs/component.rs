@@ -20,7 +20,7 @@ pub type Component = Box<dyn ComponentSystem>;
 pub trait ComponentSystem: Debug + dyn_clone::DynClone {
     fn register_component(
         &mut self,
-        concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
     }
@@ -30,7 +30,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         device: Arc<Device>,
         queue: Arc<Queue>,
         component_map: &AllComponents,
-        concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         engine_details: Option<Rc<Mutex<EngineDetails>>>,
         engine_systems: Option<Rc<Mutex<EngineSystems>>>,
     ) {
@@ -43,7 +43,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         component_map: &AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
-        concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
     }
@@ -54,7 +54,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         queue: Arc<Queue>,
         render_pass: &mut RenderPass<'b>,
         component_map: &'a HashMap<EntityId, Vec<Component>>,
-        concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         engine_details: &EngineDetails,
         engine_systems: &EngineSystems,
     ) {
@@ -64,7 +64,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         &self,
         event: &Event,
         component_map: &HashMap<EntityId, Vec<Component>>,
-        concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Arc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
         engine_details: &EngineDetails,
         engine_systems: &EngineSystems,
