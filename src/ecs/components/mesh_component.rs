@@ -37,7 +37,7 @@ pub struct MeshComponent {
 
 impl MeshComponent {
     pub fn new(
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         vertices: Vec<Vertex>,
         indices: Vec<u32>,
     ) -> Self {
@@ -60,7 +60,7 @@ impl MeshComponent {
     }
 
     pub fn from_obj(
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         obj_path: &str,
         expect_material: bool,
     ) -> Result<Self, MeshComponentError> {
@@ -127,7 +127,7 @@ impl MeshComponent {
 impl ComponentSystem for MeshComponent {
     fn register_component(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
         self.concept_ids = data.keys().cloned().collect();
@@ -143,7 +143,7 @@ impl ComponentSystem for MeshComponent {
         device: Arc<Device>,
         _queue: Arc<Queue>,
         _component_map: &AllComponents,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
     ) {
@@ -186,7 +186,7 @@ impl ComponentSystem for MeshComponent {
         _queue: Arc<Queue>,
         render_pass: &mut RenderPass<'b>,
         _component_map: &'a HashMap<EntityId, Vec<Component>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: &EngineDetails,
         _engine_systems: &EngineSystems,
     ) {

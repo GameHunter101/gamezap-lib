@@ -33,7 +33,7 @@ pub struct Scene {
     components: AllComponents,
     materials: Materials,
     active_camera_id: Option<EntityId>,
-    concept_manager: Arc<Mutex<ConceptManager>>,
+    concept_manager: Rc<Mutex<ConceptManager>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -133,33 +133,73 @@ impl Scene {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
 
-        let new_components = entities
+        /* let new_components = entities
             .iter()
             .map(|entity| {
-                let components = self
+                let mut cloned_components = self
                     .components
                     .get(entity.id())
                     .unwrap_or(&Vec::<Component>::new())
                     .iter()
-                    .map(|comp| {
-                        let mut comp_clone = dyn_clone::clone_box(&**comp);
-                        comp_clone.update(
-                            device.clone(),
-                            queue.clone(),
-                            &self.components,
-                            engine_details.clone(),
-                            engine_systems.clone(),
-                            self.concept_manager.clone(),
-                            self.active_camera_id,
-                        );
-                        comp_clone
-                    })
+                    .map(|c| dyn_clone::clone_box(&**c))
                     .collect::<Vec<_>>();
-                (*entity.id(), components)
+
+                for comp in cloned_components.iter_mut() {
+                    comp.update(
+                        device.clone(),
+                        queue.clone(),
+                        &mut self.components,
+                        engine_details.clone(),
+                        engine_systems.clone(),
+                        self.concept_manager.clone(),
+                        self.active_camera_id,
+                    );
+                }
+                (*entity.id(), cloned_components)
             })
             .collect::<HashMap<EntityId, Vec<Component>>>();
 
-        self.components = new_components;
+        self.components = new_components; */
+
+        let mut cloned_components = self
+            .components
+            .iter()
+            .map(|(k, v)| {
+                (
+                    *k,
+                    v.iter()
+                        .map(|comp| dyn_clone::clone_box(&**comp))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<HashMap<EntityId, Vec<Component>>>();
+
+        for entity in entities.iter() {
+            let entity_components_len = cloned_components
+                .get(entity.id())
+                .unwrap_or(&Vec::<Component>::new())
+                .len();
+            for comp_index in 0..entity_components_len {
+                let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
+                comp.update(
+                    device.clone(),
+                    queue.clone(),
+                    &mut cloned_components,
+                    engine_details.clone(),
+                    engine_systems.clone(),
+                    self.concept_manager.clone(),
+                    self.active_camera_id,
+                );
+                let map_ref = cloned_components
+                    .get_mut(entity.id())
+                    .unwrap()
+                    .get_mut(comp_index)
+                    .unwrap();
+                *map_ref = comp
+            }
+        }
+
+        self.components = cloned_components;
     }
 
     pub fn render(
@@ -248,7 +288,8 @@ impl Scene {
                             // render_pass.set_vertex_buffer(1, default_transform_buffer.slice(..));
                             let components_opt = self.components.get(entity.id());
                             if let Some(components) = components_opt {
-                                let ordered_components = Self::get_component_render_order(components);
+                                let ordered_components =
+                                    Self::get_component_render_order(components);
                                 for component in ordered_components.iter() {
                                     component.render(
                                         device.clone(),
@@ -389,6 +430,10 @@ impl Scene {
         &self.components
     }
 
+    pub fn get_components_mut(&mut self) -> &mut AllComponents {
+        &mut self.components
+    }
+
     pub fn set_active_camera(&mut self, entity_id: EntityId) {
         self.active_camera_id = Some(entity_id);
     }
@@ -397,7 +442,7 @@ impl Scene {
         self.active_camera_id
     }
 
-    pub fn get_concept_manager(&self) -> Arc<Mutex<ConceptManager>> {
+    pub fn get_concept_manager(&self) -> Rc<Mutex<ConceptManager>> {
         self.concept_manager.clone()
     }
 }
@@ -411,7 +456,7 @@ impl Default for Scene {
             components: HashMap::new(),
             materials: HashMap::new(),
             active_camera_id: None,
-            concept_manager: Arc::new(Mutex::new(ConceptManager::default())),
+            concept_manager: Rc::new(Mutex::new(ConceptManager::default())),
         }
     }
 }

@@ -8,7 +8,9 @@ use std::{
 use gamezap::{
     ecs::{
         component::{Component, ComponentId, ComponentSystem},
-        components::transform_component::TransformComponent,
+        components::{
+            physics_component::PhysicsComponent, transform_component::TransformComponent,
+        },
         concepts::ConceptManager,
         entity::EntityId,
         scene::{AllComponents, Scene},
@@ -41,10 +43,10 @@ impl ComponentSystem for KeyboardInputComponent {
         &mut self,
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
-        component_map: &AllComponents,
+        component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
@@ -54,6 +56,9 @@ impl ComponentSystem for KeyboardInputComponent {
             Some(transform) => transform.create_rotation_matrix(&concept_manager),
             None => na::Matrix4::identity(),
         };
+        let physics_component =
+            Scene::get_component_mut::<PhysicsComponent>(component_map.get_mut(&1).unwrap())
+                .unwrap();
 
         let position_concept = concept_manager
             .get_concept_mut::<na::Vector3<f32>>(
@@ -93,6 +98,12 @@ impl ComponentSystem for KeyboardInputComponent {
                 Scancode::Space => {
                     position_concept.y += speed;
                 }
+                Scancode::B => {
+                    physics_component.add_impulse(
+                        na::Vector3::new(-0.00001, 0.0, 0.0),
+                        time::Duration::seconds(1),
+                    );
+                }
                 _ => {}
             }
         }
@@ -102,7 +113,7 @@ impl ComponentSystem for KeyboardInputComponent {
         &self,
         event: &Event,
         _component_map: &HashMap<EntityId, Vec<Component>>,
-        _concept_manager: Arc<Mutex<ConceptManager>>,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _engine_details: &EngineDetails,
         engine_systems: &EngineSystems,

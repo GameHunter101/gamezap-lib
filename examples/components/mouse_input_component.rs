@@ -35,10 +35,10 @@ impl ComponentSystem for MouseInputComponent {
         &mut self,
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
-        _component_map: &AllComponents,
+        _component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();

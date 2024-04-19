@@ -153,7 +153,7 @@ async fn main() {
 
     let sword_physics = PhysicsComponent::new(
         concept_manager.clone(),
-        na::Vector3::new(0.0, 0.0003, 0.0),
+        na::Vector3::new(0.0, 0.0, 0.0),
         na::Vector3::new(0.0000003, 0.0, 0.0),
         1.0,
     );

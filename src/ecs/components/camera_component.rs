@@ -53,7 +53,7 @@ pub struct CameraComponent {
 }
 
 impl CameraComponent {
-    pub fn new_2d(concept_manager: Arc<Mutex<ConceptManager>>, window_size: (u32, u32)) -> Self {
+    pub fn new_2d(concept_manager: Rc<Mutex<ConceptManager>>, window_size: (u32, u32)) -> Self {
         let mut component = CameraComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
@@ -81,7 +81,7 @@ impl CameraComponent {
     }
 
     pub fn new_3d(
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         window_size: (u32, u32),
         fov: f32,
         near_plane: f32,
@@ -163,7 +163,7 @@ impl CameraComponent {
 impl ComponentSystem for CameraComponent {
     fn register_component(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
         self.concept_ids = data.keys().cloned().collect();
@@ -176,7 +176,7 @@ impl ComponentSystem for CameraComponent {
         device: Arc<Device>,
         _queue: Arc<Queue>,
         _component_map: &AllComponents,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
     ) {
@@ -197,10 +197,10 @@ impl ComponentSystem for CameraComponent {
         &mut self,
         _device: Arc<Device>,
         queue: Arc<Queue>,
-        component_map: &AllComponents,
+        component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();

@@ -7,6 +7,7 @@ use std::{
 
 use na::Vector3;
 use nalgebra as na;
+use time::{Duration, Instant};
 
 use crate::{
     ecs::{
@@ -25,11 +26,12 @@ pub struct PhysicsComponent {
     parent: EntityId,
     concept_ids: Vec<String>,
     id: ComponentId,
+    impulses: Vec<Impulse>,
 }
 
 impl PhysicsComponent {
     pub fn new(
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         velocity: Vector3<f32>,
         net_force: Vector3<f32>,
         mass: f32,
@@ -38,6 +40,7 @@ impl PhysicsComponent {
             parent: EntityId::MAX,
             concept_ids: Vec::new(),
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
+            impulses: Vec::new(),
         };
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
@@ -53,7 +56,7 @@ impl PhysicsComponent {
 
     pub fn add_constant_force(
         &self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         force: Vector3<f32>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
@@ -62,12 +65,46 @@ impl PhysicsComponent {
             .unwrap();
         *net_force += force;
     }
+
+    pub fn add_impulse(&mut self, force: Vector3<f32>, duration: Duration) {
+        self.impulses.push(Impulse {
+            force,
+            initialized_instant: Instant::now(),
+            duration,
+        });
+    }
+
+    fn sum_impulses(&self) -> Vector3<f32> {
+        let impulses = self.impulses
+            .iter()
+            .map(
+                |Impulse {
+                     force,
+                     initialized_instant: _,
+                     duration: _,
+                 }| force,
+            ).collect::<Vec<_>>();
+        impulses.into_iter().sum()
+    }
+
+    fn remove_impulses(&mut self) {
+        self.impulses.retain(
+            |Impulse {
+                 force: _,
+                 initialized_instant,
+                 duration,
+             }| {
+                let expiration_time = *initialized_instant + *duration;
+                Instant::now() >= expiration_time
+            },
+        );
+    }
 }
 
 impl ComponentSystem for PhysicsComponent {
     fn register_component(
         &mut self,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         data: HashMap<String, Box<dyn Any>>,
     ) {
         self.concept_ids = data.keys().cloned().collect();
@@ -83,7 +120,7 @@ impl ComponentSystem for PhysicsComponent {
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
         component_map: &AllComponents,
-        _concept_manager: Arc<Mutex<ConceptManager>>,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
     ) {
@@ -96,10 +133,10 @@ impl ComponentSystem for PhysicsComponent {
         &mut self,
         _device: Arc<wgpu::Device>,
         _queue: Arc<wgpu::Queue>,
-        _component_map: &AllComponents,
+        _component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
-        concept_manager: Arc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
@@ -124,11 +161,14 @@ impl ComponentSystem for PhysicsComponent {
             .get_concept::<f32>(self.id, "mass".to_string())
             .unwrap();
 
-        let acceleration = concept_manager
+        let net_force = concept_manager
             .get_concept::<Vector3<f32>>(self.id, "net_force".to_string())
             .unwrap()
             .clone_owned()
-            / mass;
+            + self.sum_impulses();
+
+        // println!("{net_force}");
+        let acceleration = net_force / mass;
 
         let velocity = concept_manager
             .get_concept_mut::<Vector3<f32>>(self.id, "velocity".to_string())
@@ -145,6 +185,8 @@ impl ComponentSystem for PhysicsComponent {
             .unwrap();
 
         *position += new_velocity * delta_time / 2.0;
+
+        self.remove_impulses();
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -168,4 +210,11 @@ impl ComponentSystem for PhysicsComponent {
     fn get_id(&self) -> ComponentId {
         self.id
     }
+}
+
+#[derive(Debug, Clone)]
+struct Impulse {
+    force: Vector3<f32>,
+    initialized_instant: Instant,
+    duration: Duration,
 }
