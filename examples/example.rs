@@ -129,7 +129,7 @@ async fn main() {
 
     let sword_transform = TransformComponent::new(
         concept_manager.clone(),
-        na::Vector3::new(0.0, 0.0, 0.0),
+        na::Vector3::new(0.0, 1.0, 0.0),
         std::f32::consts::FRAC_PI_2,
         0.0,
         0.0,
@@ -151,11 +151,17 @@ async fn main() {
         device,
     );
 
+    let v1 = ultraviolet::Vec3::new(1.0, 0.0, 0.0);
+    let v2 = ultraviolet::Vec3::new(0.0, 1.0, 0.0);
+
     let sword_physics = PhysicsComponent::new(
         concept_manager.clone(),
         na::Vector3::new(0.0, 0.0, 0.0),
-        na::Vector3::new(0.0000003, 0.0, 0.0),
+        na::Vector3::new(0.0, 0.0, 0.0),
         1.0,
+        // v1.geom(v2) * 90.0,
+        ultraviolet::Rotor3::from_angle_plane(0.01, ultraviolet::Bivec3::unit_yz()),
+        ultraviolet::Rotor3::default(),
     );
 
     scene.create_entity(

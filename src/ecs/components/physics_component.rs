@@ -8,6 +8,7 @@ use std::{
 use na::Vector3;
 use nalgebra as na;
 use time::{Duration, Instant};
+use ultraviolet::Rotor3;
 
 use crate::{
     ecs::{
@@ -35,6 +36,8 @@ impl PhysicsComponent {
         velocity: Vector3<f32>,
         net_force: Vector3<f32>,
         mass: f32,
+        angular_velocity: Rotor3,
+        net_torque: Rotor3,
     ) -> Self {
         let mut component = PhysicsComponent {
             parent: EntityId::MAX,
@@ -48,6 +51,8 @@ impl PhysicsComponent {
         concepts.insert("velocity".to_string(), Box::new(velocity));
         concepts.insert("net_force".to_string(), Box::new(net_force));
         concepts.insert("mass".to_string(), Box::new(mass));
+        concepts.insert("angular_velocity".to_string(), Box::new(angular_velocity));
+        concepts.insert("net_torque".to_string(), Box::new(net_torque));
 
         component.register_component(concept_manager, concepts);
 
@@ -75,7 +80,8 @@ impl PhysicsComponent {
     }
 
     fn sum_impulses(&self) -> Vector3<f32> {
-        let impulses = self.impulses
+        let impulses = self
+            .impulses
             .iter()
             .map(
                 |Impulse {
@@ -83,7 +89,8 @@ impl PhysicsComponent {
                      initialized_instant: _,
                      duration: _,
                  }| force,
-            ).collect::<Vec<_>>();
+            )
+            .collect::<Vec<_>>();
         impulses.into_iter().sum()
     }
 
@@ -143,10 +150,16 @@ impl ComponentSystem for PhysicsComponent {
         let engine_details = engine_details.lock().unwrap();
         let delta_time = (engine_details.last_frame_duration.as_micros() as f32) / 1000.0;
 
+        // First part of linear velocity
         let velocity = concept_manager
             .get_concept::<Vector3<f32>>(self.id, "velocity".to_string())
             .unwrap()
             .clone_owned();
+
+        let mut angular_velocity = *concept_manager
+            .get_concept::<Rotor3>(self.id, "angular_velocity".to_string())
+            .unwrap();
+        // dbg!(angular_velocity);
 
         let position = concept_manager
             .get_concept_mut::<Vector3<f32>>(
@@ -157,6 +170,15 @@ impl ComponentSystem for PhysicsComponent {
 
         *position += velocity * delta_time / 2.0;
 
+        let position_slice: [f32;3] = position.clone_owned().into();
+        // First part of angular velocity
+
+        angular_velocity.scale_by(delta_time / 2.0);
+        let rotated_position = angular_velocity * ultraviolet::Vec3::from(position_slice);
+        let position_slice: [f32;3] = rotated_position.into();
+        *position = position_slice.into();
+        
+        // Calculating new linear velocity
         let mass = *concept_manager
             .get_concept::<f32>(self.id, "mass".to_string())
             .unwrap();
@@ -167,7 +189,6 @@ impl ComponentSystem for PhysicsComponent {
             .clone_owned()
             + self.sum_impulses();
 
-        // println!("{net_force}");
         let acceleration = net_force / mass;
 
         let velocity = concept_manager
@@ -177,6 +198,12 @@ impl ComponentSystem for PhysicsComponent {
         let new_velocity = velocity.clone_owned() + acceleration * delta_time;
         *velocity = new_velocity;
 
+        // Calculating new angular velocity
+        let net_torque = *concept_manager
+            .get_concept::<Rotor3>(self.id, "net_torque".to_string())
+            .unwrap();
+
+        // Second part of linear velocity
         let position = concept_manager
             .get_concept_mut::<Vector3<f32>>(
                 (self.parent, TypeId::of::<TransformComponent>(), 0),
