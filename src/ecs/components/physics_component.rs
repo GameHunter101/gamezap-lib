@@ -8,7 +8,8 @@ use std::{
 use na::Vector3;
 use nalgebra as na;
 use time::{Duration, Instant};
-use ultraviolet::Rotor3;
+// use ultraviolet::{Rotor3, Bivec3};
+use algoe::{bivector::Bivector, rotor::Rotor3};
 
 use crate::{
     ecs::{
@@ -36,8 +37,8 @@ impl PhysicsComponent {
         velocity: Vector3<f32>,
         net_force: Vector3<f32>,
         mass: f32,
-        angular_velocity: Rotor3,
-        net_torque: Rotor3,
+        angular_velocity: Bivector,
+        net_torque: Bivector,
     ) -> Self {
         let mut component = PhysicsComponent {
             parent: EntityId::MAX,
@@ -156,10 +157,9 @@ impl ComponentSystem for PhysicsComponent {
             .unwrap()
             .clone_owned();
 
-        let mut angular_velocity = *concept_manager
-            .get_concept::<Rotor3>(self.id, "angular_velocity".to_string())
+        let angular_velocity = *concept_manager
+            .get_concept::<Bivector>(self.id, "angular_velocity".to_string())
             .unwrap();
-        // dbg!(angular_velocity);
 
         let position = concept_manager
             .get_concept_mut::<Vector3<f32>>(
@@ -170,14 +170,19 @@ impl ComponentSystem for PhysicsComponent {
 
         *position += velocity * delta_time / 2.0;
 
-        let position_slice: [f32;3] = position.clone_owned().into();
         // First part of angular velocity
+        // let corrected_angular_velocity = match angular_velocity.to_normalized().mag().is_nan() {
+        //     true => (0.0, Bivector::zero()),
+        //     false => (angular_velocity.mag(), angular_velocity.to_normalized()),
+        // };
+        let rotor = Rotor3 {
+            scalar: angular_velocity.magnitude().cos(),
+            bivector: angular_velocity.to_normalized() * angular_velocity.magnitude().sin(),
+        };
+        // angular_velocity.scale_by(delta_time / 2.0);
+        let rotated_position_slice = rotor * *position;
+        *position = rotated_position_slice;
 
-        angular_velocity.scale_by(delta_time / 2.0);
-        let rotated_position = angular_velocity * ultraviolet::Vec3::from(position_slice);
-        let position_slice: [f32;3] = rotated_position.into();
-        *position = position_slice.into();
-        
         // Calculating new linear velocity
         let mass = *concept_manager
             .get_concept::<f32>(self.id, "mass".to_string())
@@ -199,9 +204,9 @@ impl ComponentSystem for PhysicsComponent {
         *velocity = new_velocity;
 
         // Calculating new angular velocity
-        let net_torque = *concept_manager
-            .get_concept::<Rotor3>(self.id, "net_torque".to_string())
-            .unwrap();
+        /* let net_torque = *concept_manager
+        .get_concept::<Rotor3>(self.id, "net_torque".to_string())
+        .unwrap(); */
 
         // Second part of linear velocity
         let position = concept_manager

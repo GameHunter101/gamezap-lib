@@ -226,8 +226,9 @@ impl ComponentSystem for CameraComponent {
             Some(transform) => transform.create_rotation_matrix(&concept_manager),
             None => na::Matrix4::identity(),
         };
-        // println!("{rotation_matrix}");
+        // println!("rotation: {rotation_matrix}");
         let world_to_view_mat = na::Matrix4::new_translation(position) * rotation_matrix;
+        // println!("{world_to_view_mat}");
         let cam_mat = view_to_projected_mat * world_to_view_mat.try_inverse().unwrap();
         // println!("{cam_mat}");
         self.raw_data.cam_mat = cam_mat.into();

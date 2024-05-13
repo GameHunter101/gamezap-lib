@@ -2,9 +2,13 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
-    sync::{Arc, Mutex, MutexGuard}, rc::Rc,
+    rc::Rc,
+    sync::{Arc, Mutex, MutexGuard},
 };
 
+use na::{Matrix4, Vector4, Vector3};
+// use ultraviolet::{Rotor3, Vec3};
+use algoe::rotor::Rotor3;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Buffer, BufferUsages, Device, Queue, RenderPass,
@@ -15,7 +19,7 @@ use nalgebra as na;
 use crate::{
     ecs::component::{Component, ComponentId, ComponentSystem},
     model::VertexData,
-    EngineSystems, EngineDetails,
+    EngineDetails, EngineSystems,
 };
 
 use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
@@ -33,36 +37,21 @@ impl TransformComponent {
         &self,
         concept_manager: &MutexGuard<ConceptManager>,
     ) -> na::Matrix4<f32> {
-        let yaw = concept_manager
-            .get_concept::<f32>(self.id, "yaw".to_string())
+        let rotation = *concept_manager
+            .get_concept::<Rotor3>(self.id, "rotation".to_string())
             .unwrap();
 
-        let pitch = concept_manager
-            .get_concept::<f32>(self.id, "pitch".to_string())
-            .unwrap();
+        let rotated_x = (rotation * Vector3::x_axis().xyz()).to_homogeneous();
+        let rotated_y = (rotation * Vector3::y_axis().xyz()).to_homogeneous();
+        let rotated_z = (rotation * Vector3::z_axis().xyz()).to_homogeneous();
 
-        let roll = concept_manager
-            .get_concept::<f32>(self.id, "roll".to_string())
-            .unwrap();
-
-        #[rustfmt::skip]
-        let rotation_matrix = na::Matrix3::new(
-            pitch.cos() * roll.cos(), yaw.sin() * pitch.sin() * roll.cos() - yaw.cos() * roll.sin(), yaw.cos() * pitch.sin() * roll.cos() + yaw.sin() * roll.sin(), 
-            pitch.cos() * roll.sin(), yaw.sin() * pitch.sin() * roll.sin() + yaw.cos() * roll.cos(), yaw.cos() * pitch.sin() * roll.sin() - yaw.sin() * roll.cos(),
-            -1.0 * pitch.sin(), yaw.sin() * pitch.cos(), yaw.cos() * pitch.cos()
-        ).to_homogeneous();
-        rotation_matrix
+        Matrix4::from_columns(&[
+            rotated_x,
+            rotated_y,
+            rotated_z,
+            Vector4::new(0.0, 0.0, 0.0, 1.0),
+        ])
     }
-
-    /* pub fn create_scale_matrix(
-        &self,
-        concept_manager: &MutexGuard<ConceptManager>,
-    ) -> na::Matrix4<f32> {
-        let scale = concept_manager
-            .get_concept::<f32>(self.id, "scale".to_string())
-            .unwrap();
-
-    } */
 }
 
 impl VertexData for TransformComponent {
@@ -80,9 +69,10 @@ impl TransformComponent {
     pub fn new(
         concept_manager: Rc<Mutex<ConceptManager>>,
         position: na::Vector3<f32>,
-        roll: f32,
+        rotation: Rotor3,
+        /* roll: f32,
         pitch: f32,
-        yaw: f32,
+        yaw: f32, */
         scale: na::Vector3<f32>,
     ) -> TransformComponent {
         let mut component = TransformComponent {
@@ -92,24 +82,37 @@ impl TransformComponent {
             buf: Arc::new(None),
         };
 
-        #[rustfmt::skip]
+        /* #[rustfmt::skip]
         let rotation_matrix = na::Matrix3::new(
             yaw.cos() * pitch.cos(), yaw.cos() * pitch.sin() * roll.sin() - yaw.sin() * roll.cos(), yaw.cos() * pitch.sin() * roll.cos() + yaw.sin() * roll.sin(),
             yaw.sin() * pitch.cos(), yaw.sin() * pitch.sin() * roll.sin() + yaw.cos() * roll.cos(), yaw.sin() * pitch.sin() * roll.cos() - yaw.cos() * roll.sin(),
             -1.0 * pitch.sin(), pitch.cos() * roll.sin(), pitch.cos() * roll.cos()
-        ).to_homogeneous();
+        ).to_homogeneous(); */
+
+        let rotated_x = (rotation * Vector3::x_axis().xyz()).to_homogeneous();
+        let rotated_y = (rotation * Vector3::y_axis().xyz()).to_homogeneous();
+        let rotated_z = (rotation * Vector3::z_axis().xyz()).to_homogeneous();
+
+        let rotation_matrix = Matrix4::from_columns(&[
+            rotated_x,
+            rotated_y,
+            rotated_z,
+            Vector4::new(0.0, 0.0, 0.0, 1.0),
+        ]);
+        // println!("Rotor: {rotation:?}, Rotation: {rotation_matrix}");
+        // let rotation_matrix = Matrix4::identity();
         let translation_matrix = na::Translation3::from(position).to_homogeneous();
         let scale_matrix = na::Scale3::from(scale).to_homogeneous();
         let transform_matrix = scale_matrix * rotation_matrix * translation_matrix;
-
 
         let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
 
         concepts.insert("matrix".to_string(), Box::new(transform_matrix));
         concepts.insert("position".to_string(), Box::new(position));
-        concepts.insert("roll".to_string(), Box::new(roll));
+        concepts.insert("rotation".to_string(), Box::new(rotation));
+        /* concepts.insert("roll".to_string(), Box::new(roll));
         concepts.insert("pitch".to_string(), Box::new(pitch));
-        concepts.insert("yaw".to_string(), Box::new(yaw));
+        concepts.insert("yaw".to_string(), Box::new(yaw)); */
         concepts.insert("scale".to_string(), Box::new(scale));
 
         component.register_component(concept_manager, concepts);
@@ -134,9 +137,10 @@ impl TransformComponent {
             "position".to_string(),
             Box::new(na::Vector3::<f32>::zeros()),
         );
-        concepts.insert("roll".to_string(), Box::new(0.0));
+        /* concepts.insert("roll".to_string(), Box::new(0.0));
         concepts.insert("pitch".to_string(), Box::new(0.0));
-        concepts.insert("yaw".to_string(), Box::new(0.0));
+        concepts.insert("yaw".to_string(), Box::new(0.0)); */
+        concepts.insert("rotation".to_string(), Box::<Rotor3>::default());
         concepts.insert(
             "scale".to_string(),
             Box::new(na::Vector3::new(1.0, 1.0, 1.0)),
@@ -161,7 +165,9 @@ impl TransformComponent {
             .get_concept::<na::Vector3<f32>>(self.id, "scale".to_string())
             .unwrap();
 
-        let matrix = na::Matrix4::<f32>::new_translation(position) * self.create_rotation_matrix(&concept_manager) * na::Matrix4::<f32>::new_nonuniform_scaling(scale);
+        let matrix = na::Matrix4::<f32>::new_translation(position)
+            // * self.create_rotation_matrix(&concept_manager)
+            * na::Matrix4::<f32>::new_nonuniform_scaling(scale);
         let matrix_as_arr: [[f32; 4]; 4] = matrix.into();
 
         let new_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -181,7 +187,10 @@ impl ComponentSystem for TransformComponent {
     ) {
         self.concept_ids = data.keys().cloned().collect();
 
-        concept_manager.lock().unwrap().register_component_concepts(self.id, data);
+        concept_manager
+            .lock()
+            .unwrap()
+            .register_component_concepts(self.id, data);
     }
 
     fn initialize(

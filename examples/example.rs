@@ -1,3 +1,4 @@
+use algoe::{bivector::Bivector, rotor::Rotor3};
 use components::{
     keyboard_input_component::KeyboardInputComponent, mouse_input_component::MouseInputComponent,
     ui_component::UiComponent,
@@ -17,6 +18,7 @@ use gamezap::{
 };
 
 use nalgebra as na;
+// use ultraviolet::{Rotor3, Bivec3};
 
 extern crate gamezap;
 
@@ -95,9 +97,7 @@ async fn main() {
     let mesh_transform = TransformComponent::new(
         concept_manager.clone(),
         na::Vector3::new(0.1, 0.0, 1.0),
-        0.0,
-        0.0,
-        0.0,
+        Rotor3::default(),
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
@@ -129,10 +129,8 @@ async fn main() {
 
     let sword_transform = TransformComponent::new(
         concept_manager.clone(),
-        na::Vector3::new(0.0, 1.0, 0.0),
-        std::f32::consts::FRAC_PI_2,
-        0.0,
-        0.0,
+        na::Vector3::new(1.0, 1.0, 0.0),
+        (Bivector::new(0.0, 1.0, 0.0) * -std::f32::consts::FRAC_PI_2).exponentiate(),
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
@@ -148,20 +146,46 @@ async fn main() {
         .await
         .unwrap()],
         true,
-        device,
+        device.clone(),
     );
 
-    let v1 = ultraviolet::Vec3::new(1.0, 0.0, 0.0);
-    let v2 = ultraviolet::Vec3::new(0.0, 1.0, 0.0);
+    let v1 = ultraviolet::Vec3::new(5.0, 0.0, 0.0);
+    let v2 = ultraviolet::Vec3::new(2.0_f32.sqrt() / 2.0, 2.0_f32.sqrt() / 2.0, 1.0) * 2.0;
+    let angular_velocity = v1.wedge(v2);
+    /* dbg!(
+        angular_velocity.normalized(),
+        (angular_velocity * 100.0).normalized()
+    ); */
 
     let sword_physics = PhysicsComponent::new(
         concept_manager.clone(),
         na::Vector3::new(0.0, 0.0, 0.0),
         na::Vector3::new(0.0, 0.0, 0.0),
         1.0,
-        // v1.geom(v2) * 90.0,
-        ultraviolet::Rotor3::from_angle_plane(0.01, ultraviolet::Bivec3::unit_yz()),
-        ultraviolet::Rotor3::default(),
+        // angular_velocity / 100.0,
+        // 0.001 * ultraviolet::Bivec3::unit_xy(),
+        Bivector::default(),
+        Bivector::default(),
+        // Bivec3::zero(),
+        // Bivec3::default(),
+        //
+        // ultraviolet::Bivec3::from_angle_plane(0.01, ultraviolet::Bivec3::unit_yz()),
+        // ultraviolet::Rotor3::default(),
+    );
+
+    let cube_material = Material::new(
+        "examples/shaders/vert.wgsl",
+        "examples/shaders/frag.wgsl",
+        vec![Texture::load_texture(
+            "assets/testing_textures/dude.png",
+            &device.clone(),
+            &queue,
+            false,
+        )
+        .await
+        .unwrap()],
+        true,
+        device,
     );
 
     scene.create_entity(
@@ -172,6 +196,27 @@ async fn main() {
             Box::new(sword_transform),
             Box::new(sword_physics),
         ],
+        Some((vec![cube_material], 0)),
+    );
+
+    let cube_mesh =
+        MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\cube.obj", false)
+            .unwrap();
+
+    let cube_transform = TransformComponent::new(
+        concept_manager.clone(),
+        na::Vector3::new(0.0, 0.0, 0.0),
+        Rotor3::default(),
+        /* 0.0,
+        0.0,
+        0.0, */
+        na::Vector3::new(0.1, 0.1, 0.1),
+    );
+
+    scene.create_entity(
+        0,
+        true,
+        vec![Box::new(cube_mesh), Box::new(cube_transform)],
         Some((vec![sword_material], 0)),
     );
 
@@ -180,9 +225,8 @@ async fn main() {
     let camera_transform = TransformComponent::new(
         concept_manager.clone(),
         na::Vector3::new(0.1, 0.0, -1.0),
-        0.0,
-        0.0,
-        0.0,
+        // Bivector::new(0.0, 0.0, -1.0).exponentiate(),
+        Rotor3::default(),
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
