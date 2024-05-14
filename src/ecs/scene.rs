@@ -212,6 +212,7 @@ impl Scene {
         engine_systems: &EngineSystems,
         smaa_frame: smaa::SmaaFrame,
         output: wgpu::SurfaceTexture,
+        clear_color: wgpu::Color,
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
@@ -240,12 +241,7 @@ impl Scene {
                     view: &smaa_frame,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.7,
-                            g: 0.2,
-                            b: 0.2,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(clear_color),
                         store: true,
                     },
                 })],

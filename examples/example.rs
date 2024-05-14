@@ -29,7 +29,6 @@ pub mod components {
 
 #[tokio::main]
 async fn main() {
-
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
     let event_pump = sdl_context.event_pump().unwrap();
@@ -48,10 +47,10 @@ async fn main() {
             event_pump,
             window,
             wgpu::Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.0,
+                r: 0.7,
+                g: 0.2,
+                b: 0.2,
+                a: 1.0,
             },
         )
         .antialiasing()

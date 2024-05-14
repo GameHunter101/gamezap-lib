@@ -224,6 +224,7 @@ impl GameZap {
                         &self.systems.lock().unwrap(),
                         smaa_frame,
                         output,
+                        self.clear_color,
                     );
                 }
             }

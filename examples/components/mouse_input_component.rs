@@ -118,7 +118,7 @@ impl ComponentSystem for MouseInputComponent {
                 let second_rotation =
                     (bivec * mouse_state.y() as f32 * speed).exponentiate() * first_rotation;
 
-                dbg!(second_rotation);
+                // dbg!(second_rotation);
 
                 // dbg!(new_rotation);
                 // rotation.rotate_by(new_rotation);
