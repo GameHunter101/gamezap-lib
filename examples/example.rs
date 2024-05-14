@@ -18,7 +18,6 @@ use gamezap::{
 };
 
 use nalgebra as na;
-// use ultraviolet::{Rotor3, Bivec3};
 
 extern crate gamezap;
 
@@ -30,7 +29,6 @@ pub mod components {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -149,9 +147,6 @@ async fn main() {
         device.clone(),
     );
 
-    let v1 = ultraviolet::Vec3::new(5.0, 0.0, 0.0);
-    let v2 = ultraviolet::Vec3::new(2.0_f32.sqrt() / 2.0, 2.0_f32.sqrt() / 2.0, 1.0) * 2.0;
-    let angular_velocity = v1.wedge(v2);
     /* dbg!(
         angular_velocity.normalized(),
         (angular_velocity * 100.0).normalized()

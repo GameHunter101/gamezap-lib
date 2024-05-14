@@ -125,6 +125,8 @@ impl GameZap {
     }
 
     pub fn main_loop(&mut self) {
+        env_logger::init();
+        
         'running: loop {
             let active_scene_opt = self.scenes.get_mut(self.active_scene_index);
             {

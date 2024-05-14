@@ -7,7 +7,7 @@ use std::{
 
 use na::Vector3;
 use nalgebra as na;
-use time::{Duration, Instant};
+use std::time::{Duration, Instant};
 // use ultraviolet::{Rotor3, Bivec3};
 use algoe::{bivector::Bivector, rotor::Rotor3};
 

@@ -101,7 +101,7 @@ impl ComponentSystem for KeyboardInputComponent {
                 Scancode::B => {
                     physics_component.add_impulse(
                         na::Vector3::new(-0.00001, 0.0, 0.0),
-                        time::Duration::seconds(1),
+                        std::time::Duration::from_secs(1),
                     );
                 }
                 _ => {}
