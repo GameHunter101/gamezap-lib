@@ -18,8 +18,7 @@ impl Texture {
         path: String,
     ) -> (imgui::TextureId, [f32; 2]) {
         let bytes = std::fs::read(&path).unwrap();
-        let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
-            .expect("Invalid image");
+        let image = image::load_from_memory(&bytes).expect("Invalid image");
         let image = image.to_rgba8();
         let (width, height) = image.dimensions();
         let raw_data = image.into_raw();
@@ -31,7 +30,7 @@ impl Texture {
                 ..Default::default()
             },
             label: Some(&path),
-            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            format: Some(wgpu::TextureFormat::Rgba8UnormSrgb),
             ..Default::default()
         };
 
