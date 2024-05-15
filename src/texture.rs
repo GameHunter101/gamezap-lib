@@ -1,5 +1,11 @@
+use std::sync::Arc;
+
 use anyhow::*;
 use image::GenericImageView;
+use wgpu::{
+    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    BindingResource, BindingType,
+};
 
 #[derive(Debug)]
 pub struct Texture {
@@ -11,14 +17,14 @@ pub struct Texture {
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    pub fn load_ui_image(
+    pub async fn load_ui_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
         path: String,
     ) -> (imgui::TextureId, [f32; 2]) {
         let bytes = std::fs::read(&path).unwrap();
-        let image = image::load_from_memory(&bytes).expect("Invalid image");
+        let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png).expect("Invalid image");
         let image = image.to_rgb8();
         let (width, height) = image.dimensions();
         let raw_data = image.into_raw();
@@ -35,6 +41,7 @@ impl Texture {
         };
 
         let texture = imgui_wgpu::Texture::new(device, renderer, texture_config);
+
         texture.write(queue, &raw_data, width, height);
 
         (
@@ -43,8 +50,12 @@ impl Texture {
         )
     }
 
-    pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
-        let path = std::path::Path::new(&std::env::current_dir().unwrap()).join(file_name);
+    pub async fn load_binary(file_name: &str, absolute_path: bool) -> anyhow::Result<Vec<u8>> {
+        let path = if absolute_path {
+            std::path::Path::new(file_name).to_path_buf()
+        } else {
+            std::path::Path::new(&std::env::current_dir().unwrap()).join(file_name)
+        };
         let data = std::fs::read(path)?;
 
         Ok(data)
@@ -52,11 +63,12 @@ impl Texture {
 
     pub async fn load_texture(
         file_name: &str,
+        absolute_path: bool,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         is_normal_map: bool,
     ) -> anyhow::Result<Texture> {
-        let data = Self::load_binary(file_name).await?;
+        let data = Self::load_binary(file_name, absolute_path).await?;
         Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
     }
     pub fn from_bytes(

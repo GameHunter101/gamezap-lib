@@ -103,6 +103,7 @@ async fn main() {
         "examples/shaders/frag.wgsl",
         vec![Texture::load_texture(
             "assets/testing_textures/texture.png",
+            false,
             &device.clone(),
             &queue,
             false,
@@ -136,6 +137,7 @@ async fn main() {
         "examples/shaders/frag.wgsl",
         vec![Texture::load_texture(
             "assets/testing_textures/dude.png",
+            false,
             &device.clone(),
             &queue,
             false,
@@ -172,6 +174,7 @@ async fn main() {
         "examples/shaders/frag.wgsl",
         vec![Texture::load_texture(
             "assets/testing_textures/dude.png",
+            false,
             &device.clone(),
             &queue,
             false,
