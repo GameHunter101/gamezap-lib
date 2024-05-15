@@ -1,11 +1,5 @@
-use std::sync::Arc;
-
 use anyhow::*;
 use image::GenericImageView;
-use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingResource, BindingType,
-};
 
 #[derive(Debug)]
 pub struct Texture {
@@ -17,15 +11,16 @@ pub struct Texture {
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    pub async fn load_ui_image(
+    pub fn load_ui_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
         path: String,
     ) -> (imgui::TextureId, [f32; 2]) {
         let bytes = std::fs::read(&path).unwrap();
-        let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png).expect("Invalid image");
-        let image = image.to_rgb8();
+        let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+            .expect("Invalid image");
+        let image = image.to_rgba8();
         let (width, height) = image.dimensions();
         let raw_data = image.into_raw();
 

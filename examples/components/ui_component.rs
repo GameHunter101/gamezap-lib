@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use gamezap::texture::Texture;
 use wgpu::{Device, Queue};
 
 use crate::{
@@ -23,6 +24,7 @@ pub struct UiComponent {
     id: ComponentId,
     font_path: String,
     font_id: Option<imgui::FontId>,
+    image_details: Option<(imgui::TextureId, [f32; 2])>,
 }
 
 impl UiComponent {
@@ -32,6 +34,7 @@ impl UiComponent {
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
             font_path: font_path.to_string(),
             font_id: None,
+            image_details: None,
         }
     }
 }
@@ -39,8 +42,8 @@ impl UiComponent {
 impl ComponentSystem for UiComponent {
     fn initialize(
         &mut self,
-        _device: Arc<Device>,
-        _queue: Arc<Queue>,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         _component_map: &AllComponents,
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
@@ -54,12 +57,16 @@ impl ComponentSystem for UiComponent {
                 .load_font("Inter", self.font_path.clone(), 20.0)
                 .unwrap(),
         );
+        let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
+        let details = Texture::load_ui_image(&device, &queue,
+            &mut renderer, "C:\\Users\\liors\\Documents\\Coding projects\\Rust\\gamezap-lib\\assets\\testing_textures\\dude.png".to_string());
+        self.image_details = Some(details);
     }
 
     fn update(
         &mut self,
-        _device: Arc<Device>,
-        _queue: Arc<Queue>,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         _component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
@@ -116,6 +123,8 @@ impl ComponentSystem for UiComponent {
                             .last_frame_duration
                             .as_micros()
                     ));
+                    imgui::Image::new(self.image_details.unwrap().0, self.image_details.unwrap().1)
+                        .build(ui);
                 });
             _inter.pop();
 
