@@ -16,7 +16,7 @@ impl Texture {
         queue: &wgpu::Queue,
         renderer: &mut imgui_wgpu::Renderer,
         path: String,
-    ) -> imgui::TextureId {
+    ) -> (imgui::TextureId, [f32; 2]) {
         let bytes = std::fs::read(&path).unwrap();
         let image = image::load_from_memory(&bytes).expect("Invalid image");
         let image = image.to_rgb8();
@@ -37,7 +37,10 @@ impl Texture {
         let texture = imgui_wgpu::Texture::new(device, renderer, texture_config);
         texture.write(queue, &raw_data, width, height);
 
-        renderer.textures.insert(texture)
+        (
+            renderer.textures.insert(texture),
+            [width as f32, height as f32],
+        )
     }
 
     pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
