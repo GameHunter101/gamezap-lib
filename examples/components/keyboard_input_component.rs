@@ -29,6 +29,7 @@ pub struct KeyboardInputComponent {
     parent: EntityId,
     id: ComponentId,
 }
+
 impl Default for KeyboardInputComponent {
     fn default() -> Self {
         KeyboardInputComponent {

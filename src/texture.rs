@@ -10,13 +10,43 @@ pub struct Texture {
 
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+    pub fn load_ui_image(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        renderer: &mut imgui_wgpu::Renderer,
+        path: String,
+    ) -> imgui::TextureId {
+        let bytes = std::fs::read(&path).unwrap();
+        let image = image::load_from_memory(&bytes).expect("Invalid image");
+        let image = image.to_rgb8();
+        let (width, height) = image.dimensions();
+        let raw_data = image.into_raw();
+
+        let texture_config = imgui_wgpu::TextureConfig {
+            size: wgpu::Extent3d {
+                width,
+                height,
+                ..Default::default()
+            },
+            label: Some(&path),
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
+            ..Default::default()
+        };
+
+        let texture = imgui_wgpu::Texture::new(device, renderer, texture_config);
+        texture.write(queue, &raw_data, width, height);
+
+        renderer.textures.insert(texture)
+    }
+
     pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
-        let path = std::path::Path::new(&std::env::current_dir().unwrap())
-            .join(file_name);
+        let path = std::path::Path::new(&std::env::current_dir().unwrap()).join(file_name);
         let data = std::fs::read(path)?;
 
         Ok(data)
     }
+
     pub async fn load_texture(
         file_name: &str,
         device: &wgpu::Device,
