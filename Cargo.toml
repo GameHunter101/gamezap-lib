@@ -23,7 +23,7 @@ futures = "0.3.29"
 tokio = {version = "1.35.1", features = ["full"]}
 cool_utils = {git = "https://github.com/GameHunter101/cool_utils.git"}
 dyn-clone = "1.0.17"
-imgui = "0.11.0"
+imgui = "0.12.0"
 imgui-wgpu = "0.24.0"
 imgui-sdl2 = "0.15.3"
 algoe = {git = "https://github.com/GameHunter101/Algoe" }
