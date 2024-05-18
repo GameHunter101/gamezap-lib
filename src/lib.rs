@@ -216,6 +216,8 @@ impl GameZap {
                         self.systems.clone(),
                     );
                     active_scene.ui_draw(
+                        renderer.device.clone(),
+                        renderer.queue.clone(),
                         self.details.clone(),
                         self.systems.clone(),
                         self.ui_manager.clone(),

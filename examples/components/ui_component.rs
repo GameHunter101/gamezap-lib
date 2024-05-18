@@ -65,6 +65,8 @@ impl ComponentSystem for UiComponent {
 
     fn ui_draw(
         &mut self,
+        _device: Arc<Device>,
+        _queue: Arc<Queue>,
         _ui_manager: &mut UiManager,
         ui_frame: &mut Ui,
         _component_map: &mut AllComponents,

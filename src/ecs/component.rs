@@ -53,6 +53,8 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
 
     fn ui_draw(
         &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         ui_manager: &mut UiManager,
         ui_frame: &mut Ui,
         component_map: &mut AllComponents,

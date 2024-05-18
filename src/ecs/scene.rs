@@ -179,6 +179,8 @@ impl Scene {
 
     pub fn ui_draw(
         &mut self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
         ui_manager: Rc<Mutex<UiManager>>,
@@ -211,6 +213,8 @@ impl Scene {
             for comp_index in 0..entity_components_len {
                 let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
                 comp.ui_draw(
+                    device.clone(),
+                    queue.clone(),
                     &mut manager,
                     ui_frame,
                     &mut cloned_components,
