@@ -19,7 +19,7 @@ use crate::{
         component::{ComponentId, ComponentSystem},
         scene::Scene,
     },
-    EngineDetails, EngineSystems,
+    EngineDetails, EngineSystems, ui_manager::UiManager,
 };
 
 use super::{
@@ -179,6 +179,7 @@ impl ComponentSystem for CameraComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
+        _ui_manager: Rc<Mutex<UiManager>>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let position_concept = concept_manager.get_concept::<na::Vector3<f32>>(

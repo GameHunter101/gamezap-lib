@@ -18,7 +18,7 @@ use crate::{
         entity::EntityId,
         scene::{AllComponents, Scene},
     },
-    EngineDetails, EngineSystems,
+    EngineDetails, EngineSystems, ui_manager::UiManager,
 };
 
 use super::transform_component::TransformComponent;
@@ -131,6 +131,7 @@ impl ComponentSystem for PhysicsComponent {
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
+        _ui_manager: Rc<Mutex<UiManager>>,
     ) {
         let _transform_component =
             Scene::get_component::<TransformComponent>(&component_map[&self.parent])

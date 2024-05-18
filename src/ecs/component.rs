@@ -2,13 +2,15 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     fmt::Debug,
-    sync::{Arc, Mutex}, rc::Rc,
+    rc::Rc,
+    sync::{Arc, Mutex},
 };
 
+use imgui::Ui;
 use sdl2::event::Event;
 use wgpu::{Device, Queue, RenderPass};
 
-use crate::{EngineDetails, EngineSystems};
+use crate::{ui_manager::UiManager, EngineDetails, EngineSystems};
 
 use super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
 
@@ -33,6 +35,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         concept_manager: Rc<Mutex<ConceptManager>>,
         engine_details: Option<Rc<Mutex<EngineDetails>>>,
         engine_systems: Option<Rc<Mutex<EngineSystems>>>,
+        ui_manager: Rc<Mutex<UiManager>>,
     ) {
     }
 
@@ -45,6 +48,17 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
+    ) {
+    }
+
+    fn ui_draw(
+        &mut self,
+        ui_manager: &mut UiManager,
+        ui_frame: &mut Ui,
+        component_map: &mut AllComponents,
+        concept_manager: Rc<Mutex<ConceptManager>>,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
     ) {
     }
 

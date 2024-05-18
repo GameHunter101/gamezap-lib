@@ -5,7 +5,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use gamezap::texture::Texture;
+use gamezap::{texture::Texture, ui_manager::UiManager};
+use imgui::Ui;
 use wgpu::{Device, Queue};
 
 use crate::{
@@ -47,11 +48,10 @@ impl ComponentSystem for UiComponent {
         _component_map: &AllComponents,
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
-        engine_systems: Option<Rc<Mutex<EngineSystems>>>,
+        _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
+        ui_manager: Rc<Mutex<UiManager>>,
     ) {
-        let systems_arc = engine_systems.unwrap();
-        let systems = systems_arc.lock().unwrap();
-        let mut ui_manager = systems.ui_manager.lock().unwrap();
+        let mut ui_manager = ui_manager.lock().unwrap();
         self.font_id = Some(
             ui_manager
                 .load_font("Inter", self.font_path.clone(), 20.0)
@@ -63,15 +63,14 @@ impl ComponentSystem for UiComponent {
         self.image_details = Some(details);
     }
 
-    fn update(
+    fn ui_draw(
         &mut self,
-        device: Arc<Device>,
-        queue: Arc<Queue>,
+        _ui_manager: &mut UiManager,
+        ui_frame: &mut Ui,
         _component_map: &mut AllComponents,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
-        _concept_manager: Rc<Mutex<ConceptManager>>,
-        _active_camera_id: Option<EntityId>,
     ) {
         if engine_systems
             .lock()
@@ -80,33 +79,8 @@ impl ComponentSystem for UiComponent {
             .mouse()
             .is_cursor_showing()
         {
-            let systems = engine_systems.lock().unwrap();
-            let mut ui_manager = systems.ui_manager.lock().unwrap();
-            ui_manager.set_render_flag();
-
-            let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
-
-            let ui = imgui_context.new_frame();
-
-            /* ui.window("Hello World")
-            .size([300.0, 100.0], imgui::Condition::FirstUseEver)
-            .build(|| {
-                ui.text("Heyo");
-                ui.separator();
-                let moues_pos = ui.io().mouse_pos;
-                ui.text(format!(
-                    "Mouse position: ({:.1}, {:.1})",
-                    moues_pos[0], moues_pos[1]
-                ));
-                let details = engine_details.lock().unwrap();
-                ui.text(format!(
-                    "Frame time: {}",
-                    details.last_frame_duration.whole_milliseconds()
-                ));
-                ui.text(format!("FPS: {}", details.fps,));
-            }); */
-            let _inter = ui.push_font(self.font_id.unwrap());
-            ui.window(".")
+            let _inter = ui_frame.push_font(self.font_id.unwrap());
+            ui_frame.window(".")
                 .title_bar(false)
                 .draw_background(false)
                 .resizable(false)
@@ -114,8 +88,8 @@ impl ComponentSystem for UiComponent {
                 .always_auto_resize(true)
                 .position([100.0, 100.0], imgui::Condition::Always)
                 .build(|| {
-                    ui.text(format!("FPS: {}", engine_details.lock().unwrap().fps,));
-                    ui.text(format!(
+                    ui_frame.text(format!("FPS: {}", engine_details.lock().unwrap().fps,));
+                    ui_frame.text(format!(
                         "Frame time (us): {}",
                         engine_details
                             .lock()
@@ -124,7 +98,7 @@ impl ComponentSystem for UiComponent {
                             .as_micros()
                     ));
                     imgui::Image::new(self.image_details.unwrap().0, self.image_details.unwrap().1)
-                        .build(ui);
+                        .build(ui_frame);
                 });
             _inter.pop();
 

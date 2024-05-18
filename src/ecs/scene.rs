@@ -2,6 +2,7 @@ use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
     texture::Texture,
+    ui_manager::UiManager,
     EngineDetails, EngineSystems,
 };
 use std::{
@@ -75,6 +76,7 @@ impl Scene {
         color_format: TextureFormat,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
+        ui_manager: Rc<Mutex<UiManager>>,
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
@@ -112,6 +114,7 @@ impl Scene {
                                 self.concept_manager.clone(),
                                 Some(engine_details.clone()),
                                 Some(engine_systems.clone()),
+                                ui_manager.clone(),
                             );
                             comp_clone
                         })
@@ -132,34 +135,6 @@ impl Scene {
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
-
-        /* let new_components = entities
-            .iter()
-            .map(|entity| {
-                let mut cloned_components = self
-                    .components
-                    .get(entity.id())
-                    .unwrap_or(&Vec::<Component>::new())
-                    .iter()
-                    .map(|c| dyn_clone::clone_box(&**c))
-                    .collect::<Vec<_>>();
-
-                for comp in cloned_components.iter_mut() {
-                    comp.update(
-                        device.clone(),
-                        queue.clone(),
-                        &mut self.components,
-                        engine_details.clone(),
-                        engine_systems.clone(),
-                        self.concept_manager.clone(),
-                        self.active_camera_id,
-                    );
-                }
-                (*entity.id(), cloned_components)
-            })
-            .collect::<HashMap<EntityId, Vec<Component>>>();
-
-        self.components = new_components; */
 
         let mut cloned_components = self
             .components
@@ -202,6 +177,59 @@ impl Scene {
         self.components = cloned_components;
     }
 
+    pub fn ui_draw(
+        &mut self,
+        engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
+        ui_manager: Rc<Mutex<UiManager>>,
+    ) {
+        let entities_arc = self.entities.clone();
+        let entities = entities_arc.lock().unwrap();
+
+        let mut manager = ui_manager.lock().unwrap();
+        let context_arc = manager.imgui_context.clone();
+        let mut context = context_arc.lock().unwrap();
+        let ui_frame = context.new_frame();
+        let mut cloned_components = self
+            .components
+            .iter()
+            .map(|(k, v)| {
+                (
+                    *k,
+                    v.iter()
+                        .map(|comp| dyn_clone::clone_box(&**comp))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<HashMap<EntityId, Vec<Component>>>();
+
+        for entity in entities.iter() {
+            let entity_components_len = cloned_components
+                .get(entity.id())
+                .unwrap_or(&Vec::<Component>::new())
+                .len();
+            for comp_index in 0..entity_components_len {
+                let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
+                comp.ui_draw(
+                    &mut manager,
+                    ui_frame,
+                    &mut cloned_components,
+                    self.concept_manager.clone(),
+                    engine_details.clone(),
+                    engine_systems.clone(),
+                );
+                let map_ref = cloned_components
+                    .get_mut(entity.id())
+                    .unwrap()
+                    .get_mut(comp_index)
+                    .unwrap();
+                *map_ref = comp
+            }
+        }
+
+        self.components = cloned_components;
+    }
+
     pub fn render(
         &mut self,
         device: Arc<Device>,
@@ -213,12 +241,17 @@ impl Scene {
         smaa_frame: smaa::SmaaFrame,
         output: wgpu::SurfaceTexture,
         clear_color: wgpu::Color,
+        ui_manager: Rc<Mutex<UiManager>>,
     ) {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
 
-        let camera_bind_group =
-            self.create_camera_bind_group(device.clone(), queue.clone(), window_size);
+        let camera_bind_group = self.create_camera_bind_group(
+            device.clone(),
+            queue.clone(),
+            window_size,
+            ui_manager.clone(),
+        );
 
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
             label: Some("Scene Encoder"),
@@ -232,6 +265,7 @@ impl Scene {
             self.concept_manager.clone(),
             None,
             None,
+            ui_manager.clone(),
         );
 
         {
@@ -305,7 +339,7 @@ impl Scene {
         }
         smaa_frame.resolve();
 
-        let mut ui_manager = engine_systems.ui_manager.lock().unwrap();
+        let ui_manager = ui_manager.lock().unwrap();
         let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
         let mut context = ui_manager.imgui_context.lock().unwrap();
 
@@ -327,24 +361,17 @@ impl Scene {
                 depth_stencil_attachment: None,
             });
 
-            if ui_manager
-                .render_flag
-                .load(std::sync::atomic::Ordering::Relaxed)
-            {
-                self.render_ui(
-                    device,
-                    queue.clone(),
-                    &mut renderer,
-                    &mut context,
-                    &mut ui_render_pass,
-                );
-            }
+            self.render_ui(
+                device,
+                queue.clone(),
+                &mut renderer,
+                &mut context,
+                &mut ui_render_pass,
+            );
         }
 
         drop(renderer);
         drop(context);
-
-        ui_manager.clear_render_flag();
 
         queue.submit(std::iter::once(encoder.finish()));
         output.present();
@@ -382,6 +409,7 @@ impl Scene {
         device: Arc<Device>,
         queue: Arc<Queue>,
         window_size: (u32, u32),
+        ui_manager: Rc<Mutex<UiManager>>,
     ) -> BindGroup {
         if let Some(active_camera_id) = self.active_camera_id {
             let camera_component =
@@ -398,6 +426,7 @@ impl Scene {
             self.concept_manager.clone(),
             None,
             None,
+            ui_manager,
         );
         cam.create_camera_bind_group(device)
     }

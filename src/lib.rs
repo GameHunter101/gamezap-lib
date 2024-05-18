@@ -32,8 +32,8 @@ pub mod ecs {
     pub mod components {
         pub mod camera_component;
         pub mod mesh_component;
-        pub mod transform_component;
         pub mod physics_component;
+        pub mod transform_component;
     }
 }
 
@@ -44,6 +44,7 @@ pub struct GameZap {
     pub window: Window,
     pub window_size: (u32, u32),
     pub details: Rc<Mutex<EngineDetails>>,
+    pub ui_manager: Rc<Mutex<UiManager>>,
 
     scenes: Vec<Scene>,
     active_scene_index: usize,
@@ -69,7 +70,6 @@ pub struct EngineSystems {
     pub sdl_context: Sdl,
     pub video_subsystem: VideoSubsystem,
     pub event_pump: RefCell<EventPump>,
-    pub ui_manager: Rc<Mutex<UiManager>>,
 }
 
 pub struct RenderMask {
@@ -126,7 +126,7 @@ impl GameZap {
 
     pub fn main_loop(&mut self) {
         env_logger::init();
-        
+
         'running: loop {
             let active_scene_opt = self.scenes.get_mut(self.active_scene_index);
             {
@@ -134,7 +134,7 @@ impl GameZap {
 
                 let mut event_pump = systems.event_pump.borrow_mut();
 
-                let ui_manager = systems.ui_manager.lock().unwrap();
+                let ui_manager = self.ui_manager.lock().unwrap();
                 let mut imgui_context = ui_manager.imgui_context.lock().unwrap();
                 let mut imgui_platform = ui_manager.imgui_platform.lock().unwrap();
 
@@ -198,9 +198,9 @@ impl GameZap {
                             renderer.config.format,
                             self.details.clone(),
                             self.systems.clone(),
+                            self.ui_manager.clone(),
                         );
-                        let systems = self.systems.lock().unwrap();
-                        let ui_manager = systems.ui_manager.lock().unwrap();
+                        let ui_manager = self.ui_manager.lock().unwrap();
                         let mut imgui_renderer = ui_manager.imgui_renderer.lock().unwrap();
                         let mut context = ui_manager.imgui_context.lock().unwrap();
                         imgui_renderer.reload_font_texture(
@@ -215,6 +215,11 @@ impl GameZap {
                         self.details.clone(),
                         self.systems.clone(),
                     );
+                    active_scene.ui_draw(
+                        self.details.clone(),
+                        self.systems.clone(),
+                        self.ui_manager.clone(),
+                    );
                     active_scene.render(
                         renderer.device.clone(),
                         renderer.queue.clone(),
@@ -225,6 +230,7 @@ impl GameZap {
                         smaa_frame,
                         output,
                         self.clear_color,
+                        self.ui_manager.clone(),
                     );
                 }
             }
@@ -260,7 +266,7 @@ pub struct GameZapBuilder {
     render_mask: Option<RenderMask>,
 }
 
-impl GameZapBuilder {
+impl<'a> GameZapBuilder {
     fn init() -> Self {
         GameZapBuilder {
             sdl_context: None,
@@ -358,7 +364,6 @@ impl GameZapBuilder {
                 sdl_context,
                 video_subsystem,
                 event_pump,
-                ui_manager,
             })),
             renderer,
             clear_color: self.clear_color,
@@ -380,6 +385,7 @@ impl GameZapBuilder {
                     / self.window_size.unwrap().1 as f32,
                 render_mask: self.render_mask,
             })),
+            ui_manager,
             scenes: Vec::new(),
             active_scene_index: self.active_scene_index,
         }

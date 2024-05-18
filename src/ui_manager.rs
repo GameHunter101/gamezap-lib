@@ -4,7 +4,7 @@ use std::{
     io::Read,
     path::Path,
     rc::Rc,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 
 use imgui::{Context, FontId};
@@ -23,7 +23,6 @@ pub struct UiManager {
     pub imgui_context: Rc<Mutex<Context>>,
     pub imgui_renderer: Rc<Mutex<Renderer>>,
     pub imgui_platform: Rc<Mutex<ImguiSdl2>>,
-    pub render_flag: Rc<AtomicBool>,
 
     pub font_ids: HashMap<String, FontId>,
 }
@@ -55,19 +54,8 @@ impl UiManager {
             imgui_context: Rc::new(Mutex::new(imgui_context)),
             imgui_renderer: Rc::new(Mutex::new(imgui_renderer)),
             imgui_platform: Rc::new(Mutex::new(imgui_platform)),
-            render_flag: Rc::new(AtomicBool::new(false)),
             font_ids: HashMap::new(),
         }
-    }
-
-    pub fn set_render_flag(&mut self) {
-        self.render_flag
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    pub fn clear_render_flag(&mut self) {
-        self.render_flag
-            .store(false, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn load_font(

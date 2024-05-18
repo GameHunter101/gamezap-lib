@@ -107,16 +107,16 @@ impl ComponentSystem for MouseInputComponent {
                 .rotated_by(rotation)
                 .normalized(); */
                 let first_rotation =
-                    (Bivector::new(0.0, 0.0, -1.0) * /* mouse_state.x() as f32 * */ speed)
+                    (Bivector::new(0.0, 0.0, -1.0) * mouse_state.x() as f32 * speed)
                         .exponentiate()
                         * rotation;
 
                 let forward_vec = first_rotation * Vector3::z_axis().xyz();
-                let bivec = forward_vec.wedge(&Vector3::y_axis().xyz());
+                let bivec = forward_vec.wedge(&-Vector3::y_axis().xyz());
                 // dbg!(bivec);
 
                 let second_rotation =
-                    (bivec * mouse_state.y() as f32 * speed).exponentiate() * first_rotation;
+                    first_rotation * (bivec * -mouse_state.y() as f32 * speed).exponentiate();
 
                 // dbg!(second_rotation);
 

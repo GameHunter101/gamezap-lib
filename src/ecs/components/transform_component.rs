@@ -19,7 +19,7 @@ use nalgebra as na;
 use crate::{
     ecs::component::{Component, ComponentId, ComponentSystem},
     model::VertexData,
-    EngineDetails, EngineSystems,
+    EngineDetails, EngineSystems, ui_manager::UiManager,
 };
 
 use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
@@ -201,6 +201,7 @@ impl ComponentSystem for TransformComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
+        _ui_manager: Rc<Mutex<UiManager>>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let matrix = concept_manager
