@@ -12,7 +12,7 @@ use wgpu::{Device, Queue, RenderPass};
 
 use crate::{ui_manager::UiManager, EngineDetails, EngineSystems};
 
-use super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
+use super::{concepts::ConceptManager, entity::{EntityId, Entity}, scene::AllComponents};
 
 pub type ComponentId = (EntityId, TypeId, u32);
 
@@ -48,6 +48,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
+        entities: Arc<Mutex<Vec<Entity>>>,
     ) {
     }
 

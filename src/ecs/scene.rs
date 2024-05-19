@@ -165,6 +165,7 @@ impl Scene {
                         engine_systems.clone(),
                         self.concept_manager.clone(),
                         self.active_camera_id,
+                        self.entities.clone(),
                     );
                     let map_ref = cloned_components
                         .get_mut(entity.id())

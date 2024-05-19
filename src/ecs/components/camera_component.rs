@@ -17,7 +17,7 @@ use nalgebra as na;
 use crate::{
     ecs::{
         component::{ComponentId, ComponentSystem},
-        scene::Scene,
+        scene::Scene, entity::Entity,
     },
     EngineDetails, EngineSystems, ui_manager::UiManager,
 };
@@ -203,6 +203,7 @@ impl ComponentSystem for CameraComponent {
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
+        _entities: Arc<Mutex<Vec<Entity>>>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let aspect_ratio = concept_manager
