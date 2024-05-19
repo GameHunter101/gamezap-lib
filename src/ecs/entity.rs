@@ -17,7 +17,7 @@ use super::{
 
 pub type EntityId = u32;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entity {
     id: EntityId,
     pub enabled: bool,

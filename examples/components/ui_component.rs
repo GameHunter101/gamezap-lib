@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use gamezap::{texture::Texture, ui_manager::UiManager};
+use gamezap::{texture::Texture, ui_manager::UiManager, ecs::entity::Entity};
 use imgui::Ui;
 use wgpu::{Device, Queue};
 
@@ -26,6 +26,7 @@ pub struct UiComponent {
     font_path: String,
     font_id: Option<imgui::FontId>,
     image_details: Option<(imgui::TextureId, [f32; 2])>,
+    picture_enabled: bool,
 }
 
 impl UiComponent {
@@ -36,6 +37,7 @@ impl UiComponent {
             font_path: font_path.to_string(),
             font_id: None,
             image_details: None,
+            picture_enabled: false,
         }
     }
 }
@@ -61,6 +63,29 @@ impl ComponentSystem for UiComponent {
         let details = Texture::load_ui_image(&device, &queue,
             &mut renderer, "C:\\Users\\liors\\Documents\\Coding projects\\Rust\\gamezap-lib\\assets\\testing_textures\\dude.png".to_string());
         self.image_details = Some(details);
+    }
+
+    fn update(
+            &mut self,
+            _device: Arc<Device>,
+            _queue: Arc<Queue>,
+            _component_map: &mut AllComponents,
+            _engine_details: Rc<Mutex<EngineDetails>>,
+            engine_systems: Rc<Mutex<EngineSystems>>,
+            _concept_manager: Rc<Mutex<ConceptManager>>,
+            _active_camera_id: Option<EntityId>,
+            entities: &mut Vec<Entity>,
+        ) {
+        if engine_systems
+            .lock()
+            .unwrap()
+            .sdl_context
+            .mouse()
+            .is_cursor_showing() != self.picture_enabled
+        {
+            entities[0].enabled = !self.picture_enabled;
+        }
+        self.picture_enabled = !self.picture_enabled;
     }
 
     fn ui_draw(

@@ -136,6 +136,8 @@ impl Scene {
         let entities_arc = self.entities.clone();
         let entities = entities_arc.lock().unwrap();
 
+        let mut entities_clone = entities.clone();
+
         let mut cloned_components = self
             .components
             .iter()
@@ -165,7 +167,7 @@ impl Scene {
                         engine_systems.clone(),
                         self.concept_manager.clone(),
                         self.active_camera_id,
-                        self.entities.clone(),
+                        &mut entities_clone,
                     );
                     let map_ref = cloned_components
                         .get_mut(entity.id())
@@ -178,6 +180,7 @@ impl Scene {
         }
 
         self.components = cloned_components;
+        self.entities = Arc::new(Mutex::new(entities_clone));
     }
 
     pub fn ui_draw(
@@ -308,37 +311,39 @@ impl Scene {
                 render_pass.set_pipeline(pipeline.pipeline());
 
                 for entity in entities.iter() {
-                    let entity_materials = self.materials.get(entity.id());
-                    if let Some((materials, active_material_index)) = entity_materials {
-                        let active_material = &materials[*active_material_index];
-                        if active_material.id() == pipeline_id {
-                            render_pass.set_bind_group(0, active_material.bind_group(), &[]);
+                    if entity.enabled {
+                        let entity_materials = self.materials.get(entity.id());
+                        if let Some((materials, active_material_index)) = entity_materials {
+                            let active_material = &materials[*active_material_index];
+                            if active_material.id() == pipeline_id {
+                                render_pass.set_bind_group(0, active_material.bind_group(), &[]);
 
-                            default_transform.render(
-                                device.clone(),
-                                queue.clone(),
-                                &mut render_pass,
-                                &self.components,
-                                self.concept_manager.clone(),
-                                engine_details,
-                                engine_systems,
-                            );
+                                default_transform.render(
+                                    device.clone(),
+                                    queue.clone(),
+                                    &mut render_pass,
+                                    &self.components,
+                                    self.concept_manager.clone(),
+                                    engine_details,
+                                    engine_systems,
+                                );
 
-                            // render_pass.set_vertex_buffer(1, default_transform_buffer.slice(..));
-                            let components_opt = self.components.get(entity.id());
-                            if let Some(components) = components_opt {
-                                let ordered_components =
+                                // render_pass.set_vertex_buffer(1, default_transform_buffer.slice(..));
+                                let components_opt = self.components.get(entity.id());
+                                if let Some(components) = components_opt {
+                                    let ordered_components =
                                     Self::get_component_render_order(components);
-                                for component in ordered_components.iter() {
-                                    component.render(
-                                        device.clone(),
-                                        queue.clone(),
-                                        &mut render_pass,
-                                        &self.components,
-                                        self.concept_manager.clone(),
-                                        engine_details,
-                                        engine_systems,
-                                    );
+                                    for component in ordered_components.iter() {
+                                        component.render(
+                                            device.clone(),
+                                            queue.clone(),
+                                            &mut render_pass,
+                                            &self.components,
+                                            self.concept_manager.clone(),
+                                            engine_details,
+                                            engine_systems,
+                                        );
+                                    }
                                 }
                             }
                         }

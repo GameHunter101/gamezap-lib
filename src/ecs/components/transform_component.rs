@@ -224,7 +224,7 @@ impl ComponentSystem for TransformComponent {
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _entities: Arc<Mutex<Vec<Entity>>>,
+        _entities: &mut Vec<Entity>,
     ) {
         self.update_buffer(concept_manager, device);
     }

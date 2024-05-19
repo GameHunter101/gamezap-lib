@@ -48,7 +48,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
-        entities: Arc<Mutex<Vec<Entity>>>,
+        entities: &mut Vec<Entity>,
     ) {
     }
 

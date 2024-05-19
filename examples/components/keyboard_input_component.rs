@@ -49,7 +49,7 @@ impl ComponentSystem for KeyboardInputComponent {
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        entities: Arc<Mutex<Vec<Entity>>>,
+        _entities: &mut Vec<Entity>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let transform_component =
