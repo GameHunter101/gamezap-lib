@@ -150,27 +150,29 @@ impl Scene {
             .collect::<HashMap<EntityId, Vec<Component>>>();
 
         for entity in entities.iter() {
-            let entity_components_len = cloned_components
-                .get(entity.id())
-                .unwrap_or(&Vec::<Component>::new())
-                .len();
-            for comp_index in 0..entity_components_len {
-                let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
-                comp.update(
-                    device.clone(),
-                    queue.clone(),
-                    &mut cloned_components,
-                    engine_details.clone(),
-                    engine_systems.clone(),
-                    self.concept_manager.clone(),
-                    self.active_camera_id,
-                );
-                let map_ref = cloned_components
-                    .get_mut(entity.id())
-                    .unwrap()
-                    .get_mut(comp_index)
-                    .unwrap();
-                *map_ref = comp
+            if entity.enabled {
+                let entity_components_len = cloned_components
+                    .get(entity.id())
+                    .unwrap_or(&Vec::<Component>::new())
+                    .len();
+                for comp_index in 0..entity_components_len {
+                    let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
+                    comp.update(
+                        device.clone(),
+                        queue.clone(),
+                        &mut cloned_components,
+                        engine_details.clone(),
+                        engine_systems.clone(),
+                        self.concept_manager.clone(),
+                        self.active_camera_id,
+                    );
+                    let map_ref = cloned_components
+                        .get_mut(entity.id())
+                        .unwrap()
+                        .get_mut(comp_index)
+                        .unwrap();
+                    *map_ref = comp
+                }
             }
         }
 
@@ -206,28 +208,30 @@ impl Scene {
             .collect::<HashMap<EntityId, Vec<Component>>>();
 
         for entity in entities.iter() {
-            let entity_components_len = cloned_components
-                .get(entity.id())
-                .unwrap_or(&Vec::<Component>::new())
-                .len();
-            for comp_index in 0..entity_components_len {
-                let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
-                comp.ui_draw(
-                    device.clone(),
-                    queue.clone(),
-                    &mut manager,
-                    ui_frame,
-                    &mut cloned_components,
-                    self.concept_manager.clone(),
-                    engine_details.clone(),
-                    engine_systems.clone(),
-                );
-                let map_ref = cloned_components
-                    .get_mut(entity.id())
-                    .unwrap()
-                    .get_mut(comp_index)
-                    .unwrap();
-                *map_ref = comp
+            if entity.enabled {
+                let entity_components_len = cloned_components
+                    .get(entity.id())
+                    .unwrap_or(&Vec::<Component>::new())
+                    .len();
+                for comp_index in 0..entity_components_len {
+                    let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
+                    comp.ui_draw(
+                        device.clone(),
+                        queue.clone(),
+                        &mut manager,
+                        ui_frame,
+                        &mut cloned_components,
+                        self.concept_manager.clone(),
+                        engine_details.clone(),
+                        engine_systems.clone(),
+                    );
+                    let map_ref = cloned_components
+                        .get_mut(entity.id())
+                        .unwrap()
+                        .get_mut(comp_index)
+                        .unwrap();
+                    *map_ref = comp
+                }
             }
         }
 

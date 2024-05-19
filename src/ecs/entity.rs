@@ -20,7 +20,7 @@ pub type EntityId = u32;
 #[derive(Debug)]
 pub struct Entity {
     id: EntityId,
-    enabled: bool,
+    pub enabled: bool,
     parent: EntityId,
     children: Vec<EntityId>,
 }
