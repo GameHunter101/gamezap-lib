@@ -86,38 +86,64 @@ impl Pipeline {
     }
 
     pub fn create_pipeline_layout(material_id: &MaterialId, device: Arc<Device>) -> PipelineLayout {
-        let bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> = if material_id.2 == 0 {
-            Vec::new()
-        } else {
-            vec![
-                wgpu::BindGroupLayoutEntry {
+        let texture_bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> =
+            if material_id.2 == 0 {
+                Vec::new()
+            } else {
+                vec![
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: NonZeroU32::new(material_id.2 as u32),
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: NonZeroU32::new(material_id.2 as u32),
+                    },
+                ]
+            };
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some(&format!("{material_id:?} Texture Bind Group Layout")),
+                entries: &texture_bind_group_layout_entries,
+            });
+
+        let uniform_buffer_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some(&format!("{material_id:?} Uniform Buffer Bind Group Layout")),
+                entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    count: NonZeroU32::new(material_id.2 as u32),
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: NonZeroU32::new(material_id.2 as u32),
-                },
+                    count: None,
+                }],
+            });
+        let camera_bind_group_layout = CameraComponent::camera_bind_group_layout(device.clone());
+
+        let all_layouts = if material_id.3 {
+            vec![
+                &texture_bind_group_layout,
+                &camera_bind_group_layout,
+                &uniform_buffer_bind_group_layout,
             ]
+        } else {
+            vec![&texture_bind_group_layout, &camera_bind_group_layout]
         };
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(&format!("{material_id:?} Bind Group Layout")),
-            entries: &bind_group_layout_entries,
-        });
+
         device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(&format!("{material_id:?} Pipeline Layout")),
-            bind_group_layouts: &[
-                &bind_group_layout,
-                &CameraComponent::camera_bind_group_layout(device.clone()),
-            ],
+            bind_group_layouts: &all_layouts,
             push_constant_ranges: &[],
         })
     }

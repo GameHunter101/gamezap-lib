@@ -2,13 +2,13 @@
 use std::{num::NonZeroU32, sync::Arc};
 
 use wgpu::{
-    BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType, Device,
-    SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension,
+    util::DeviceExt, BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType,
+    Device, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension,
 };
 
 use crate::texture::Texture;
 
-pub type MaterialId = (String, String, usize);
+pub type MaterialId = (String, String, usize, bool);
 
 #[derive(Debug)]
 pub struct Material {
@@ -17,7 +17,8 @@ pub struct Material {
     textures: Vec<Texture>,
     enabled: bool,
     id: MaterialId,
-    bind_group: BindGroup,
+    texture_bind_group: BindGroup,
+    uniform_buffer_bind_group: Option<BindGroup>,
 }
 
 impl Material {
@@ -25,6 +26,7 @@ impl Material {
         vertex_shader_path: &str,
         fragment_shader_path: &str,
         textures: Vec<Texture>,
+        uniform_buffer_data: Option<&[u8]>,
         enabled: bool,
         device: Arc<Device>,
     ) -> Self {
@@ -32,7 +34,31 @@ impl Material {
             vertex_shader_path.to_string(),
             fragment_shader_path.to_string(),
             textures.len(),
+            uniform_buffer_data.is_some(),
         );
+
+        let texture_bind_group =
+            Self::create_texture_bind_group(&textures, device.clone(), id.clone());
+
+        let uniform_buffer_bind_group = uniform_buffer_data
+            .map(|data| Self::create_uniform_buffer_bind_group(id.clone(), device, data));
+
+        Self {
+            vertex_shader_path: vertex_shader_path.to_string(),
+            fragment_shader_path: fragment_shader_path.to_string(),
+            textures,
+            enabled,
+            id,
+            texture_bind_group,
+            uniform_buffer_bind_group,
+        }
+    }
+
+    fn create_texture_bind_group(
+        textures: &[Texture],
+        device: Arc<Device>,
+        material_id: MaterialId,
+    ) -> BindGroup {
         let bind_group_layout_entries = if textures.is_empty() {
             Vec::new()
         } else {
@@ -56,7 +82,7 @@ impl Material {
             ]
         };
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(&format!("Material {id:?} Bind Group Layout")),
+            label: Some(&format!("Material {material_id:?} Bind Group Layout")),
             entries: &bind_group_layout_entries,
         });
         let views = textures.iter().map(|tex| &tex.view).collect::<Vec<_>>();
@@ -78,19 +104,50 @@ impl Material {
             ]
         };
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(&format!("Material {id:?} Bind Group")),
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("Material {material_id:?} Texture Bind Group")),
             layout: &bind_group_layout,
             entries: &bind_group_entries,
+        })
+    }
+
+    fn create_uniform_buffer_bind_group(
+        material_id: MaterialId,
+        device: Arc<Device>,
+        data: &[u8],
+    ) -> BindGroup {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some(&format!("Material {material_id:?} Bind Group")),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
         });
-        Self {
-            vertex_shader_path: vertex_shader_path.to_string(),
-            fragment_shader_path: fragment_shader_path.to_string(),
-            textures,
-            enabled,
-            id,
-            bind_group,
-        }
+
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("Material {material_id:?} Uniform Buffer")),
+            contents: data,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group_entries = [BindGroupEntry {
+            binding: 0,
+            resource: uniform_buffer.as_entire_binding(),
+        }];
+
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!(
+                "Material {material_id:?} Uniform Buffer Bind Group"
+            )),
+            layout: &bind_group_layout,
+            entries: &bind_group_entries,
+        })
     }
 
     pub fn id(&self) -> &MaterialId {
@@ -101,7 +158,11 @@ impl Material {
         self.enabled
     }
 
-    pub fn bind_group(&self) -> &BindGroup {
-        &self.bind_group
+    pub fn texture_bind_group(&self) -> &BindGroup {
+        &self.texture_bind_group
+    }
+
+    pub fn uniform_buffer_bind_group(&self) -> Option<&BindGroup> {
+        self.uniform_buffer_bind_group.as_ref()
     }
 }

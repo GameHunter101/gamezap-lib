@@ -110,6 +110,7 @@ async fn main() {
         )
         .await
         .unwrap()],
+        None,
         true,
         device.clone(),
     );
@@ -144,6 +145,7 @@ async fn main() {
         )
         .await
         .unwrap()],
+        None,
         true,
         device.clone(),
     );
@@ -171,7 +173,7 @@ async fn main() {
 
     let cube_material = Material::new(
         "examples/shaders/vert.wgsl",
-        "examples/shaders/frag.wgsl",
+        "examples/shaders/frag2.wgsl",
         vec![Texture::load_texture(
             "assets/testing_textures/dude.png",
             false,
@@ -181,6 +183,7 @@ async fn main() {
         )
         .await
         .unwrap()],
+        Some(bytemuck::cast_slice(&[0.5_f32])),
         true,
         device,
     );
@@ -193,7 +196,7 @@ async fn main() {
             Box::new(sword_transform),
             Box::new(sword_physics),
         ],
-        Some((vec![cube_material], 0)),
+        Some((vec![sword_material], 0)),
     );
 
     let cube_mesh =
@@ -214,7 +217,7 @@ async fn main() {
         0,
         true,
         vec![Box::new(cube_mesh), Box::new(cube_transform)],
-        Some((vec![sword_material], 0)),
+        Some((vec![cube_material], 0)),
     );
 
     let camera_component =
@@ -251,4 +254,10 @@ async fn main() {
     engine.create_scene(scene);
 
     engine.main_loop();
+}
+
+#[repr(C)]
+#[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
+struct TestUniform {
+    coefficient: f32
 }

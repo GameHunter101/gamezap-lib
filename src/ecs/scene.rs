@@ -316,7 +316,10 @@ impl Scene {
                         if let Some((materials, active_material_index)) = entity_materials {
                             let active_material = &materials[*active_material_index];
                             if active_material.id() == pipeline_id {
-                                render_pass.set_bind_group(0, active_material.bind_group(), &[]);
+                                render_pass.set_bind_group(0, active_material.texture_bind_group(), &[]);
+                                if let Some(uniform_buffer_bind_group) = active_material.uniform_buffer_bind_group() {
+                                    render_pass.set_bind_group(2, uniform_buffer_bind_group, &[]);
+                                }
 
                                 default_transform.render(
                                     device.clone(),
