@@ -17,7 +17,7 @@ use wgpu::{
 use nalgebra as na;
 
 use crate::{
-    ecs::{component::{Component, ComponentId, ComponentSystem}, entity::Entity},
+    ecs::{component::{Component, ComponentId, ComponentSystem}, entity::Entity, material::Material},
     model::VertexData,
     EngineDetails, EngineSystems, ui_manager::UiManager,
 };
@@ -225,6 +225,7 @@ impl ComponentSystem for TransformComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
+        _materials: Option<&(Vec<Material>, usize)>,
     ) {
         self.update_buffer(concept_manager, device);
     }

@@ -13,7 +13,7 @@ use gamezap::{
         },
         concepts::ConceptManager,
         entity::{EntityId, Entity},
-        scene::{AllComponents, Scene},
+        scene::{AllComponents, Scene}, material::Material,
     },
     EngineDetails, EngineSystems,
 };
@@ -50,6 +50,7 @@ impl ComponentSystem for KeyboardInputComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
+        _materials: Option<&(Vec<Material>, usize)>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let transform_component =

@@ -10,7 +10,7 @@ use gamezap::{
         components::transform_component::TransformComponent,
         concepts::ConceptManager,
         entity::{EntityId, Entity},
-        scene::AllComponents,
+        scene::AllComponents, material::Material,
     },
     EngineDetails, EngineSystems,
 };
@@ -45,6 +45,7 @@ impl ComponentSystem for MouseInputComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
+        _materials: Option<&(Vec<Material>, usize)>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         /* let pitch = *concept_manager

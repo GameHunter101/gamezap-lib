@@ -138,6 +138,7 @@ impl Scene {
 
         let mut entities_clone = entities.clone();
 
+
         let mut cloned_components = self
             .components
             .iter()
@@ -168,6 +169,7 @@ impl Scene {
                         self.concept_manager.clone(),
                         self.active_camera_id,
                         &mut entities_clone,
+                        self.materials.get(entity.id()),
                     );
                     let map_ref = cloned_components
                         .get_mut(entity.id())
@@ -318,7 +320,7 @@ impl Scene {
                             if active_material.id() == pipeline_id {
                                 render_pass.set_bind_group(0, active_material.texture_bind_group(), &[]);
                                 if let Some(uniform_buffer_bind_group) = active_material.uniform_buffer_bind_group() {
-                                    render_pass.set_bind_group(2, uniform_buffer_bind_group, &[]);
+                                    render_pass.set_bind_group(2, &uniform_buffer_bind_group.0, &[]);
                                 }
 
                                 default_transform.render(

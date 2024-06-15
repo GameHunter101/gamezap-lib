@@ -16,7 +16,7 @@ use crate::{
         component::{ComponentId, ComponentSystem},
         concepts::ConceptManager,
         entity::{EntityId, Entity},
-        scene::{AllComponents, Scene},
+        scene::{AllComponents, Scene}, material::Material,
     },
     EngineDetails, EngineSystems, ui_manager::UiManager,
 };
@@ -148,6 +148,7 @@ impl ComponentSystem for PhysicsComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
+        _materials: Option<&(Vec<Material>, usize)>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let engine_details = engine_details.lock().unwrap();

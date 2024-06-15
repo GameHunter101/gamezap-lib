@@ -3,7 +3,7 @@ use std::{num::NonZeroU32, sync::Arc};
 
 use wgpu::{
     util::DeviceExt, BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType,
-    Device, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension,
+    Buffer, Device, SamplerBindingType, ShaderStages, TextureSampleType, TextureViewDimension,
 };
 
 use crate::texture::Texture;
@@ -18,7 +18,7 @@ pub struct Material {
     enabled: bool,
     id: MaterialId,
     texture_bind_group: BindGroup,
-    uniform_buffer_bind_group: Option<BindGroup>,
+    uniform_buffer_and_bind_group: Option<(BindGroup, Buffer)>,
 }
 
 impl Material {
@@ -40,8 +40,8 @@ impl Material {
         let texture_bind_group =
             Self::create_texture_bind_group(&textures, device.clone(), id.clone());
 
-        let uniform_buffer_bind_group = uniform_buffer_data
-            .map(|data| Self::create_uniform_buffer_bind_group(id.clone(), device, data));
+        let uniform_buffer_and_bind_group= uniform_buffer_data
+            .map(|data| Self::create_uniform_buffer_and_bind_group(id.clone(), device, data));
 
         Self {
             vertex_shader_path: vertex_shader_path.to_string(),
@@ -50,7 +50,7 @@ impl Material {
             enabled,
             id,
             texture_bind_group,
-            uniform_buffer_bind_group,
+            uniform_buffer_and_bind_group,
         }
     }
 
@@ -111,11 +111,11 @@ impl Material {
         })
     }
 
-    fn create_uniform_buffer_bind_group(
+    fn create_uniform_buffer_and_bind_group(
         material_id: MaterialId,
         device: Arc<Device>,
         data: &[u8],
-    ) -> BindGroup {
+    ) -> (BindGroup, Buffer) {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some(&format!("Material {material_id:?} Bind Group")),
             entries: &[BindGroupLayoutEntry {
@@ -141,13 +141,16 @@ impl Material {
             resource: uniform_buffer.as_entire_binding(),
         }];
 
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(&format!(
+        (
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!(
                 "Material {material_id:?} Uniform Buffer Bind Group"
             )),
-            layout: &bind_group_layout,
-            entries: &bind_group_entries,
-        })
+                layout: &bind_group_layout,
+                entries: &bind_group_entries,
+            }),
+            uniform_buffer,
+        )
     }
 
     pub fn id(&self) -> &MaterialId {
@@ -162,7 +165,7 @@ impl Material {
         &self.texture_bind_group
     }
 
-    pub fn uniform_buffer_bind_group(&self) -> Option<&BindGroup> {
-        self.uniform_buffer_bind_group.as_ref()
+    pub fn uniform_buffer_bind_group(&self) -> Option<&(BindGroup, Buffer)> {
+        self.uniform_buffer_and_bind_group.as_ref()
     }
 }

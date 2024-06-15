@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use gamezap::{texture::Texture, ui_manager::UiManager, ecs::entity::Entity};
+use gamezap::{ecs::{entity::Entity, material::Material}, texture::Texture, ui_manager::UiManager};
 use imgui::Ui;
 use wgpu::{Device, Queue};
 
@@ -66,22 +66,24 @@ impl ComponentSystem for UiComponent {
     }
 
     fn update(
-            &mut self,
-            _device: Arc<Device>,
-            _queue: Arc<Queue>,
-            _component_map: &mut AllComponents,
-            _engine_details: Rc<Mutex<EngineDetails>>,
-            engine_systems: Rc<Mutex<EngineSystems>>,
-            _concept_manager: Rc<Mutex<ConceptManager>>,
-            _active_camera_id: Option<EntityId>,
-            entities: &mut Vec<Entity>,
-        ) {
+        &mut self,
+        _device: Arc<Device>,
+        _queue: Arc<Queue>,
+        _component_map: &mut AllComponents,
+        _engine_details: Rc<Mutex<EngineDetails>>,
+        engine_systems: Rc<Mutex<EngineSystems>>,
+        _concept_manager: Rc<Mutex<ConceptManager>>,
+        _active_camera_id: Option<EntityId>,
+        entities: &mut Vec<Entity>,
+        _materials: Option<&(Vec<Material>, usize)>,
+    ) {
         if engine_systems
             .lock()
             .unwrap()
             .sdl_context
             .mouse()
-            .is_cursor_showing() != self.picture_enabled
+            .is_cursor_showing()
+            != self.picture_enabled
         {
             entities[0].enabled = !self.picture_enabled;
         }
@@ -107,7 +109,8 @@ impl ComponentSystem for UiComponent {
             .is_cursor_showing()
         {
             let _inter = ui_frame.push_font(self.font_id.unwrap());
-            ui_frame.window(".")
+            ui_frame
+                .window(".")
                 .title_bar(false)
                 .draw_background(false)
                 .resizable(false)

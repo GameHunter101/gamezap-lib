@@ -1,7 +1,7 @@
 use algoe::{bivector::Bivector, rotor::Rotor3};
 use components::{
     keyboard_input_component::KeyboardInputComponent, mouse_input_component::MouseInputComponent,
-    ui_component::UiComponent,
+    transparency_component::TransparencyComponent, ui_component::UiComponent,
 };
 use gamezap::{
     ecs::{
@@ -24,6 +24,7 @@ extern crate gamezap;
 pub mod components {
     pub mod keyboard_input_component;
     pub mod mouse_input_component;
+    pub mod transparency_component;
     pub mod ui_component;
 }
 
@@ -171,6 +172,17 @@ async fn main() {
         // ultraviolet::Rotor3::default(),
     );
 
+    scene.create_entity(
+        0,
+        true,
+        vec![
+            Box::new(sword_mesh),
+            Box::new(sword_transform),
+            Box::new(sword_physics),
+        ],
+        Some((vec![sword_material], 0)),
+    );
+
     let cube_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag2.wgsl",
@@ -183,20 +195,9 @@ async fn main() {
         )
         .await
         .unwrap()],
-        Some(bytemuck::cast_slice(&[0.5_f32])),
+        Some(bytemuck::cast_slice(&[0.0_f32])),
         true,
         device,
-    );
-
-    scene.create_entity(
-        0,
-        true,
-        vec![
-            Box::new(sword_mesh),
-            Box::new(sword_transform),
-            Box::new(sword_physics),
-        ],
-        Some((vec![sword_material], 0)),
     );
 
     let cube_mesh =
@@ -213,10 +214,16 @@ async fn main() {
         na::Vector3::new(0.1, 0.1, 0.1),
     );
 
+    let cube_transparency = TransparencyComponent::default();
+
     scene.create_entity(
         0,
         true,
-        vec![Box::new(cube_mesh), Box::new(cube_transform)],
+        vec![
+            Box::new(cube_mesh),
+            Box::new(cube_transform),
+            Box::new(cube_transparency),
+        ],
         Some((vec![cube_material], 0)),
     );
 
@@ -259,5 +266,5 @@ async fn main() {
 #[repr(C)]
 #[derive(bytemuck::Pod, bytemuck::Zeroable, Clone, Copy)]
 struct TestUniform {
-    coefficient: f32
+    coefficient: f32,
 }
