@@ -1,21 +1,12 @@
-use std::{
-    any::TypeId,
-    collections::HashMap,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
-
 use gamezap::{
     ecs::{
-        component::{Component, ComponentId, ComponentSystem},
+        component::Component,
         components::{
             physics_component::PhysicsComponent, transform_component::TransformComponent,
         },
-        concepts::ConceptManager,
-        entity::{EntityId, Entity},
-        scene::{AllComponents, Scene}, material::Material,
+        scene::Scene,
     },
-    EngineDetails, EngineSystems,
+    new_component,
 };
 
 use nalgebra as na;
@@ -24,11 +15,7 @@ use sdl2::{
     keyboard::{Keycode, Scancode},
 };
 
-#[derive(Debug, Clone)]
-pub struct KeyboardInputComponent {
-    parent: EntityId,
-    id: ComponentId,
-}
+new_component!(KeyboardInputComponent {});
 
 impl Default for KeyboardInputComponent {
     fn default() -> Self {
@@ -51,6 +38,7 @@ impl ComponentSystem for KeyboardInputComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&(Vec<Material>, usize)>,
+        _compute_pipelines: &[ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let transform_component =
@@ -131,27 +119,5 @@ impl ComponentSystem for KeyboardInputComponent {
             context.mouse().set_relative_mouse_mode(is_cursor_visible);
             context.mouse().show_cursor(!is_cursor_visible);
         }
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
     }
 }

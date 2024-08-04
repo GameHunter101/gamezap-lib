@@ -1,9 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+#![allow(unused_imports)]
 
 use na::Vector3;
 use nalgebra as na;
@@ -11,25 +6,16 @@ use std::time::{Duration, Instant};
 // use ultraviolet::{Rotor3, Bivec3};
 use algoe::{bivector::Bivector, rotor::Rotor3};
 
-use crate::{
-    ecs::{
-        component::{ComponentId, ComponentSystem},
-        concepts::ConceptManager,
-        entity::{EntityId, Entity},
-        scene::{AllComponents, Scene}, material::Material,
-    },
-    EngineDetails, EngineSystems, ui_manager::UiManager,
-};
+use crate::{ecs::scene::Scene, new_component, ui_manager::UiManager};
 
 use super::transform_component::TransformComponent;
 
-#[derive(Debug, Clone)]
-pub struct PhysicsComponent {
-    parent: EntityId,
-    concept_ids: Vec<String>,
-    id: ComponentId,
-    impulses: Vec<Impulse>,
-}
+new_component!(
+    PhysicsComponent {
+        concept_ids: Vec<String>,
+        impulses: Vec<Impulse>
+    }
+);
 
 impl PhysicsComponent {
     pub fn new(
@@ -149,6 +135,7 @@ impl ComponentSystem for PhysicsComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&(Vec<Material>, usize)>,
+        _compute_pipelines: &[ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let engine_details = engine_details.lock().unwrap();
@@ -223,32 +210,10 @@ impl ComponentSystem for PhysicsComponent {
 
         self.remove_impulses();
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
-    }
 }
 
 #[derive(Debug, Clone)]
-struct Impulse {
+pub struct Impulse {
     force: Vector3<f32>,
     initialized_instant: Instant,
     duration: Duration,

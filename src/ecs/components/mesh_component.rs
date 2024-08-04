@@ -1,23 +1,16 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    fmt::Debug,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+#![allow(unused_imports)]
+use std::fmt::Debug;
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    Buffer, Device, Queue, RenderPass,
+    Buffer, RenderPass,
 };
 
 use crate::{
-    ecs::component::{Component, ComponentId, ComponentSystem},
     model::Vertex,
-    EngineDetails, EngineSystems, ui_manager::UiManager,
+    new_component,
+    ui_manager::UiManager,
 };
-
-use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
 
 #[derive(Debug)]
 pub enum MeshComponentError {
@@ -25,15 +18,12 @@ pub enum MeshComponentError {
     FailedToLoadMtl,
 }
 
-#[derive(Debug, Clone)]
-pub struct MeshComponent {
-    parent: EntityId,
+new_component!(MeshComponent {
     concept_ids: Vec<String>,
-    id: ComponentId,
     mesh_count: usize,
     vertex_buffers: Arc<[Option<Buffer>]>,
-    index_buffers: Arc<[Option<Buffer>]>,
-}
+    index_buffers: Arc<[Option<Buffer>]>
+}, render_order: usize::MAX);
 
 impl MeshComponent {
     pub fn new(
@@ -186,7 +176,7 @@ impl ComponentSystem for MeshComponent {
         _device: Arc<Device>,
         _queue: Arc<Queue>,
         render_pass: &mut RenderPass<'b>,
-        _component_map: &'a HashMap<EntityId, Vec<Component>>,
+        _component_map: &'a AllComponents,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _engine_details: &EngineDetails,
         _engine_systems: &EngineSystems,
@@ -209,31 +199,5 @@ impl ComponentSystem for MeshComponent {
                 render_pass.draw_indexed(0..indices.len() as u32, 0, 0..1);
             }
         }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
-    }
-
-    fn render_order(&self) -> usize {
-        usize::MAX
     }
 }

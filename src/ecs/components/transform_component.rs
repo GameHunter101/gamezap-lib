@@ -1,36 +1,25 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    fmt::Debug,
-    rc::Rc,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::{fmt::Debug, sync::MutexGuard};
 
-use na::{Matrix4, Vector4, Vector3};
+use na::{Matrix4, Vector3, Vector4};
 // use ultraviolet::{Rotor3, Vec3};
 use algoe::rotor::Rotor3;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    Buffer, BufferUsages, Device, Queue, RenderPass,
+    Buffer, BufferUsages, RenderPass,
 };
 
 use nalgebra as na;
 
 use crate::{
-    ecs::{component::{Component, ComponentId, ComponentSystem}, entity::Entity, material::Material},
-    model::VertexData,
-    EngineDetails, EngineSystems, ui_manager::UiManager,
+    ecs::component::Component, model::VertexData, new_component, ui_manager::UiManager,
 };
 
-use super::super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents};
-
-#[derive(Debug, Clone)]
-pub struct TransformComponent {
-    parent: EntityId,
-    concept_ids: Vec<String>,
-    id: ComponentId,
-    buf: Arc<Option<Buffer>>,
-}
+new_component!(
+    TransformComponent {
+        concept_ids: Vec<String>,
+        buf: Arc<Option<Buffer>>
+    }
+);
 
 impl TransformComponent {
     pub fn create_rotation_matrix(
@@ -226,6 +215,7 @@ impl ComponentSystem for TransformComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&(Vec<Material>, usize)>,
+        _compute_pipelines: &[ComputePipeline],
     ) {
         self.update_buffer(concept_manager, device);
     }
@@ -243,27 +233,5 @@ impl ComponentSystem for TransformComponent {
         if let Some(buf) = self.buf.as_ref() {
             render_pass.set_vertex_buffer(1, buf.slice(..));
         }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
     }
 }

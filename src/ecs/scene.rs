@@ -1,6 +1,7 @@
 use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
+    pipeline::PipelineError,
     texture::Texture,
     ui_manager::UiManager,
     EngineDetails, EngineSystems,
@@ -14,7 +15,7 @@ use std::{
 
 use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, TextureFormat};
 
-use crate::pipeline::Pipeline;
+use crate::pipeline::{ComputeError, ComputePipeline, Pipeline};
 
 use super::{
     component::{Component, ComponentSystem},
@@ -31,6 +32,7 @@ pub struct Scene {
     entities: Arc<Mutex<Vec<Entity>>>,
     total_entities_created: u32,
     pipelines: HashMap<MaterialId, Pipeline>,
+    compute_pipelines: Vec<ComputePipeline>,
     components: AllComponents,
     materials: Materials,
     active_camera_id: Option<EntityId>,
@@ -138,7 +140,6 @@ impl Scene {
 
         let mut entities_clone = entities.clone();
 
-
         let mut cloned_components = self
             .components
             .iter()
@@ -159,7 +160,8 @@ impl Scene {
                     .unwrap_or(&Vec::<Component>::new())
                     .len();
                 for comp_index in 0..entity_components_len {
-                    let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
+                    let mut comp =
+                        dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
                     comp.update(
                         device.clone(),
                         queue.clone(),
@@ -170,6 +172,7 @@ impl Scene {
                         self.active_camera_id,
                         &mut entities_clone,
                         self.materials.get(entity.id()),
+                        &self.compute_pipelines
                     );
                     let map_ref = cloned_components
                         .get_mut(entity.id())
@@ -220,7 +223,8 @@ impl Scene {
                     .unwrap_or(&Vec::<Component>::new())
                     .len();
                 for comp_index in 0..entity_components_len {
-                    let mut comp = dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
+                    let mut comp =
+                        dyn_clone::clone_box(&*cloned_components[entity.id()][comp_index]);
                     comp.ui_draw(
                         device.clone(),
                         queue.clone(),
@@ -318,9 +322,19 @@ impl Scene {
                         if let Some((materials, active_material_index)) = entity_materials {
                             let active_material = &materials[*active_material_index];
                             if active_material.id() == pipeline_id {
-                                render_pass.set_bind_group(0, active_material.texture_bind_group(), &[]);
-                                if let Some(uniform_buffer_bind_group) = active_material.uniform_buffer_bind_group() {
-                                    render_pass.set_bind_group(2, &uniform_buffer_bind_group.0, &[]);
+                                render_pass.set_bind_group(
+                                    0,
+                                    active_material.texture_bind_group(),
+                                    &[],
+                                );
+                                if let Some(uniform_buffer_bind_group) =
+                                    active_material.uniform_buffer_bind_group()
+                                {
+                                    render_pass.set_bind_group(
+                                        2,
+                                        &uniform_buffer_bind_group.0,
+                                        &[],
+                                    );
                                 }
 
                                 default_transform.render(
@@ -337,7 +351,7 @@ impl Scene {
                                 let components_opt = self.components.get(entity.id());
                                 if let Some(components) = components_opt {
                                     let ordered_components =
-                                    Self::get_component_render_order(components);
+                                        Self::get_component_render_order(components);
                                     for component in ordered_components.iter() {
                                         component.render(
                                             device.clone(),
@@ -489,6 +503,42 @@ impl Scene {
     pub fn get_concept_manager(&self) -> Rc<Mutex<ConceptManager>> {
         self.concept_manager.clone()
     }
+
+    pub fn create_compute_pipeline<T: bytemuck::Pod + bytemuck::Zeroable>(
+        &mut self,
+        device: Arc<Device>,
+        shader_path: &str,
+        workgroup_size: (u32, u32, u32),
+        input_data: T,
+        output_buffer_size: Option<u64>,
+    ) -> Result<usize, PipelineError> {
+        let this_compute_index = self.compute_pipelines.len();
+        let shader_module_descriptor = Pipeline::load_shader_module_descriptor(shader_path)?;
+        let pipeline = ComputePipeline::new(
+            &device,
+            shader_module_descriptor,
+            input_data,
+            this_compute_index,
+            workgroup_size,
+            output_buffer_size,
+            this_compute_index,
+        );
+        self.compute_pipelines.push(pipeline);
+        Ok(this_compute_index)
+    }
+
+    pub async fn run_compute_shader<
+        T: bytemuck::Pod + bytemuck::Zeroable + std::marker::Sync + std::marker::Send,
+    >(
+        &self,
+        compute_pipeline_index: usize,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+    ) -> Result<Vec<T>, ComputeError> {
+        self.compute_pipelines[compute_pipeline_index]
+            .run_compute_shader(device.clone(), queue.clone())
+            .await
+    }
 }
 
 impl Default for Scene {
@@ -497,6 +547,7 @@ impl Default for Scene {
             entities: Arc::new(Mutex::new(Vec::new())),
             total_entities_created: 0,
             pipelines: HashMap::new(),
+            compute_pipelines: Vec::new(),
             components: HashMap::new(),
             materials: HashMap::new(),
             active_camera_id: None,

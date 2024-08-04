@@ -1,33 +1,16 @@
-use std::{
-    any::{Any, TypeId},
-    fmt::Debug,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::fmt::Debug;
 
-use gamezap::{ecs::{entity::Entity, material::Material}, texture::Texture, ui_manager::UiManager};
+use gamezap::{new_component, texture::Texture, ui_manager::UiManager};
 use imgui::Ui;
-use wgpu::{Device, Queue};
 
-use crate::{
-    gamezap::ecs::{
-        component::{ComponentId, ComponentSystem},
-        scene::AllComponents,
-    },
-    EngineDetails, EngineSystems,
-};
-
-use super::super::{gamezap::ecs::concepts::ConceptManager, gamezap::ecs::entity::EntityId};
-
-#[derive(Debug, Clone)]
-pub struct UiComponent {
-    parent: EntityId,
-    id: ComponentId,
-    font_path: String,
-    font_id: Option<imgui::FontId>,
-    image_details: Option<(imgui::TextureId, [f32; 2])>,
-    picture_enabled: bool,
-}
+new_component!(
+    UiComponent {
+        font_path: String,
+        font_id: Option<imgui::FontId>,
+        image_details: Option<(imgui::TextureId, [f32; 2])>,
+        picture_enabled: bool
+    }
+);
 
 impl UiComponent {
     pub fn new(font_path: &str) -> UiComponent {
@@ -76,6 +59,7 @@ impl ComponentSystem for UiComponent {
         _active_camera_id: Option<EntityId>,
         entities: &mut Vec<Entity>,
         _materials: Option<&(Vec<Material>, usize)>,
+        _compute_pipelines: &[ComputePipeline],
     ) {
         if engine_systems
             .lock()
@@ -134,27 +118,5 @@ impl ComponentSystem for UiComponent {
 
             // ui.show_demo_window(&mut true);
         }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
     }
 }

@@ -1,5 +1,5 @@
 use std::{num::NonZeroU32, sync::Arc};
-use wgpu::{util::DeviceExt, Device, PipelineLayout, RenderPipeline, ShaderStages};
+use wgpu::{util::DeviceExt, Device, PipelineLayout, Queue, RenderPipeline, ShaderStages};
 
 use crate::{
     ecs::{components::camera_component::CameraComponent, material::MaterialId},
@@ -172,13 +172,20 @@ impl Pipeline {
     }
 }
 
+pub enum ComputeError {
+    InvalidCast,
+    BufferMapError,
+}
+
+#[derive(Debug)]
 pub struct ComputePipeline {
     pub pipeline: wgpu::ComputePipeline,
     pub bind_group: wgpu::BindGroup,
     pub input_buffer: wgpu::Buffer,
-    pub output_buffer: wgpu::Buffer,
+    pub output_buffer: Arc<wgpu::Buffer>,
     pub workgroup_counts: (u32, u32, u32),
     pub data_size: u64,
+    pub pipeline_id: usize,
 }
 
 impl ComputePipeline {
@@ -188,6 +195,8 @@ impl ComputePipeline {
         data: T,
         compute_shader_index: usize,
         workgroup_counts: (u32, u32, u32),
+        output_buffer_size: Option<u64>,
+        pipeline_id: usize,
     ) -> Self {
         let shader_module = device.create_shader_module(shader_module_descriptor);
 
@@ -201,12 +210,12 @@ impl ComputePipeline {
 
         let data_size = std::mem::size_of_val(&data) as u64;
 
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        let output_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(format!("Compute shader #{} output buffer", compute_shader_index).as_str()),
-            size: data_size,
+            size: output_buffer_size.unwrap_or(data_size),
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
+        }));
 
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some(format!("Compute shader #{} pipeline", compute_shader_index).as_str()),
@@ -232,6 +241,68 @@ impl ComputePipeline {
             output_buffer,
             workgroup_counts,
             data_size,
+            pipeline_id,
         }
+    }
+
+    pub async fn run_compute_shader<
+        T: bytemuck::Pod + bytemuck::Zeroable + std::marker::Sync + std::marker::Send,
+    >(
+        &self,
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+    ) -> Result<Vec<T>, ComputeError> {
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some(&format!("Compute shader #{} encoder", self.pipeline_id)),
+        });
+
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some(&format!(
+                    "Compute shader #{} compute pass",
+                    self.pipeline_id
+                )),
+            });
+
+            compute_pass.set_pipeline(&self.pipeline);
+            compute_pass.set_bind_group(0, &self.bind_group, &[]);
+            compute_pass.dispatch_workgroups(
+                self.workgroup_counts.0,
+                self.workgroup_counts.1,
+                self.workgroup_counts.2,
+            );
+        }
+
+        queue.submit(Some(encoder.finish()));
+
+        let buf = self.output_buffer.clone();
+
+        tokio::task::spawn(async move {
+            let buffer_slice = buf.slice(..);
+            let (sender, receiver) = flume::bounded(1);
+            buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+
+            device.poll(wgpu::Maintain::Wait);
+
+            if let Ok(Ok(())) = receiver.recv() {
+                let data_buffer = buffer_slice.get_mapped_range();
+
+                let data_result: Result<&[T], bytemuck::PodCastError> =
+                    bytemuck::try_cast_slice(&data_buffer);
+
+                if let Ok(result) = data_result {
+                    let vec = result.to_vec();
+                    drop(data_buffer);
+                    buf.unmap();
+                    Ok(vec)
+                } else {
+                    Err(ComputeError::InvalidCast)
+                }
+            } else {
+                Err(ComputeError::BufferMapError)
+            }
+        })
+        .await
+        .unwrap()
     }
 }

@@ -14,7 +14,7 @@ use gamezap::{
     },
     model::Vertex,
     texture::Texture,
-    EngineDetails, EngineSystems, GameZap,
+    GameZap,
 };
 
 use nalgebra as na;
@@ -22,6 +22,7 @@ use nalgebra as na;
 extern crate gamezap;
 
 pub mod components {
+    pub mod compute_monitor_component;
     pub mod keyboard_input_component;
     pub mod mouse_input_component;
     pub mod transparency_component;
@@ -197,7 +198,7 @@ async fn main() {
         .unwrap()],
         Some(bytemuck::cast_slice(&[0.0_f32])),
         true,
-        device,
+        device.clone(),
     );
 
     let cube_mesh =
@@ -249,6 +250,14 @@ async fn main() {
             Box::new(camera_keyboard_controller),
             Box::new(camera_mouse_controller),
         ],
+        None,
+    );
+
+    let test_compute_pipeline_index = scene.create_compute_pipeline(
+        device.clone(),
+        "examples/shaders/compute.wgsl",
+        (6, 1, 1),
+        [10, 5, 3, 2, 1, 17_u32],
         None,
     );
 

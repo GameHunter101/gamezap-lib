@@ -1,29 +1,10 @@
-use std::{
-    any::TypeId,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
-
-use gamezap::{
-    ecs::{
-        component::{ComponentId, ComponentSystem},
-        components::transform_component::TransformComponent,
-        concepts::ConceptManager,
-        entity::{EntityId, Entity},
-        scene::AllComponents, material::Material,
-    },
-    EngineDetails, EngineSystems,
-};
+use gamezap::{ecs::components::transform_component::TransformComponent, new_component};
 
 // use ultraviolet::{Rotor3, Vec3, Bivec3};
 use algoe::{bivector::Bivector, rotor::Rotor3, vector::GeometricOperations};
 use nalgebra::Vector3;
 
-#[derive(Debug, Clone)]
-pub struct MouseInputComponent {
-    parent: EntityId,
-    id: ComponentId,
-}
+new_component!(MouseInputComponent {});
 
 impl Default for MouseInputComponent {
     fn default() -> Self {
@@ -46,6 +27,7 @@ impl ComponentSystem for MouseInputComponent {
         active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&(Vec<Material>, usize)>,
+        _compute_pipelines: &[ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         /* let pitch = *concept_manager
@@ -109,8 +91,7 @@ impl ComponentSystem for MouseInputComponent {
                 .rotated_by(rotation)
                 .normalized(); */
                 let first_rotation =
-                    (Bivector::new(0.0, 0.0, -1.0) * mouse_state.x() as f32 * speed)
-                        .exponentiate()
+                    (Bivector::new(0.0, 0.0, -1.0) * mouse_state.x() as f32 * speed).exponentiate()
                         * rotation;
 
                 let forward_vec = first_rotation * Vector3::z_axis().xyz();
@@ -163,27 +144,5 @@ impl ComponentSystem for MouseInputComponent {
                     .unwrap();
             }
         }
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 }

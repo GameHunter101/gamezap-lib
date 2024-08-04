@@ -1,31 +1,17 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    fmt::Debug,
-    sync::{Arc, Mutex}, rc::Rc,
-};
+use std::fmt::Debug;
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindingType, Buffer, BufferBindingType, BufferUsages, Device, Queue, ShaderStages,
+    BindingType, Buffer, BufferBindingType, BufferUsages, ShaderStages,
 };
 
 use nalgebra as na;
 
-use crate::{
-    ecs::{
-        component::{ComponentId, ComponentSystem},
-        scene::Scene, entity::Entity, material::Material,
-    },
-    EngineDetails, EngineSystems, ui_manager::UiManager,
-};
+use crate::{ecs::scene::Scene, new_component, ui_manager::UiManager};
 
-use super::{
-    super::{concepts::ConceptManager, entity::EntityId, scene::AllComponents},
-    transform_component::TransformComponent,
-};
+use super::transform_component::TransformComponent;
 
 #[repr(C)]
 #[derive(Pod, Zeroable, Clone, Copy, Debug)]
@@ -43,14 +29,13 @@ impl Default for RawCameraData {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CameraComponent {
-    parent: EntityId,
-    concept_ids: Vec<String>,
-    id: ComponentId,
-    buf: Arc<Option<Buffer>>,
-    raw_data: RawCameraData,
-}
+new_component!(
+    CameraComponent {
+        concept_ids: Vec<String>,
+        buf: Arc<Option<Buffer>>,
+        raw_data: RawCameraData
+    }
+);
 
 impl CameraComponent {
     pub fn new_2d(concept_manager: Rc<Mutex<ConceptManager>>, window_size: (u32, u32)) -> Self {
@@ -168,7 +153,10 @@ impl ComponentSystem for CameraComponent {
     ) {
         self.concept_ids = data.keys().cloned().collect();
 
-        concept_manager.lock().unwrap().register_component_concepts(self.id, data);
+        concept_manager
+            .lock()
+            .unwrap()
+            .register_component_concepts(self.id, data);
     }
 
     fn initialize(
@@ -205,6 +193,7 @@ impl ComponentSystem for CameraComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&(Vec<Material>, usize)>,
+        _compute_pipelines: &[ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let aspect_ratio = concept_manager
@@ -243,27 +232,5 @@ impl ComponentSystem for CameraComponent {
             0,
             bytemuck::cast_slice(&[self.raw_data]),
         )
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
     }
 }

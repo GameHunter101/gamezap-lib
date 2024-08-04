@@ -10,16 +10,21 @@ use imgui::Ui;
 use sdl2::event::Event;
 use wgpu::{Device, Queue, RenderPass};
 
-use crate::{ui_manager::UiManager, EngineDetails, EngineSystems};
+use crate::{ui_manager::UiManager, EngineDetails, EngineSystems, pipeline::ComputePipeline};
 
-use super::{concepts::ConceptManager, entity::{EntityId, Entity}, scene::AllComponents, material::Material};
+use super::{
+    concepts::ConceptManager,
+    entity::{Entity, EntityId},
+    material::Material,
+    scene::AllComponents,
+};
 
 pub type ComponentId = (EntityId, TypeId, u32);
 
 pub type Component = Box<dyn ComponentSystem>;
 
 #[allow(unused, clippy::too_many_arguments)]
-pub trait ComponentSystem: Debug + dyn_clone::DynClone {
+pub trait ComponentSystem: Debug + dyn_clone::DynClone + ComponentSystemCore {
     fn register_component(
         &mut self,
         concept_manager: Rc<Mutex<ConceptManager>>,
@@ -50,6 +55,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         active_camera_id: Option<EntityId>,
         entities: &mut Vec<Entity>,
         materials: Option<&(Vec<Material>, usize)>,
+        compute_pipelines: &[ComputePipeline],
     ) {
     }
 
@@ -88,7 +94,9 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
         engine_systems: &EngineSystems,
     ) {
     }
+}
 
+pub trait ComponentSystemCore {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
@@ -99,5 +107,64 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone {
 
     fn render_order(&self) -> usize {
         0
+    }
+}
+
+#[macro_export]
+macro_rules! new_component {
+    ($name:ident {$($field:ident : $field_type:ty),*}$(, render_order: $render_order: expr)?) => {
+        use std::{
+            any::{Any, TypeId},
+            rc::Rc,
+            sync::{Arc, Mutex},
+            collections::HashMap,
+        };
+
+        use $crate::{
+            ecs::{
+                component::{ComponentSystem,ComponentId, ComponentSystemCore},
+                concepts::ConceptManager,
+                entity::{Entity, EntityId},
+                material::Material,
+                scene::AllComponents,
+            },
+            EngineDetails, EngineSystems,
+            pipeline::ComputePipeline,
+        };
+
+        use wgpu::{Device, Queue};
+
+        #[derive(Debug, Clone)]
+        pub struct $name {
+            $(pub $field:$field_type,)*
+            pub parent: EntityId,
+            pub id: ComponentId,
+        }
+
+        impl ComponentSystemCore for $name {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+
+            fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
+                self.parent = parent;
+                self.id.0 = parent;
+                self.id.2 = same_component_count;
+            }
+
+            fn get_parent_entity(&self) -> EntityId {
+                self.parent
+            }
+
+            fn get_id(&self) -> ComponentId {
+                self.id
+            }
+
+            $( fn render_order(&self) -> usize{ $render_order })?
+        }
     }
 }

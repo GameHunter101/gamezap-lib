@@ -1,27 +1,6 @@
-use std::{
-    any::{Any, TypeId},
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use gamezap::new_component;
 
-use gamezap::{
-    ecs::{
-        component::{ComponentId, ComponentSystem},
-        concepts::ConceptManager,
-        entity::{Entity, EntityId},
-        material::Material,
-        scene::AllComponents,
-    },
-    EngineDetails, EngineSystems,
-};
-
-use wgpu::{Device, Queue};
-
-#[derive(Debug, Clone)]
-pub struct TransparencyComponent {
-    parent: EntityId,
-    id: ComponentId,
-}
+new_component!(TransparencyComponent {});
 
 impl Default for TransparencyComponent {
     fn default() -> Self {
@@ -44,6 +23,7 @@ impl ComponentSystem for TransparencyComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         materials: Option<&(Vec<Material>, usize)>,
+        _compute_pipelines: &[ComputePipeline],
     ) {
         let details = engine_details.lock().unwrap();
         let time = details.time_elapsed.as_secs_f32();
@@ -53,27 +33,5 @@ impl ComponentSystem for TransparencyComponent {
         if let Some((_, buffer)) = &selected_material.uniform_buffer_bind_group() {
             queue.write_buffer(buffer, 0, bytemuck::cast_slice(&[time % 2.0]));
         }
-    }
-
-    fn get_parent_entity(&self) -> EntityId {
-        self.parent
-    }
-
-    fn get_id(&self) -> ComponentId {
-        self.id
-    }
-
-    fn update_metadata(&mut self, parent: EntityId, same_component_count: u32) {
-        self.parent = parent;
-        self.id.0 = parent;
-        self.id.2 = same_component_count;
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
     }
 }
