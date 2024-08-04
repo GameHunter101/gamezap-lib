@@ -1,11 +1,18 @@
 use gamezap::new_component;
 
-new_component!(
-    ComputeMonitorComponent {
-        data: [f32; 6],
-        pipeline_index: usize
+new_component!(ComputeMonitorComponent {
+    pipeline_index: usize
+});
+
+impl ComputeMonitorComponent {
+    pub fn new(pipeline_index: usize) -> ComputeMonitorComponent {
+        ComputeMonitorComponent {
+            pipeline_index,
+            parent: 0,
+            id: (EntityId::MAX, TypeId::of::<Self>(), 0),
+        }
     }
-);
+}
 
 impl ComponentSystem for ComputeMonitorComponent {
     fn update(
@@ -21,6 +28,9 @@ impl ComponentSystem for ComputeMonitorComponent {
         _materials: Option<&(Vec<Material>, usize)>,
         compute_pipelines: &[ComputePipeline],
     ) {
-        compute_pipelines[self.pipeline_index].run_compute_shader::<u32>(device, queue);
+        match compute_pipelines[self.pipeline_index].run_compute_shader::<f32>(device, queue) {
+            Ok(res) => println!("Compute result: {:?}", res),
+            Err(err) => println!("ERROR: {:?}", err),
+        };
     }
 }

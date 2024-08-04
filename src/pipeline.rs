@@ -172,6 +172,7 @@ impl Pipeline {
     }
 }
 
+#[derive(Debug)]
 pub enum ComputeError {
     InvalidCast,
     BufferMapError,
@@ -213,7 +214,7 @@ impl ComputePipeline {
         let output_buffer = Arc::new(device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(format!("Compute shader #{} output buffer", compute_shader_index).as_str()),
             size: output_buffer_size.unwrap_or(data_size),
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         }));
 
@@ -228,10 +229,16 @@ impl ComputePipeline {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(format!("Compute shader #{} bind group", compute_shader_index).as_str()),
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: input_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: output_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         ComputePipeline {
@@ -245,7 +252,7 @@ impl ComputePipeline {
         }
     }
 
-    pub async fn run_compute_shader<
+    pub fn run_compute_shader<
         T: bytemuck::Pod + bytemuck::Zeroable + std::marker::Sync + std::marker::Send,
     >(
         &self,
@@ -277,32 +284,28 @@ impl ComputePipeline {
 
         let buf = self.output_buffer.clone();
 
-        tokio::task::spawn(async move {
-            let buffer_slice = buf.slice(..);
-            let (sender, receiver) = flume::bounded(1);
-            buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
+        let buffer_slice = buf.slice(..);
+        let (sender, receiver) = flume::bounded(1);
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v| sender.send(v).unwrap());
 
-            device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::Maintain::Wait);
 
-            if let Ok(Ok(())) = receiver.recv() {
-                let data_buffer = buffer_slice.get_mapped_range();
+        if let Ok(Ok(())) = receiver.recv() {
+            let data_buffer = buffer_slice.get_mapped_range();
 
-                let data_result: Result<&[T], bytemuck::PodCastError> =
-                    bytemuck::try_cast_slice(&data_buffer);
+            let data_result: Result<&[T], bytemuck::PodCastError> =
+                bytemuck::try_cast_slice(&data_buffer);
 
-                if let Ok(result) = data_result {
-                    let vec = result.to_vec();
-                    drop(data_buffer);
-                    buf.unmap();
-                    Ok(vec)
-                } else {
-                    Err(ComputeError::InvalidCast)
-                }
+            if let Ok(result) = data_result {
+                let vec = result.to_vec();
+                drop(data_buffer);
+                buf.unmap();
+                Ok(vec)
             } else {
-                Err(ComputeError::BufferMapError)
+                Err(ComputeError::InvalidCast)
             }
-        })
-        .await
-        .unwrap()
+        } else {
+            Err(ComputeError::BufferMapError)
+        }
     }
 }

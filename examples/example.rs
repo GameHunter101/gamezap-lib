@@ -1,5 +1,6 @@
 use algoe::{bivector::Bivector, rotor::Rotor3};
 use components::{
+    compute_monitor_component::ComputeMonitorComponent,
     keyboard_input_component::KeyboardInputComponent, mouse_input_component::MouseInputComponent,
     transparency_component::TransparencyComponent, ui_component::UiComponent,
 };
@@ -255,11 +256,17 @@ async fn main() {
 
     let test_compute_pipeline_index = scene.create_compute_pipeline(
         device.clone(),
-        "examples/shaders/compute.wgsl",
+        "examples/shaders/compute_2.wgsl",
         (6, 1, 1),
-        [10, 5, 3, 2, 1, 17_u32],
+        [10.0, 5.0, 3.0, 2.0, 1.0, 17.0_f32],
         None,
     );
+
+    let compute_monitor_component =
+        ComputeMonitorComponent::new(test_compute_pipeline_index.unwrap());
+
+    let _compute_entity =
+        scene.create_entity(0, true, vec![Box::new(compute_monitor_component)], None);
 
     scene.set_active_camera(camera);
 

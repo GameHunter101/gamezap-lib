@@ -1,8 +1,8 @@
-@group(0) @binding(0) var<storage, read_write> data: array<u32>;
-@group(0) @binding(1) var<storage, read_write> output: array<u32>;
+@group(0) @binding(0) var<storage, read_write> data: array<f32>;
+@group(0) @binding(1) var<storage, read_write> output: array<f32>;
 
-fn work(num: u32) -> u32 {
-    var output:u32 = num*100u;
+fn work(num: f32) -> f32 {
+    var output:f32 = num*1.1;
     return output;
 }
 

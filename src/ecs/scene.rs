@@ -172,7 +172,7 @@ impl Scene {
                         self.active_camera_id,
                         &mut entities_clone,
                         self.materials.get(entity.id()),
-                        &self.compute_pipelines
+                        &self.compute_pipelines,
                     );
                     let map_ref = cloned_components
                         .get_mut(entity.id())
@@ -535,9 +535,7 @@ impl Scene {
         device: Arc<Device>,
         queue: Arc<Queue>,
     ) -> Result<Vec<T>, ComputeError> {
-        self.compute_pipelines[compute_pipeline_index]
-            .run_compute_shader(device.clone(), queue.clone())
-            .await
+        self.compute_pipelines[compute_pipeline_index].run_compute_shader(device, queue)
     }
 }
 
