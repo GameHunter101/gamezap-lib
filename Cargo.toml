@@ -1,6 +1,6 @@
 [package]
 name = "gamezap"
-version = "0.5.31"
+version = "0.5.33"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -27,6 +27,7 @@ imgui = {version = "0.11.0", features = ["tables-api"]}
 imgui-wgpu = "0.24.0"
 imgui-sdl2 = "0.15.3"
 algoe = {git = "https://github.com/GameHunter101/Algoe" }
+enum-as-inner = "0.6.0"
 
 [dependencies.image]
 version = "0.24.6"

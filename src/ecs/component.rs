@@ -54,7 +54,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + ComponentSystemCore {
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
         entities: &mut Vec<Entity>,
-        materials: Option<&(Vec<Material>, usize)>,
+        materials: Option<&mut (Vec<Material>, usize)>,
         compute_pipelines: &[ComputePipeline],
     ) {
     }

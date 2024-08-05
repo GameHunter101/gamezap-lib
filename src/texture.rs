@@ -1,5 +1,4 @@
 use anyhow::*;
-use image::GenericImageView;
 
 #[derive(Debug)]
 pub struct Texture {
@@ -10,6 +9,24 @@ pub struct Texture {
 
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+    pub fn blank_texture(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        label: Option<&str>,
+        is_normal: bool,
+    ) -> Result<Self> {
+        Self::from_rgba(
+            device,
+            queue,
+            &image::RgbaImage::new(width, height),
+            label,
+            is_normal,
+            true,
+        )
+    }
 
     pub fn load_ui_image(
         device: &wgpu::Device,
@@ -65,6 +82,7 @@ impl Texture {
         let data = Self::load_binary(file_name, absolute_path).await?;
         Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
     }
+
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -76,14 +94,14 @@ impl Texture {
         Self::from_image(device, queue, &img, Some(label), is_normal_map)
     }
 
-    pub fn from_image(
+    pub fn from_rgba(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        img: &image::DynamicImage,
+        img: &image::RgbaImage,
         label: Option<&str>,
         is_normal_map: bool,
+        is_storage_texture: bool,
     ) -> Result<Self> {
-        let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
 
         let size = wgpu::Extent3d {
@@ -105,7 +123,13 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            usage: if is_storage_texture {
+                wgpu::TextureUsages::STORAGE_BINDING
+                    | wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_DST
+            } else {
+                wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST
+            },
             view_formats: &[],
         });
 
@@ -116,7 +140,7 @@ impl Texture {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &rgba,
+            img,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * dimensions.0),
@@ -141,6 +165,17 @@ impl Texture {
             view,
             sampler,
         })
+    }
+
+    pub fn from_image(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        img: &image::DynamicImage,
+        label: Option<&str>,
+        is_normal_map: bool,
+    ) -> Result<Self> {
+        let rgba = img.to_rgba8();
+        Self::from_rgba(device, queue, &rgba, label, is_normal_map, false)
     }
 
     pub fn create_depth_texture(

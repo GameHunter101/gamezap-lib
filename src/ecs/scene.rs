@@ -1,7 +1,7 @@
 use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
-    pipeline::PipelineError,
+    pipeline::{PipelineError, ComputeData},
     texture::Texture,
     ui_manager::UiManager,
     EngineDetails, EngineSystems,
@@ -171,7 +171,7 @@ impl Scene {
                         self.concept_manager.clone(),
                         self.active_camera_id,
                         &mut entities_clone,
-                        self.materials.get(entity.id()),
+                        self.materials.get_mut(entity.id()),
                         &self.compute_pipelines,
                     );
                     let map_ref = cloned_components
@@ -507,15 +507,17 @@ impl Scene {
     pub fn create_compute_pipeline<T: bytemuck::Pod + bytemuck::Zeroable>(
         &mut self,
         device: Arc<Device>,
+        queue: Arc<Queue>,
         shader_path: &str,
         workgroup_size: (u32, u32, u32),
-        input_data: T,
+        input_data: ComputeData<T>,
         output_buffer_size: Option<u64>,
     ) -> Result<usize, PipelineError> {
         let this_compute_index = self.compute_pipelines.len();
         let shader_module_descriptor = Pipeline::load_shader_module_descriptor(shader_path)?;
         let pipeline = ComputePipeline::new(
-            &device,
+            device,
+            queue,
             shader_module_descriptor,
             input_data,
             this_compute_index,
@@ -534,7 +536,7 @@ impl Scene {
         compute_pipeline_index: usize,
         device: Arc<Device>,
         queue: Arc<Queue>,
-    ) -> Result<Vec<T>, ComputeError> {
+    ) -> Result<Option<Vec<T>>, ComputeError> {
         self.compute_pipelines[compute_pipeline_index].run_compute_shader(device, queue)
     }
 }

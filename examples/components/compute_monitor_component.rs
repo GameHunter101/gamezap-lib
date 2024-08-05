@@ -25,7 +25,7 @@ impl ComponentSystem for ComputeMonitorComponent {
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
-        _materials: Option<&(Vec<Material>, usize)>,
+        _materials: Option<&mut (Vec<Material>, usize)>,
         compute_pipelines: &[ComputePipeline],
     ) {
         match compute_pipelines[self.pipeline_index].run_compute_shader::<f32>(device, queue) {

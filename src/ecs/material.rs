@@ -38,9 +38,9 @@ impl Material {
         );
 
         let texture_bind_group =
-            Self::create_texture_bind_group(&textures, device.clone(), id.clone());
+            Self::create_texture_bind_group(&textures.iter().collect::<Vec<_>>(), device.clone());
 
-        let uniform_buffer_and_bind_group= uniform_buffer_data
+        let uniform_buffer_and_bind_group = uniform_buffer_data
             .map(|data| Self::create_uniform_buffer_and_bind_group(id.clone(), device, data));
 
         Self {
@@ -54,11 +54,7 @@ impl Material {
         }
     }
 
-    fn create_texture_bind_group(
-        textures: &[Texture],
-        device: Arc<Device>,
-        material_id: MaterialId,
-    ) -> BindGroup {
+    pub fn create_texture_bind_group(textures: &[&Texture], device: Arc<Device>) -> BindGroup {
         let bind_group_layout_entries = if textures.is_empty() {
             Vec::new()
         } else {
@@ -82,7 +78,7 @@ impl Material {
             ]
         };
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(&format!("Material {material_id:?} Bind Group Layout")),
+            label: Some("Texture Bind Group Layout"),
             entries: &bind_group_layout_entries,
         });
         let views = textures.iter().map(|tex| &tex.view).collect::<Vec<_>>();
@@ -105,7 +101,7 @@ impl Material {
         };
 
         device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(&format!("Material {material_id:?} Texture Bind Group")),
+            label: Some("Texture Bind Group"),
             layout: &bind_group_layout,
             entries: &bind_group_entries,
         })
@@ -144,13 +140,18 @@ impl Material {
         (
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(&format!(
-                "Material {material_id:?} Uniform Buffer Bind Group"
-            )),
+                    "Material {material_id:?} Uniform Buffer Bind Group"
+                )),
                 layout: &bind_group_layout,
                 entries: &bind_group_entries,
             }),
             uniform_buffer,
         )
+    }
+
+    pub fn update_textures(&mut self, device: Arc<Device>, textures: Vec<&Texture>) {
+        // self.textures = textures;
+        self.texture_bind_group = Self::create_texture_bind_group(&textures, device);
     }
 
     pub fn id(&self) -> &MaterialId {

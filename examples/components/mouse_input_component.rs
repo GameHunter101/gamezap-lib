@@ -26,7 +26,7 @@ impl ComponentSystem for MouseInputComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
-        _materials: Option<&(Vec<Material>, usize)>,
+        _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &[ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();

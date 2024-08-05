@@ -14,6 +14,7 @@ use gamezap::{
         scene::Scene,
     },
     model::Vertex,
+    pipeline::{ComputeData, ComputeTextureData},
     texture::Texture,
     GameZap,
 };
@@ -136,18 +137,20 @@ async fn main() {
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
+    let dude_texture = Texture::load_texture(
+        "assets/testing_textures/dude.png",
+        false,
+        &device.clone(),
+        &queue,
+        false,
+    )
+    .await
+    .unwrap();
+
     let sword_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
-        vec![Texture::load_texture(
-            "assets/testing_textures/dude.png",
-            false,
-            &device.clone(),
-            &queue,
-            false,
-        )
-        .await
-        .unwrap()],
+        vec![dude_texture],
         None,
         true,
         device.clone(),
@@ -203,7 +206,7 @@ async fn main() {
     );
 
     let cube_mesh =
-        MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\cube.obj", false)
+        MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\basic_cube.obj", false)
             .unwrap();
 
     let cube_transform = TransformComponent::new(
@@ -256,9 +259,13 @@ async fn main() {
 
     let test_compute_pipeline_index = scene.create_compute_pipeline(
         device.clone(),
-        "examples/shaders/compute_2.wgsl",
-        (6, 1, 1),
-        [10.0, 5.0, 3.0, 2.0, 1.0, 17.0_f32],
+        queue.clone(),
+        "examples/shaders/compute_texture.wgsl",
+        (100, 100, 1),
+        ComputeData::<[f32; 10]>::TextureData(ComputeTextureData::Dimensions((1000, 1000))),
+        /* "examples/shaders/compute_2.wgsl",
+        (6,1,1),
+        ComputeData::ArrayData([5.0, 6.0, 10.0, 4.0, 0.1, 12.0_f32]), */
         None,
     );
 
