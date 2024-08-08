@@ -14,7 +14,7 @@ use gamezap::{
         scene::Scene,
     },
     model::Vertex,
-    pipeline::{ComputeData, ComputeTextureData},
+    pipeline::{ComputeData, ComputePipelineType, ComputeTextureData},
     texture::Texture,
     GameZap,
 };
@@ -205,9 +205,12 @@ async fn main() {
         device.clone(),
     );
 
-    let cube_mesh =
-        MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\basic_cube.obj", false)
-            .unwrap();
+    let cube_mesh = MeshComponent::from_obj(
+        concept_manager.clone(),
+        "assets\\models\\basic_cube.obj",
+        false,
+    )
+    .unwrap();
 
     let cube_transform = TransformComponent::new(
         concept_manager.clone(),
@@ -261,12 +264,16 @@ async fn main() {
         device.clone(),
         queue.clone(),
         "examples/shaders/compute_texture.wgsl",
-        (100, 100, 1),
-        ComputeData::<[f32; 10]>::TextureData(ComputeTextureData::Dimensions((1000, 1000))),
+        (128, 1, 1),
+        ComputePipelineType::<[u32; 128]> {
+            input_data: ComputeData::TextureData(ComputeTextureData::Dimensions((
+                1000, 1000,
+            ))),
+            output_data_type: gamezap::pipeline::ComputeOutput::Array(std::mem::size_of::<[u32;128]>() as u64)
+        },
         /* "examples/shaders/compute_2.wgsl",
         (6,1,1),
         ComputeData::ArrayData([5.0, 6.0, 10.0, 4.0, 0.1, 12.0_f32]), */
-        None,
     );
 
     let compute_monitor_component =

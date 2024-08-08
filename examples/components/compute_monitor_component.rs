@@ -28,7 +28,7 @@ impl ComponentSystem for ComputeMonitorComponent {
         _materials: Option<&mut (Vec<Material>, usize)>,
         compute_pipelines: &[ComputePipeline],
     ) {
-        match compute_pipelines[self.pipeline_index].run_compute_shader::<f32>(device, queue) {
+        match compute_pipelines[self.pipeline_index].run_compute_shader::<u32>(device, queue) {
             Ok(res) => println!("Compute result: {:?}", res),
             Err(err) => println!("ERROR: {:?}", err),
         };

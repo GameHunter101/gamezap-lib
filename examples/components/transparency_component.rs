@@ -34,10 +34,10 @@ impl ComponentSystem for TransparencyComponent {
             queue.write_buffer(buffer, 0, bytemuck::cast_slice(&[time % 2.0]));
         }
 
-        let output_data = &compute_pipelines[0].output_data;
+        /* let output_data = &compute_pipelines[0].output_data;
         if let ComputePackagedData::Texture(texture) = output_data {
             selected_material.update_textures(device, vec![texture]);
-        }
+        } */
 
     }
 }

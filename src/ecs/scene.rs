@@ -1,7 +1,7 @@
 use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
-    pipeline::{PipelineError, ComputeData},
+    pipeline::{PipelineError, ComputePipelineType},
     texture::Texture,
     ui_manager::UiManager,
     EngineDetails, EngineSystems,
@@ -10,7 +10,7 @@ use std::{
     any::Any,
     collections::HashMap,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, fmt::Debug,
 };
 
 use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, TextureFormat};
@@ -504,14 +504,13 @@ impl Scene {
         self.concept_manager.clone()
     }
 
-    pub fn create_compute_pipeline<T: bytemuck::Pod + bytemuck::Zeroable>(
+    pub fn create_compute_pipeline<T: bytemuck::Pod + bytemuck::Zeroable + Debug>(
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
         shader_path: &str,
         workgroup_size: (u32, u32, u32),
-        input_data: ComputeData<T>,
-        output_buffer_size: Option<u64>,
+        pipeline_type: ComputePipelineType<T>,
     ) -> Result<usize, PipelineError> {
         let this_compute_index = self.compute_pipelines.len();
         let shader_module_descriptor = Pipeline::load_shader_module_descriptor(shader_path)?;
@@ -519,10 +518,9 @@ impl Scene {
             device,
             queue,
             shader_module_descriptor,
-            input_data,
+            pipeline_type,
             this_compute_index,
             workgroup_size,
-            output_buffer_size,
             this_compute_index,
         );
         self.compute_pipelines.push(pipeline);
