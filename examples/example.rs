@@ -282,6 +282,63 @@ async fn main() {
     let _compute_entity =
         scene.create_entity(0, true, vec![Box::new(compute_monitor_component)], None);
 
+
+
+
+
+    let mesh_component = MeshComponent::new(
+        concept_manager.clone(),
+        vec![
+            Vertex {
+                position: [-1.0, -1.0, 0.0],
+                tex_coords: [0.0, 1.0],
+                normal: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [-1.0, 1.0, 0.0],
+                tex_coords: [0.0, 0.0],
+                normal: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [1.0, -1.0, 0.0],
+                tex_coords: [1.0, 1.0],
+                normal: [0.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [1.0, 1.0, 0.0],
+                tex_coords: [1.0, 0.0],
+                normal: [0.0, 0.0, 1.0],
+            },
+        ],
+        vec![0, 1, 2, 1, 2, 3],
+    );
+
+    let mesh_transform = TransformComponent::new(
+        concept_manager.clone(),
+        na::Vector3::new(0.1, 0.0, 5.0),
+        Rotor3::default(),
+        na::Vector3::new(2.0, 2.0, 2.0),
+    );
+
+    let test_material = Material::new(
+        "examples/shaders/vert.wgsl",
+        "examples/shaders/frag3.wgsl",
+        vec![],
+        Some(bytemuck::cast_slice(&[1.0])),
+        true,
+        device.clone(),
+    );
+
+    scene.create_entity(
+        0,
+        true,
+        vec![Box::new(mesh_transform), Box::new(mesh_component)],
+        Some((vec![test_material], 0)),
+    );
+
+
+
+
     scene.set_active_camera(camera);
 
     let ui_component = UiComponent::new("assets/fonts/inter.ttf");

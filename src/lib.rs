@@ -266,6 +266,8 @@ pub struct GameZapBuilder {
     active_scene_index: usize,
 
     render_mask: Option<RenderMask>,
+
+    limits: wgpu::Limits,
 }
 
 impl<'a> GameZapBuilder {
@@ -293,6 +295,8 @@ impl<'a> GameZapBuilder {
             active_scene_index: 0,
 
             render_mask: None,
+            
+            limits: wgpu::Limits::default(),
         }
     }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
@@ -332,6 +336,11 @@ impl<'a> GameZapBuilder {
         self
     }
 
+    pub fn device_limits(mut self, limits: wgpu::Limits) -> GameZapBuilder {
+        self.limits = limits;
+        self
+    }
+
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
     pub async fn build(self) -> GameZap {
         let sdl_context = if let Some(context) = self.sdl_context {
@@ -352,7 +361,7 @@ impl<'a> GameZapBuilder {
 
         let window = self.window.unwrap();
 
-        let renderer = Renderer::new(&window, self.clear_color, self.antialiasing).await;
+        let renderer = Renderer::new(&window, self.clear_color, self.antialiasing, self.limits).await;
 
         let ui_manager = Rc::new(Mutex::new(UiManager::new(
             renderer.surface_format,

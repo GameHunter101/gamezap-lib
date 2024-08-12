@@ -18,7 +18,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub async fn new(window: &Window, clear_color: wgpu::Color, antialiasing: bool) -> Renderer {
+    pub async fn new(window: &Window, clear_color: wgpu::Color, antialiasing: bool, limits: wgpu::Limits) -> Renderer {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -42,7 +42,7 @@ impl Renderer {
                 &wgpu::DeviceDescriptor {
                     features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
                         | wgpu::Features::TEXTURE_BINDING_ARRAY,
-                    limits: wgpu::Limits::default(),
+                    limits,
                     label: None,
                 },
                 None,
