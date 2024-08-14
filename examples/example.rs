@@ -265,11 +265,14 @@ async fn main() {
         queue.clone(),
         "examples/shaders/compute_texture.wgsl",
         (128, 1, 1),
-        ComputePipelineType::<[u32; 128]> {
-            input_data: ComputeData::TextureData(ComputeTextureData::Dimensions((
-                1000, 1000,
-            ))),
-            output_data_type: gamezap::pipeline::ComputeOutput::Array(std::mem::size_of::<[u32;128]>() as u64)
+        ComputePipelineType::<u32> {
+            input_data: ComputeData::TextureData(vec![
+                ComputeTextureData::Dimensions((1000, 1000)),
+                ComputeTextureData::Dimensions((200, 200)),
+            ]),
+            output_data_type: gamezap::pipeline::ComputeOutput::Array(
+                std::mem::size_of::<[u32; 128]>() as u64,
+            ),
         },
         /* "examples/shaders/compute_2.wgsl",
         (6,1,1),
@@ -281,10 +284,6 @@ async fn main() {
 
     let _compute_entity =
         scene.create_entity(0, true, vec![Box::new(compute_monitor_component)], None);
-
-
-
-
 
     let mesh_component = MeshComponent::new(
         concept_manager.clone(),
@@ -335,9 +334,6 @@ async fn main() {
         vec![Box::new(mesh_transform), Box::new(mesh_component)],
         Some((vec![test_material], 0)),
     );
-
-
-
 
     scene.set_active_camera(camera);
 

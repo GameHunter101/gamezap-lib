@@ -1,7 +1,7 @@
 use crate::{
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
-    pipeline::{PipelineError, ComputePipelineType},
+    pipeline::{ComputePipelineType, PipelineError},
     texture::Texture,
     ui_manager::UiManager,
     EngineDetails, EngineSystems,
@@ -9,8 +9,9 @@ use crate::{
 use std::{
     any::Any,
     collections::HashMap,
+    fmt::Debug,
     rc::Rc,
-    sync::{Arc, Mutex}, fmt::Debug,
+    sync::{Arc, Mutex},
 };
 
 use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, TextureFormat};

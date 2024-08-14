@@ -112,7 +112,7 @@ pub trait ComponentSystemCore {
 
 #[macro_export]
 macro_rules! new_component {
-    ($name:ident {$($field:ident : $field_type:ty),*}$(, render_order: $render_order: expr)?) => {
+    ($(#[$($doc:tt)*])? $name:ident {$($field:ident : $field_type:ty),*}$(, render_order: $render_order: expr)?) => {
         use std::{
             any::{Any, TypeId},
             rc::Rc,
@@ -134,6 +134,7 @@ macro_rules! new_component {
 
         use wgpu::{Device, Queue};
 
+        $(#[$($doc)*])?
         #[derive(Debug, Clone)]
         pub struct $name {
             $(pub $field:$field_type,)*

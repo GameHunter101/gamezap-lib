@@ -181,21 +181,21 @@ pub enum ComputeError {
 }
 
 #[derive(Debug)]
-pub struct ComputePipelineType<T: bytemuck::Pod + bytemuck::Zeroable> {
-    pub input_data: ComputeData<T>,
+pub struct ComputePipelineType<'a, T: bytemuck::Pod + bytemuck::Zeroable> {
+    pub input_data: ComputeData<'a, T>,
     pub output_data_type: ComputeOutput,
 }
 
 #[derive(Debug)]
 pub enum ComputeOutput {
     Array(u64),
-    Texture((u32, u32)),
+    Texture(Vec<(u32, u32)>),
 }
 
 #[derive(Debug, EnumAsInner)]
-pub enum ComputeData<T: bytemuck::Pod + bytemuck::Zeroable> {
-    ArrayData(T),
-    TextureData(ComputeTextureData),
+pub enum ComputeData<'a, T: bytemuck::Pod + bytemuck::Zeroable> {
+    ArrayData(Vec<&'a [T]>),
+    TextureData(Vec<ComputeTextureData>),
 }
 
 #[derive(Debug)]
@@ -206,8 +206,8 @@ pub enum ComputeTextureData {
 
 #[derive(Debug, EnumAsInner)]
 pub enum ComputePackagedData {
-    Buffer(Arc<Buffer>),
-    Texture(Texture),
+    Buffer(Vec<Arc<Buffer>>),
+    Textures(Vec<Texture>),
 }
 
 #[derive(Debug)]
@@ -216,7 +216,7 @@ pub struct ComputePipeline {
     pub bind_group: wgpu::BindGroup,
     pub output_data: ComputePackagedData,
     pub workgroup_counts: (u32, u32, u32),
-    pub data_size: Option<u64>,
+    pub data_sizes: Option<u64>,
     pub pipeline_id: usize,
 }
 
@@ -234,25 +234,38 @@ impl ComputePipeline {
 
         let shader_module = device.create_shader_module(shader_module_descriptor);
 
+        let mut input_entries = match &data {
+            ComputeData::ArrayData(entries) => entries
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Self::create_array_bind_group_layout_entry(i as u32))
+                .collect::<Vec<_>>(),
+            ComputeData::TextureData(entries) => entries
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Self::create_texture_bind_group_layout_entry(i as u32, true))
+                .collect::<Vec<_>>(),
+        };
+
+        let mut output_entries = match &pipeline_type.output_data_type {
+            ComputeOutput::Array(_) => vec![Self::create_array_bind_group_layout_entry(
+                input_entries.len() as u32,
+            )],
+            ComputeOutput::Texture(entries) => entries
+                .iter()
+                .enumerate()
+                .map(|(i, _)| Self::create_texture_bind_group_layout_entry(i as u32, true))
+                .collect::<Vec<_>>(),
+        };
+
+        input_entries.append(&mut output_entries);
+
         let pipeline_bind_group_layouts =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some(&format!(
                     "Compute Shader #{compute_shader_index} group layout"
                 )),
-                entries: &[
-                    match data {
-                        ComputeData::ArrayData(_) => Self::create_array_bind_group_layout_entry(0),
-                        ComputeData::TextureData(_) => {
-                            Self::create_texture_bind_group_layout_entry(0, true)
-                        }
-                    },
-                    match pipeline_type.output_data_type {
-                        ComputeOutput::Array(_) => Self::create_array_bind_group_layout_entry(1),
-                        ComputeOutput::Texture((_, _)) => {
-                            Self::create_texture_bind_group_layout_entry(1, false)
-                        }
-                    },
-                ],
+                entries: &input_entries,
             });
 
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -271,75 +284,115 @@ impl ComputePipeline {
         });
 
         let output_data = match &pipeline_type.output_data_type {
-            ComputeOutput::Array(data_size) => ComputePackagedData::Buffer(Arc::new(
+            ComputeOutput::Array(data_size) => ComputePackagedData::Buffer(vec![Arc::new(
                 device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some(
-                        format!("Compute shader #{} output buffer", compute_shader_index).as_str(),
+                        format!("Compute shader #{compute_shader_index} output buffer").as_str(),
                     ),
                     size: *data_size,
                     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::STORAGE,
                     mapped_at_creation: false,
                 }),
-            )),
-            ComputeOutput::Texture((width, height)) => ComputePackagedData::Texture({
-                Texture::blank_texture(
-                    &device,
-                    &queue,
-                    *width,
-                    *height,
-                    Some(&format!("Compute shader #{pipeline_id} output texture")),
-                    true,
-                )
-                .unwrap()
-            }),
+            )]),
+            ComputeOutput::Texture(entries) => ComputePackagedData::Textures(
+                entries
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (width, height))| {
+                        Texture::blank_texture(
+                            &device,
+                            &queue,
+                            *width,
+                            *height,
+                            Some(&format!(
+                                "Compute shader #{pipeline_id} output texture #{i}"
+                            )),
+                            true,
+                        )
+                        .unwrap()
+                    })
+                    .collect(),
+            ),
         };
 
-        let input_texture = match data {
-            ComputeData::ArrayData(arr) => ComputePackagedData::Buffer(Arc::new(
-                Self::create_array_buffer(device.clone(), arr, compute_shader_index),
-            )),
-            ComputeData::TextureData(ref tex_data) => {
-                ComputePackagedData::Texture(match tex_data {
-                    ComputeTextureData::Path(path) => pollster::block_on(Texture::load_texture(
-                        path, false, &device, &queue, false,
-                    ))
-                    .unwrap(),
-                    ComputeTextureData::Dimensions((width, height)) => Texture::blank_texture(
-                        &device,
-                        &queue,
-                        *width,
-                        *height,
-                        Some(&format!("Compute shader #{pipeline_id} input texture")),
-                        true,
-                    )
-                    .unwrap(),
+        let input_texture = match &data {
+            ComputeData::ArrayData(entries) => ComputePackagedData::Buffer(
+                entries
+                    .iter()
+                    .enumerate()
+                    .map(|(i, arr)| {
+                        Arc::new(Self::create_array_buffer(
+                            device.clone(),
+                            arr,
+                            compute_shader_index,
+                            i,
+                        ))
+                    })
+                    .collect(),
+            ),
+            ComputeData::TextureData(ref textures) => ComputePackagedData::Textures(
+                textures
+                    .iter()
+                    .map(|tex_data| match tex_data {
+                        ComputeTextureData::Path(path) => pollster::block_on(
+                            Texture::load_texture(path, false, &device, &queue, false),
+                        )
+                        .unwrap(),
+                        ComputeTextureData::Dimensions((width, height)) => Texture::blank_texture(
+                            &device,
+                            &queue,
+                            *width,
+                            *height,
+                            Some(&format!("Compute shader #{pipeline_id} input texture")),
+                            true,
+                        )
+                        .unwrap(),
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+        };
+
+        let mut input_bind_group_entries = match &data {
+            ComputeData::ArrayData(entries) => entries
+                .iter()
+                .enumerate()
+                .map(|(i, _)| wgpu::BindGroupEntry {
+                    binding: i as u32,
+                    resource: input_texture.as_buffer().unwrap()[i].as_entire_binding(),
                 })
-            }
+                .collect::<Vec<_>>(),
+            ComputeData::TextureData(_) => input_texture
+                .as_textures()
+                .unwrap()
+                .iter()
+                .enumerate()
+                .map(|(i, texture)| wgpu::BindGroupEntry {
+                    binding: i as u32,
+                    resource: { wgpu::BindingResource::TextureView(&texture.view) },
+                })
+                .collect(),
         };
 
-        let input_bind_group_entry = match &data {
-            ComputeData::ArrayData(_) => wgpu::BindGroupEntry {
-                binding: 0,
-                resource: input_texture.as_buffer().unwrap().as_entire_binding(),
-            },
-            ComputeData::TextureData(_) => wgpu::BindGroupEntry {
-                binding: 0,
-                resource: {
-                    wgpu::BindingResource::TextureView(&input_texture.as_texture().unwrap().view)
-                },
-            },
+        let mut output_bind_group_entries = match &output_data {
+            ComputePackagedData::Buffer(buffers) => buffers
+                .iter()
+                .enumerate()
+                .map(|(i, buf)| wgpu::BindGroupEntry {
+                    binding: (input_bind_group_entries.len() + i) as u32,
+                    resource: buf.as_entire_binding(),
+                })
+                .collect::<Vec<_>>(),
+            ComputePackagedData::Textures(textures) => textures
+                .iter()
+                .enumerate()
+                .map(|(i, tex)| wgpu::BindGroupEntry {
+                    binding: (input_bind_group_entries.len() + i) as u32,
+                    resource: wgpu::BindingResource::TextureView(&tex.view),
+                })
+                .collect(),
         };
 
-        let output_bind_group_entry = match &output_data {
-            ComputePackagedData::Buffer(buf) => wgpu::BindGroupEntry {
-                binding: 1,
-                resource: buf.as_entire_binding(),
-            },
-            ComputePackagedData::Texture(tex) => wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(&tex.view),
-            },
-        };
+        input_bind_group_entries.append(&mut output_bind_group_entries);
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(&format!(
@@ -347,59 +400,16 @@ impl ComputePipeline {
                 compute_shader_index
             )),
             layout: &pipeline_bind_group_layouts,
-            entries: &[input_bind_group_entry, output_bind_group_entry],
+            entries: &input_bind_group_entries,
         });
-
-        /* let bind_group = match &output_data {
-            ComputePackagedData::Buffer(output_buffer) => {
-                device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(
-                        format!("Compute shader #{} bind group", compute_shader_index).as_str(),
-                    ),
-                    layout: &pipeline_bind_group_layouts,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: input_buffer.unwrap().as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: output_buffer.as_entire_binding(),
-                        },
-                    ],
-                })
-            }
-            ComputePackagedData::Texture(output_texture) => {
-                let input_texture = match data.as_texture_data().unwrap() {
-                    ComputeTextureData::Path(path) => pollster::block_on(Texture::load_texture(
-                        path, false, &device, &queue, false,
-                    ))
-                    .unwrap(),
-                    ComputeTextureData::Dimensions((width, height)) => Texture::blank_texture(
-                        &device,
-                        &queue,
-                        *width,
-                        *height,
-                        Some(&format!("Compute shader #{pipeline_id} input texture")),
-                        true,
-                    )
-                    .unwrap(),
-                };
-                Self::create_texture_bind_group(
-                    device,
-                    &[&input_texture, output_texture],
-                    pipeline_id,
-                )
-            }
-        }; */
 
         ComputePipeline {
             pipeline,
             bind_group,
             output_data,
             workgroup_counts,
-            data_size: match pipeline_type.output_data_type {
-                ComputeOutput::Array(size) => Some(size),
+            data_sizes: match pipeline_type.output_data_type {
+                ComputeOutput::Array(sizes) => Some(sizes),
                 ComputeOutput::Texture(_) => None,
             },
             pipeline_id,
@@ -450,18 +460,16 @@ impl ComputePipeline {
 
     fn create_array_buffer<T: bytemuck::Pod + bytemuck::Zeroable>(
         device: Arc<Device>,
-        arr: T,
+        arr: &[T],
         compute_shader_index: usize,
+        buffer_id: usize,
     ) -> wgpu::Buffer {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(
-                format!(
-                    "Compute shader #{} input array buffer",
-                    compute_shader_index
-                )
-                .as_str(),
+                format!("Compute shader #{compute_shader_index} input array buffer #{buffer_id}",)
+                    .as_str(),
             ),
-            contents: bytemuck::cast_slice(&[arr]),
+            contents: bytemuck::cast_slice(arr),
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -550,7 +558,7 @@ impl ComputePipeline {
         queue.submit(Some(encoder.finish()));
 
         if let ComputePackagedData::Buffer(buf) = &self.output_data {
-            let buf = buf.clone();
+            let buf = buf[0].clone();
 
             let buffer_slice = buf.slice(..);
             let (sender, receiver) = flume::bounded(1);
