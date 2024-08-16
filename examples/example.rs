@@ -267,8 +267,8 @@ async fn main() {
         (128, 1, 1),
         ComputePipelineType::<u32> {
             input_data: ComputeData::TextureData(vec![
-                ComputeTextureData::Dimensions((1000, 1000)),
-                ComputeTextureData::Dimensions((200, 200)),
+                (ComputeTextureData::Dimensions((1000, 1000)), false),
+                (ComputeTextureData::Dimensions((200, 200)), false),
             ]),
             output_data_type: gamezap::pipeline::ComputeOutput::Array(
                 std::mem::size_of::<[u32; 128]>() as u64,

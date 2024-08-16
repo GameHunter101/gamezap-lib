@@ -195,7 +195,7 @@ pub enum ComputeOutput {
 #[derive(Debug, EnumAsInner)]
 pub enum ComputeData<'a, T: bytemuck::Pod + bytemuck::Zeroable> {
     ArrayData(Vec<&'a [T]>),
-    TextureData(Vec<ComputeTextureData>),
+    TextureData(Vec<(ComputeTextureData, bool)>),
 }
 
 #[derive(Debug)]
@@ -243,7 +243,7 @@ impl ComputePipeline {
             ComputeData::TextureData(entries) => entries
                 .iter()
                 .enumerate()
-                .map(|(i, _)| Self::create_texture_bind_group_layout_entry(i as u32, true))
+                .map(|(i, (_, is_write))| Self::create_texture_bind_group_layout_entry(i as u32, *is_write))
                 .collect::<Vec<_>>(),
         };
 
@@ -333,7 +333,7 @@ impl ComputePipeline {
             ComputeData::TextureData(ref textures) => ComputePackagedData::Textures(
                 textures
                     .iter()
-                    .map(|tex_data| match tex_data {
+                    .map(|(tex_data, _)| match tex_data {
                         ComputeTextureData::Path(path) => pollster::block_on(
                             Texture::load_texture(path, false, &device, &queue, false),
                         )
@@ -431,16 +431,16 @@ impl ComputePipeline {
 
     fn create_texture_bind_group_layout_entry(
         binding: u32,
-        is_input: bool,
+        is_write: bool,
     ) -> wgpu::BindGroupLayoutEntry {
-        if is_input {
+        if is_write {
             wgpu::BindGroupLayoutEntry {
                 binding,
                 visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                ty: wgpu::BindingType::StorageTexture {
+                    access: wgpu::StorageTextureAccess::ReadWrite,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
                     view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
                 },
                 count: None,
             }
@@ -448,10 +448,10 @@ impl ComputePipeline {
             wgpu::BindGroupLayoutEntry {
                 binding,
                 visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::StorageTexture {
-                    access: wgpu::StorageTextureAccess::WriteOnly,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
                 },
                 count: None,
             }
