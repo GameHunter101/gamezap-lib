@@ -243,7 +243,9 @@ impl ComputePipeline {
             ComputeData::TextureData(entries) => entries
                 .iter()
                 .enumerate()
-                .map(|(i, (_, is_write))| Self::create_texture_bind_group_layout_entry(i as u32, *is_write))
+                .map(|(i, (_, is_write))| {
+                    Self::create_texture_bind_group_layout_entry(i as u32, *is_write)
+                })
                 .collect::<Vec<_>>(),
         };
 
@@ -254,7 +256,12 @@ impl ComputePipeline {
             ComputeOutput::Texture(entries) => entries
                 .iter()
                 .enumerate()
-                .map(|(i, _)| Self::create_texture_bind_group_layout_entry(i as u32, true))
+                .map(|(i, _)| {
+                    Self::create_texture_bind_group_layout_entry(
+                        (input_entries.len() + i) as u32,
+                        true,
+                    )
+                })
                 .collect::<Vec<_>>(),
         };
 

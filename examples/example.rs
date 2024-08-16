@@ -270,9 +270,10 @@ async fn main() {
                 (ComputeTextureData::Dimensions((1000, 1000)), true),
                 (ComputeTextureData::Dimensions((200, 200)), true),
             ]),
-            output_data_type: gamezap::pipeline::ComputeOutput::Array(
+            /* output_data_type: gamezap::pipeline::ComputeOutput::Array(
                 std::mem::size_of::<[u32; 128]>() as u64,
-            ),
+            ), */
+            output_data_type: gamezap::pipeline::ComputeOutput::Texture(vec![(200, 200)])
         },
         /* "examples/shaders/compute_2.wgsl",
         (6,1,1),
