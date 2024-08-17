@@ -26,28 +26,28 @@ use super::{
 };
 
 pub type AllComponents = HashMap<EntityId, Vec<Component>>;
-pub type Materials = HashMap<EntityId, (Vec<Material>, usize)>;
+pub type Materials<'a> = HashMap<EntityId, (Vec<Material<'a>>, usize)>;
 
 #[derive(Debug)]
-pub struct Scene {
+pub struct Scene<'a> {
     entities: Arc<Mutex<Vec<Entity>>>,
     total_entities_created: u32,
     pipelines: HashMap<MaterialId, Pipeline>,
     compute_pipelines: Vec<ComputePipeline>,
     components: AllComponents,
-    materials: Materials,
+    materials: Materials<'a>,
     active_camera_id: Option<EntityId>,
     concept_manager: Rc<Mutex<ConceptManager>>,
 }
 
 #[allow(clippy::too_many_arguments)]
-impl Scene {
+impl<'a> Scene<'a> {
     pub fn create_entity(
         &mut self,
         parent: EntityId,
         enabled: bool,
         mut components: Vec<Component>,
-        materials: Option<(Vec<Material>, usize)>,
+        materials: Option<(Vec<Material<'a>>, usize)>,
     ) -> EntityId {
         let new_entity_id = self.total_entities_created;
         let new_entity = Entity::new(new_entity_id, enabled, parent, Vec::new());
@@ -425,13 +425,13 @@ impl Scene {
             .collect::<Vec<_>>()
     }
 
-    fn render_ui<'a: 'b, 'b>(
+    fn render_ui<'b: 'c, 'c>(
         &self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        renderer: &'a mut imgui_wgpu::Renderer,
-        context: &'a mut imgui::Context,
-        rpass: &mut wgpu::RenderPass<'b>,
+        renderer: &'b mut imgui_wgpu::Renderer,
+        context: &'b mut imgui::Context,
+        rpass: &mut wgpu::RenderPass<'c>,
     ) {
         renderer
             .render(context.render(), &queue, &device, rpass)
@@ -540,7 +540,7 @@ impl Scene {
     }
 }
 
-impl Default for Scene {
+impl<'a> Default for Scene<'a> {
     fn default() -> Self {
         Self {
             entities: Arc::new(Mutex::new(Vec::new())),

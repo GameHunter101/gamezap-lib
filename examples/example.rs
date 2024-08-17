@@ -102,10 +102,7 @@ async fn main() {
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
-    let test_material = Material::new(
-        "examples/shaders/vert.wgsl",
-        "examples/shaders/frag.wgsl",
-        vec![Texture::load_texture(
+    let test_textures = vec![Texture::load_texture(
             "assets/testing_textures/texture.png",
             false,
             &device.clone(),
@@ -113,7 +110,12 @@ async fn main() {
             false,
         )
         .await
-        .unwrap()],
+        .unwrap()];
+
+    let test_material = Material::new(
+        "examples/shaders/vert.wgsl",
+        "examples/shaders/frag.wgsl",
+        &test_textures,
         None,
         true,
         device.clone(),
@@ -137,7 +139,7 @@ async fn main() {
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
-    let dude_texture = Texture::load_texture(
+    let dude_texture = vec![Texture::load_texture(
         "assets/testing_textures/dude.png",
         false,
         &device.clone(),
@@ -145,12 +147,12 @@ async fn main() {
         false,
     )
     .await
-    .unwrap();
+    .unwrap()];
 
     let sword_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
-        vec![dude_texture],
+        &dude_texture,
         None,
         true,
         device.clone(),
@@ -188,10 +190,7 @@ async fn main() {
         Some((vec![sword_material], 0)),
     );
 
-    let cube_material = Material::new(
-        "examples/shaders/vert.wgsl",
-        "examples/shaders/frag2.wgsl",
-        vec![Texture::load_texture(
+    let dude_texture = vec![Texture::load_texture(
             "assets/testing_textures/dude.png",
             false,
             &device.clone(),
@@ -199,7 +198,12 @@ async fn main() {
             false,
         )
         .await
-        .unwrap()],
+        .unwrap()];
+
+    let cube_material = Material::new(
+        "examples/shaders/vert.wgsl",
+        "examples/shaders/frag2.wgsl",
+        &dude_texture,
         Some(bytemuck::cast_slice(&[0.0_f32])),
         true,
         device.clone(),
@@ -320,10 +324,12 @@ async fn main() {
         na::Vector3::new(2.0, 2.0, 2.0),
     );
 
+    let test_textures = Vec::new();
+
     let test_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag3.wgsl",
-        vec![],
+        &test_textures,
         Some(bytemuck::cast_slice(&[1.0])),
         true,
         device.clone(),

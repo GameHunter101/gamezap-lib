@@ -11,21 +11,21 @@ use crate::texture::Texture;
 pub type MaterialId = (String, String, usize, bool);
 
 #[derive(Debug)]
-pub struct Material {
+pub struct Material<'a> {
     vertex_shader_path: String,
     fragment_shader_path: String,
-    textures: Vec<Texture>,
+    views_and_samplers: Vec<(&'a wgpu::TextureView, &'a wgpu::Sampler)>,
     enabled: bool,
     id: MaterialId,
     texture_bind_group: BindGroup,
     uniform_buffer_and_bind_group: Option<(BindGroup, Buffer)>,
 }
 
-impl Material {
+impl<'a> Material<'a> {
     pub fn new(
         vertex_shader_path: &str,
         fragment_shader_path: &str,
-        textures: Vec<Texture>,
+        textures: &'a [Texture],
         uniform_buffer_data: Option<&[u8]>,
         enabled: bool,
         device: Arc<Device>,
@@ -37,8 +37,13 @@ impl Material {
             uniform_buffer_data.is_some(),
         );
 
+        let views_and_samplers = textures
+            .iter()
+            .map(|tex| (&tex.view, &tex.sampler))
+            .collect::<Vec<_>>();
+
         let texture_bind_group =
-            Self::create_texture_bind_group(&textures.iter().collect::<Vec<_>>(), device.clone());
+            Self::create_texture_bind_group(&views_and_samplers, device.clone());
 
         let uniform_buffer_and_bind_group = uniform_buffer_data
             .map(|data| Self::create_uniform_buffer_and_bind_group(id.clone(), device, data));
@@ -46,7 +51,7 @@ impl Material {
         Self {
             vertex_shader_path: vertex_shader_path.to_string(),
             fragment_shader_path: fragment_shader_path.to_string(),
-            textures,
+            views_and_samplers,
             enabled,
             id,
             texture_bind_group,
@@ -54,8 +59,11 @@ impl Material {
         }
     }
 
-    pub fn create_texture_bind_group(textures: &[&Texture], device: Arc<Device>) -> BindGroup {
-        let bind_group_layout_entries = if textures.is_empty() {
+    pub fn create_texture_bind_group(
+        views_and_samplers: &[(&wgpu::TextureView, &wgpu::Sampler)],
+        device: Arc<Device>,
+    ) -> BindGroup {
+        let bind_group_layout_entries = if views_and_samplers.is_empty() {
             Vec::new()
         } else {
             vec![
@@ -67,13 +75,13 @@ impl Material {
                         view_dimension: TextureViewDimension::D2,
                         multisampled: false,
                     },
-                    count: NonZeroU32::new(textures.len() as u32),
+                    count: NonZeroU32::new(views_and_samplers.len() as u32),
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
                     visibility: ShaderStages::VERTEX_FRAGMENT,
                     ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: NonZeroU32::new(textures.len() as u32),
+                    count: NonZeroU32::new(views_and_samplers.len() as u32),
                 },
             ]
         };
@@ -81,11 +89,15 @@ impl Material {
             label: Some("Texture Bind Group Layout"),
             entries: &bind_group_layout_entries,
         });
-        let views = textures.iter().map(|tex| &tex.view).collect::<Vec<_>>();
 
-        let samplers = textures.iter().map(|tex| &tex.sampler).collect::<Vec<_>>();
+        let mut views = Vec::new();
+        let mut samplers = Vec::new();
+        for (view, sampler) in views_and_samplers {
+            views.push(*view);
+            samplers.push(*sampler);
+        }
 
-        let bind_group_entries = if textures.is_empty() {
+        let bind_group_entries = if views.is_empty() {
             Vec::new()
         } else {
             vec![
@@ -149,9 +161,38 @@ impl Material {
         )
     }
 
-    pub fn update_textures(&mut self, device: Arc<Device>, textures: Vec<&Texture>) {
-        // self.textures = textures;
-        self.texture_bind_group = Self::create_texture_bind_group(&textures, device);
+    pub fn update_textures(
+        &mut self,
+        device: Arc<Device>,
+        textures: &[&'a Texture],
+        replace_indices: &[usize],
+    ) {
+        let updated_views = (if replace_indices.is_empty() {
+            textures
+                .iter()
+                .map(|tex| (&tex.view, &tex.sampler))
+                .collect::<Vec<_>>()
+        } else {
+            self.views_and_samplers
+                .iter()
+                .enumerate()
+                .map(|(i, e)| {
+                    if replace_indices.contains(&i) {
+                        (&textures[i].view, &textures[i].sampler)
+                    } else {
+                        *e
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+
+
+        self.texture_bind_group = Self::create_texture_bind_group(
+            &updated_views,
+            device,
+        );
+
+        self.views_and_samplers = updated_views;
     }
 
     pub fn id(&self) -> &MaterialId {
