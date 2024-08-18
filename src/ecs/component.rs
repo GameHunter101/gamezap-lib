@@ -10,7 +10,7 @@ use imgui::Ui;
 use sdl2::event::Event;
 use wgpu::{Device, Queue, RenderPass};
 
-use crate::{ui_manager::UiManager, EngineDetails, EngineSystems, pipeline::ComputePipeline};
+use crate::{compute::ComputePipeline, ui_manager::UiManager, EngineDetails, EngineSystems};
 
 use super::{
     concepts::ConceptManager,
@@ -55,7 +55,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + ComponentSystemCore {
         active_camera_id: Option<EntityId>,
         entities: &mut Vec<Entity>,
         materials: Option<&mut (Vec<Material>, usize)>,
-        compute_pipelines: &[ComputePipeline],
+        compute_pipelines: &mut [ComputePipeline],
     ) {
     }
 
@@ -129,7 +129,7 @@ macro_rules! new_component {
                 scene::AllComponents,
             },
             EngineDetails, EngineSystems,
-            pipeline::ComputePipeline,
+            compute::ComputePipeline,
         };
 
         use wgpu::{Device, Queue};

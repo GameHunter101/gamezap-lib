@@ -1,4 +1,4 @@
-use gamezap::new_component;
+use gamezap::{compute::ComputePackagedData, new_component, texture::Texture};
 
 new_component!(ComputeMonitorComponent {
     pipeline_index: usize
@@ -26,11 +26,20 @@ impl ComponentSystem for ComputeMonitorComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
-        compute_pipelines: &[ComputePipeline],
+        compute_pipelines: &mut [ComputePipeline],
     ) {
-        match compute_pipelines[self.pipeline_index].run_compute_shader::<u32>(device, queue) {
+        match compute_pipelines[self.pipeline_index].grab_array_data::<f32>(device.clone(), 2) {
             Ok(res) => println!("Compute result: {:?}", res),
             Err(err) => println!("ERROR: {:?}", err),
         };
+
+        let rgba = image::RgbaImage::from_fn(200, 200, |_, _| image::Rgba([10; 4]));
+
+        compute_pipelines[self.pipeline_index].update_pipeline_assets(
+            device.clone(),
+            vec![(ComputePackagedData::Texture(Texture::from_rgba(
+                &device, &queue, &rgba, None, true, true,
+            ).unwrap()), 0)],
+        )
     }
 }

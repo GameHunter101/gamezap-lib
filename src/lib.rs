@@ -23,6 +23,7 @@ pub mod pipeline;
 pub mod renderer;
 pub mod texture;
 pub mod ui_manager;
+pub mod compute;
 pub mod ecs {
     pub mod component;
     pub mod concepts;

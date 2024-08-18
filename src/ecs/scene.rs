@@ -1,7 +1,8 @@
 use crate::{
+    compute::{ComputePipeline, ComputePipelineType},
     ecs::{concepts::ConceptManager, entity::Entity},
     model::{Vertex, VertexData},
-    pipeline::{ComputePipelineType, PipelineError},
+    pipeline::PipelineError,
     texture::Texture,
     ui_manager::UiManager,
     EngineDetails, EngineSystems,
@@ -16,7 +17,7 @@ use std::{
 
 use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, TextureFormat};
 
-use crate::pipeline::{ComputeError, ComputePipeline, Pipeline};
+use crate::pipeline::Pipeline;
 
 use super::{
     component::{Component, ComponentSystem},
@@ -173,7 +174,7 @@ impl<'a> Scene<'a> {
                         self.active_camera_id,
                         &mut entities_clone,
                         self.materials.get_mut(entity.id()),
-                        &self.compute_pipelines,
+                        &mut self.compute_pipelines,
                     );
                     let map_ref = cloned_components
                         .get_mut(entity.id())
@@ -183,6 +184,10 @@ impl<'a> Scene<'a> {
                     *map_ref = comp
                 }
             }
+        }
+
+        for compute_pipeline in &self.compute_pipelines {
+            compute_pipeline.run_compute_shader(&device, &queue);
         }
 
         self.components = cloned_components;
@@ -522,21 +527,9 @@ impl<'a> Scene<'a> {
             pipeline_type,
             this_compute_index,
             workgroup_size,
-            this_compute_index,
         );
         self.compute_pipelines.push(pipeline);
         Ok(this_compute_index)
-    }
-
-    pub async fn run_compute_shader<
-        T: bytemuck::Pod + bytemuck::Zeroable + std::marker::Sync + std::marker::Send,
-    >(
-        &self,
-        compute_pipeline_index: usize,
-        device: Arc<Device>,
-        queue: Arc<Queue>,
-    ) -> Result<Option<Vec<T>>, ComputeError> {
-        self.compute_pipelines[compute_pipeline_index].run_compute_shader(device, queue)
     }
 }
 

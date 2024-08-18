@@ -38,7 +38,7 @@ impl ComponentSystem for KeyboardInputComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
-        _compute_pipelines: &[ComputePipeline],
+        _compute_pipelines: &mut [ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let transform_component =

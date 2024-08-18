@@ -5,6 +5,7 @@ use components::{
     transparency_component::TransparencyComponent, ui_component::UiComponent,
 };
 use gamezap::{
+    compute::{ComputeData, ComputePipelineType, ComputeTextureData},
     ecs::{
         components::{
             camera_component::CameraComponent, mesh_component::MeshComponent,
@@ -14,7 +15,6 @@ use gamezap::{
         scene::Scene,
     },
     model::Vertex,
-    pipeline::{ComputeData, ComputePipelineType, ComputeTextureData},
     texture::Texture,
     GameZap,
 };
@@ -103,14 +103,14 @@ async fn main() {
     );
 
     let test_textures = vec![Texture::load_texture(
-            "assets/testing_textures/texture.png",
-            false,
-            &device.clone(),
-            &queue,
-            false,
-        )
-        .await
-        .unwrap()];
+        "assets/testing_textures/texture.png",
+        false,
+        &device.clone(),
+        &queue,
+        false,
+    )
+    .await
+    .unwrap()];
 
     let test_material = Material::new(
         "examples/shaders/vert.wgsl",
@@ -191,14 +191,14 @@ async fn main() {
     );
 
     let dude_texture = vec![Texture::load_texture(
-            "assets/testing_textures/dude.png",
-            false,
-            &device.clone(),
-            &queue,
-            false,
-        )
-        .await
-        .unwrap()];
+        "assets/testing_textures/dude.png",
+        false,
+        &device.clone(),
+        &queue,
+        false,
+    )
+    .await
+    .unwrap()];
 
     let cube_material = Material::new(
         "examples/shaders/vert.wgsl",
@@ -269,15 +269,15 @@ async fn main() {
         queue.clone(),
         "examples/shaders/compute_texture.wgsl",
         (128, 1, 1),
-        ComputePipelineType::<u32> {
-            input_data: ComputeData::TextureData(vec![
-                (ComputeTextureData::Dimensions((1000, 1000)), true),
-                (ComputeTextureData::Dimensions((200, 200)), true),
-            ]),
-            /* output_data_type: gamezap::pipeline::ComputeOutput::Array(
-                std::mem::size_of::<[u32; 128]>() as u64,
-            ), */
-            output_data_type: gamezap::pipeline::ComputeOutput::Texture(vec![(200, 200)])
+        ComputePipelineType::<f32> {
+            input_data: vec![
+                ComputeData::TextureData((ComputeTextureData::Dimensions((1000, 1000)), true)),
+                ComputeData::TextureData((ComputeTextureData::Dimensions((200, 200)), true)),
+            ],
+            output_data_type: vec![gamezap::compute::ComputeOutput::Array(
+                std::mem::size_of::<[f32; 128]>() as u64,
+            )],
+            // output_data_type: vec![gamezap::compute::ComputeOutput::Texture((200, 200))],
         },
         /* "examples/shaders/compute_2.wgsl",
         (6,1,1),

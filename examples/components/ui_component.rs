@@ -59,7 +59,7 @@ impl ComponentSystem for UiComponent {
         _active_camera_id: Option<EntityId>,
         entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
-        _compute_pipelines: &[ComputePipeline],
+        _compute_pipelines: &mut [ComputePipeline],
     ) {
         if engine_systems
             .lock()

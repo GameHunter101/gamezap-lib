@@ -215,7 +215,7 @@ impl ComponentSystem for TransformComponent {
         _active_camera_id: Option<EntityId>,
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
-        _compute_pipelines: &[ComputePipeline],
+        _compute_pipelines: &mut [ComputePipeline],
     ) {
         self.update_buffer(concept_manager, device);
     }
