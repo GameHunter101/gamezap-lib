@@ -16,18 +16,18 @@ impl Default for MouseInputComponent {
 }
 
 impl ComponentSystem for MouseInputComponent {
-    fn update(
-        &mut self,
-        _device: Arc<wgpu::Device>,
-        _queue: Arc<wgpu::Queue>,
-        _component_map: &mut AllComponents,
+    fn update<'a:'b, 'b>(
+        &'a mut self,
+        _device: Arc<Device>,
+        _queue: Arc<Queue>,
+        _component_map: &'a mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
-        _entities: &mut Vec<Entity>,
-        _materials: Option<&mut (Vec<Material>, usize)>,
-        _compute_pipelines: &mut [ComputePipeline],
+        _entities: &'a mut Vec<Entity>,
+        _materials: Option<&'b mut (Vec<Material>, usize)>,
+        _compute_pipelines: &'a mut [ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         /* let pitch = *concept_manager

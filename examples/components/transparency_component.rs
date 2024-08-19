@@ -12,18 +12,18 @@ impl Default for TransparencyComponent {
 }
 
 impl ComponentSystem for TransparencyComponent {
-    fn update(
-        &mut self,
+    fn update<'a:'b, 'b>(
+        &'a mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        _component_map: &mut AllComponents,
+        _component_map: &'a mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _entities: &mut Vec<Entity>,
-        materials: Option<&mut (Vec<Material>, usize)>,
-        compute_pipelines: &mut [ComputePipeline],
+        _entities: &'a mut Vec<Entity>,
+        materials: Option<&'b mut (Vec<Material>, usize)>,
+        compute_pipelines: &'a mut [ComputePipeline],
     ) {
         let details = engine_details.lock().unwrap();
         let time = details.time_elapsed.as_secs_f32();
