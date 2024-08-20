@@ -37,9 +37,12 @@ impl ComponentSystem for ComputeMonitorComponent {
 
         compute_pipelines[self.pipeline_index].update_pipeline_assets(
             device.clone(),
-            vec![(ComputePackagedData::Texture(Texture::from_rgba(
-                &device, &queue, &rgba, None, true, true,
-            ).unwrap()), 0)],
+            vec![(
+                ComputePackagedData::Texture(Rc::new(
+                    Texture::from_rgba(&device, &queue, &rgba, None, true, true).unwrap(),
+                )),
+                0,
+            )],
         )
     }
 }

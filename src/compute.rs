@@ -1,4 +1,4 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, rc::Rc, sync::Arc};
 
 use enum_as_inner::EnumAsInner;
 use wgpu::{util::DeviceExt, Buffer, Device, Queue};
@@ -38,8 +38,8 @@ pub enum ComputeTextureData {
 
 #[derive(Debug, EnumAsInner)]
 pub enum ComputePackagedData {
-    Buffer(Arc<Buffer>),
-    Texture(Texture),
+    Buffer(Rc<Buffer>),
+    Texture(Rc<Texture>),
 }
 
 #[derive(Debug)]
@@ -166,11 +166,11 @@ impl ComputePipeline {
         let input_data = &pipeline_type.input_data;
 
         let packaged_input_data = input_data.iter().enumerate().map(|(i, entry)| match entry {
-            ComputeData::ArrayData(arr) => ComputePackagedData::Buffer(Arc::new(
+            ComputeData::ArrayData(arr) => ComputePackagedData::Buffer(Rc::new(
                 Self::create_array_buffer(device.clone(), arr, compute_shader_index, i),
             )),
             ComputeData::TextureData((tex_data, _)) => {
-                ComputePackagedData::Texture(match tex_data {
+                ComputePackagedData::Texture(Rc::new(match tex_data {
                     ComputeTextureData::Path(path) => pollster::block_on(Texture::load_texture(
                         path, false, &device, &queue, false,
                     ))
@@ -186,7 +186,7 @@ impl ComputePipeline {
                         true,
                     )
                     .unwrap(),
-                })
+                }))
             }
         });
 
@@ -196,7 +196,7 @@ impl ComputePipeline {
             .iter()
             .enumerate()
             .map(|(i, entry)| match entry {
-                ComputeOutput::Array(buf_size) => ComputePackagedData::Buffer(Arc::new(
+                ComputeOutput::Array(buf_size) => ComputePackagedData::Buffer(Rc::new(
                     device.create_buffer(&wgpu::BufferDescriptor {
                         label: Some(
                             format!(
@@ -209,7 +209,7 @@ impl ComputePipeline {
                         mapped_at_creation: false,
                     }),
                 )),
-                ComputeOutput::Texture((width, height)) => ComputePackagedData::Texture(
+                ComputeOutput::Texture((width, height)) => ComputePackagedData::Texture(Rc::new(
                     Texture::blank_texture(
                         &device.clone(),
                         &queue.clone(),
@@ -224,7 +224,7 @@ impl ComputePipeline {
                         true,
                     )
                     .unwrap(),
-                ),
+                )),
             });
 
         packaged_input_data.chain(packaged_output_data).collect()
