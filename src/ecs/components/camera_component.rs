@@ -182,18 +182,18 @@ impl ComponentSystem for CameraComponent {
         self.buf = Arc::new(Some(self.create_camera_buffer(device)));
     }
 
-    fn update<'a:'b, 'b>(
-        &'a mut self,
+    fn update(
+        &mut self,
         _device: Arc<Device>,
         queue: Arc<Queue>,
-        component_map: &'a mut AllComponents,
+        component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _entities: &'a mut Vec<Entity>,
-        _materials: Option<&'b mut (Vec<Material>, usize)>,
-        _compute_pipelines: &'a mut [ComputePipeline],
+        _entities: &mut Vec<Entity>,
+        _materials: Option<&mut (Vec<Material>, usize)>,
+        _compute_pipelines: &mut [ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let aspect_ratio = concept_manager

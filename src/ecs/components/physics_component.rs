@@ -124,18 +124,18 @@ impl ComponentSystem for PhysicsComponent {
                 .expect("Physics component expects a transform component on this entity");
     }
 
-    fn update<'a:'b, 'b>(
-        &'a mut self,
+    fn update(
+        &mut self,
         _device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: &'a mut AllComponents,
+        _component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _entities: &'a mut Vec<Entity>,
-        _materials: Option<&'b mut (Vec<Material>, usize)>,
-        _compute_pipelines: &'a mut [ComputePipeline],
+        _entities: &mut Vec<Entity>,
+        _materials: Option<&mut (Vec<Material>, usize)>,
+        _compute_pipelines: &mut [ComputePipeline],
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let engine_details = engine_details.lock().unwrap();

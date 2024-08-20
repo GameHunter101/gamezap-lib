@@ -38,7 +38,7 @@ pub mod ecs {
     }
 }
 
-pub struct GameZap<'a> {
+pub struct GameZap {
     pub systems: Rc<Mutex<EngineSystems>>,
     pub renderer: Renderer,
     pub clear_color: wgpu::Color,
@@ -47,7 +47,7 @@ pub struct GameZap<'a> {
     pub details: Rc<Mutex<EngineDetails>>,
     pub ui_manager: Rc<Mutex<UiManager>>,
 
-    scenes: Vec<Scene<'a>>,
+    scenes: Vec<Scene>,
     active_scene_index: usize,
 }
 
@@ -113,7 +113,7 @@ impl EngineDetails {
     }
 }
 
-impl<'a> GameZap<'a> {
+impl GameZap {
     /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
     pub fn builder() -> GameZapBuilder {
         GameZapBuilder::init()
@@ -242,7 +242,7 @@ impl<'a> GameZap<'a> {
         }
     }
 
-    pub fn create_scene(&mut self, scene: Scene<'a>) {
+    pub fn create_scene(&mut self, scene: Scene) {
         self.scenes.push(scene);
     }
 }
@@ -343,7 +343,7 @@ impl<'a> GameZapBuilder {
     }
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
-    pub async fn build(self) -> GameZap<'a> {
+    pub async fn build(self) -> GameZap {
         let sdl_context = if let Some(context) = self.sdl_context {
             context
         } else {

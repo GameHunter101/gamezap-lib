@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::{num::NonZeroU32, sync::Arc};
+use std::{num::NonZeroU32, rc::Rc, sync::Arc};
 
 use wgpu::{
     util::DeviceExt, BindGroup, BindGroupEntry, BindGroupLayoutEntry, BindingResource, BindingType,
@@ -11,21 +11,21 @@ use crate::texture::Texture;
 pub type MaterialId = (String, String, usize, bool);
 
 #[derive(Debug)]
-pub struct Material<'a> {
+pub struct Material {
     vertex_shader_path: String,
     fragment_shader_path: String,
-    views_and_samplers: Vec<(&'a wgpu::TextureView, &'a wgpu::Sampler)>,
+    textures: Vec<Rc<Texture>>,
     enabled: bool,
     id: MaterialId,
     texture_bind_group: BindGroup,
     uniform_buffer_and_bind_group: Option<(BindGroup, Buffer)>,
 }
 
-impl<'a> Material<'a> {
+impl Material {
     pub fn new(
         vertex_shader_path: &str,
         fragment_shader_path: &str,
-        textures: &'a [Texture],
+        textures: Vec<Rc<Texture>>,
         uniform_buffer_data: Option<&[u8]>,
         enabled: bool,
         device: Arc<Device>,
@@ -51,7 +51,7 @@ impl<'a> Material<'a> {
         Self {
             vertex_shader_path: vertex_shader_path.to_string(),
             fragment_shader_path: fragment_shader_path.to_string(),
-            views_and_samplers,
+            textures,
             enabled,
             id,
             texture_bind_group,
@@ -90,12 +90,14 @@ impl<'a> Material<'a> {
             entries: &bind_group_layout_entries,
         });
 
-        let mut views = Vec::new();
-        let mut samplers = Vec::new();
-        for (view, sampler) in views_and_samplers {
-            views.push(*view);
-            samplers.push(*sampler);
-        }
+        let views = views_and_samplers
+            .iter()
+            .map(|(v, _)| *v)
+            .collect::<Vec<_>>();
+        let samplers = views_and_samplers
+            .iter()
+            .map(|(_, s)| *s)
+            .collect::<Vec<_>>();
 
         let bind_group_entries = if views.is_empty() {
             Vec::new()
@@ -161,38 +163,19 @@ impl<'a> Material<'a> {
         )
     }
 
-    pub fn update_textures(
-        &mut self,
-        device: Arc<Device>,
-        textures: &[&'a Texture],
-        replace_indices: &[usize],
-    ) {
-        let updated_views = (if replace_indices.is_empty() {
-            textures
-                .iter()
-                .map(|tex| (&tex.view, &tex.sampler))
-                .collect::<Vec<_>>()
-        } else {
-            self.views_and_samplers
-                .iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    if replace_indices.contains(&i) {
-                        (&textures[i].view, &textures[i].sampler)
-                    } else {
-                        *e
-                    }
-                })
-                .collect::<Vec<_>>()
-        });
-
+    pub fn update_textures(&mut self, device: Arc<Device>, textures: &[(Rc<Texture>, usize)]) {
+        for (tex, index) in textures {
+            self.textures[*index] = tex.clone();
+        }
 
         self.texture_bind_group = Self::create_texture_bind_group(
-            &updated_views,
+            &self
+                .textures
+                .iter()
+                .map(|tex| (&tex.view, &tex.sampler))
+                .collect::<Vec<_>>(),
             device,
         );
-
-        self.views_and_samplers = updated_views;
     }
 
     pub fn id(&self) -> &MaterialId {

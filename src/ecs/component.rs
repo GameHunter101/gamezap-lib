@@ -44,18 +44,18 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + ComponentSystemCore {
     ) {
     }
 
-    fn update<'a:'b, 'b>(
-        &'a mut self,
+    fn update(
+        &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        component_map: &'a mut AllComponents,
+        component_map: &mut AllComponents,
         engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         active_camera_id: Option<EntityId>,
-        entities: &'a mut Vec<Entity>,
-        materials: Option<&'b mut (Vec<Material>, usize)>,
-        compute_pipelines: &'a mut [ComputePipeline],
+        entities: &mut Vec<Entity>,
+        materials: Option<&mut (Vec<Material>, usize)>,
+        compute_pipelines: &mut [ComputePipeline],
     ) {
     }
 

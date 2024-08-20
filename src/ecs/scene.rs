@@ -27,28 +27,28 @@ use super::{
 };
 
 pub type AllComponents = HashMap<EntityId, Vec<Component>>;
-pub type Materials<'a> = HashMap<EntityId, (Vec<Material<'a>>, usize)>;
+pub type Materials = HashMap<EntityId, (Vec<Material>, usize)>;
 
 #[derive(Debug)]
-pub struct Scene<'a> {
+pub struct Scene {
     entities: Arc<Mutex<Vec<Entity>>>,
     total_entities_created: u32,
     pipelines: HashMap<MaterialId, Pipeline>,
     compute_pipelines: Vec<ComputePipeline>,
     components: AllComponents,
-    materials: Materials<'a>,
+    materials: Materials,
     active_camera_id: Option<EntityId>,
     concept_manager: Rc<Mutex<ConceptManager>>,
 }
 
 #[allow(clippy::too_many_arguments)]
-impl<'a> Scene<'a> {
+impl Scene {
     pub fn create_entity(
         &mut self,
         parent: EntityId,
         enabled: bool,
         mut components: Vec<Component>,
-        materials: Option<(Vec<Material<'a>>, usize)>,
+        materials: Option<(Vec<Material>, usize)>,
     ) -> EntityId {
         let new_entity_id = self.total_entities_created;
         let new_entity = Entity::new(new_entity_id, enabled, parent, Vec::new());
@@ -533,7 +533,7 @@ impl<'a> Scene<'a> {
     }
 }
 
-impl<'a> Default for Scene<'a> {
+impl Default for Scene {
     fn default() -> Self {
         Self {
             entities: Arc::new(Mutex::new(Vec::new())),

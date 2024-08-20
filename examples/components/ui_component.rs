@@ -48,18 +48,18 @@ impl ComponentSystem for UiComponent {
         self.image_details = Some(details);
     }
 
-    fn update<'a:'b, 'b>(
-        &'a mut self,
+    fn update(
+        &mut self,
         _device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: &'a mut AllComponents,
+        _component_map: &mut AllComponents,
         _engine_details: Rc<Mutex<EngineDetails>>,
         engine_systems: Rc<Mutex<EngineSystems>>,
         _concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        entities: &'a mut Vec<Entity>,
-        _materials: Option<&'b mut (Vec<Material>, usize)>,
-        _compute_pipelines: &'a mut [ComputePipeline],
+        entities: &mut Vec<Entity>,
+        _materials: Option<&mut (Vec<Material>, usize)>,
+        _compute_pipelines: &mut [ComputePipeline],
     ) {
         if engine_systems
             .lock()

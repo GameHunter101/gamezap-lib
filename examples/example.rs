@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use algoe::{bivector::Bivector, rotor::Rotor3};
 use components::{
     compute_monitor_component::ComputeMonitorComponent,
@@ -102,20 +104,20 @@ async fn main() {
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
-    let test_textures = vec![Texture::load_texture(
-        "assets/testing_textures/texture.png",
-        false,
-        &device.clone(),
-        &queue,
-        false,
-    )
-    .await
-    .unwrap()];
-
     let test_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
-        &test_textures,
+        vec![Rc::new(
+            Texture::load_texture(
+                "assets/testing_textures/texture.png",
+                false,
+                &device.clone(),
+                &queue,
+                false,
+            )
+            .await
+            .unwrap(),
+        )],
         None,
         true,
         device.clone(),
@@ -139,20 +141,20 @@ async fn main() {
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
-    let dude_texture = vec![Texture::load_texture(
-        "assets/testing_textures/dude.png",
-        false,
-        &device.clone(),
-        &queue,
-        false,
-    )
-    .await
-    .unwrap()];
-
     let sword_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag.wgsl",
-        &dude_texture,
+        vec![Rc::new(
+            Texture::load_texture(
+                "assets/testing_textures/dude.png",
+                false,
+                &device.clone(),
+                &queue,
+                false,
+            )
+            .await
+            .unwrap(),
+        )],
         None,
         true,
         device.clone(),
@@ -190,20 +192,20 @@ async fn main() {
         Some((vec![sword_material], 0)),
     );
 
-    let dude_texture = vec![Texture::load_texture(
-        "assets/testing_textures/dude.png",
-        false,
-        &device.clone(),
-        &queue,
-        false,
-    )
-    .await
-    .unwrap()];
-
     let cube_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag2.wgsl",
-        &dude_texture,
+        vec![Rc::new(
+            Texture::load_texture(
+                "assets/testing_textures/dude.png",
+                false,
+                &device.clone(),
+                &queue,
+                false,
+            )
+            .await
+            .unwrap(),
+        )],
         Some(bytemuck::cast_slice(&[0.0_f32])),
         true,
         device.clone(),
@@ -274,9 +276,10 @@ async fn main() {
                 ComputeData::TextureData((ComputeTextureData::Dimensions((1000, 1000)), true)),
                 ComputeData::TextureData((ComputeTextureData::Dimensions((200, 200)), true)),
             ],
-            output_data_type: vec![gamezap::compute::ComputeOutput::Array(
-                std::mem::size_of::<[f32; 128]>() as u64,
-            )],
+            output_data_type: vec![gamezap::compute::ComputeOutput::Array(std::mem::size_of::<
+                [f32; 128],
+            >()
+                as u64)],
             // output_data_type: vec![gamezap::compute::ComputeOutput::Texture((200, 200))],
         },
         /* "examples/shaders/compute_2.wgsl",
@@ -324,12 +327,10 @@ async fn main() {
         na::Vector3::new(2.0, 2.0, 2.0),
     );
 
-    let test_textures = Vec::new();
-
     let test_material = Material::new(
         "examples/shaders/vert.wgsl",
         "examples/shaders/frag3.wgsl",
-        &test_textures,
+        Vec::new(),
         Some(bytemuck::cast_slice(&[1.0])),
         true,
         device.clone(),

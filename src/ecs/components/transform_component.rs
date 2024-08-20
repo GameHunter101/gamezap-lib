@@ -204,18 +204,18 @@ impl ComponentSystem for TransformComponent {
         })));
     }
 
-    fn update<'a:'b, 'b>(
-        &'a mut self,
+    fn update(
+        & mut self,
         device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: &'a mut AllComponents,
+        _component_map: & mut AllComponents,
         _engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _entities: &'a mut Vec<Entity>,
-        _materials: Option<&'b mut (Vec<Material>, usize)>,
-        _compute_pipelines: &'a mut [ComputePipeline],
+        _entities: & mut Vec<Entity>,
+        _materials: Option<& mut (Vec<Material>, usize)>,
+        _compute_pipelines: & mut [ComputePipeline],
     ) {
         self.update_buffer(concept_manager, device);
     }
