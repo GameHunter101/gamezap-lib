@@ -87,29 +87,34 @@ impl Pipeline {
     }
 
     pub fn create_pipeline_layout(material_id: &MaterialId, device: Arc<Device>) -> PipelineLayout {
-        let texture_bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> =
-            if material_id.2 == 0 {
-                Vec::new()
-            } else {
-                vec![
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
+        let texture_bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> = if material_id.2
+            == 0
+        {
+            Vec::new()
+        } else {
+            (0..material_id.2)
+                .flat_map(|i| {
+                    [
+                        wgpu::BindGroupLayoutEntry {
+                            binding: i as u32 * 2,
+                            visibility: ShaderStages::VERTEX_FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
                         },
-                        count: NonZeroU32::new(material_id.2 as u32),
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: NonZeroU32::new(material_id.2 as u32),
-                    },
-                ]
-            };
+                        wgpu::BindGroupLayoutEntry {
+                            binding: i as u32 * 2 + 1,
+                            visibility: ShaderStages::VERTEX_FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ]
+                })
+                .collect::<Vec<wgpu::BindGroupLayoutEntry>>()
+        };
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some(&format!("{material_id:?} Texture Bind Group Layout")),
@@ -172,4 +177,3 @@ impl Pipeline {
         &self.pipeline
     }
 }
-

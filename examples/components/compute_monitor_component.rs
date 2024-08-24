@@ -33,7 +33,7 @@ impl ComponentSystem for ComputeMonitorComponent {
             Err(err) => println!("ERROR: {:?}", err),
         };
 
-        let rgba = image::RgbaImage::from_fn(200, 200, |_, _| image::Rgba([10; 4]));
+        /* let rgba = image::RgbaImage::from_fn(200, 200, |_, _| image::Rgba([10; 4]));
 
         compute_pipelines[self.pipeline_index].update_pipeline_assets(
             device.clone(),
@@ -43,6 +43,6 @@ impl ComponentSystem for ComputeMonitorComponent {
                 )),
                 0,
             )],
-        )
+        ) */
     }
 }

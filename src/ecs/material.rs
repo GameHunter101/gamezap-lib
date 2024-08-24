@@ -66,24 +66,28 @@ impl Material {
         let bind_group_layout_entries = if views_and_samplers.is_empty() {
             Vec::new()
         } else {
-            vec![
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Texture {
-                        sample_type: TextureSampleType::Float { filterable: true },
-                        view_dimension: TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: NonZeroU32::new(views_and_samplers.len() as u32),
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: NonZeroU32::new(views_and_samplers.len() as u32),
-                },
-            ]
+            (0..views_and_samplers.len())
+                .flat_map(|i| {
+                    [
+                        BindGroupLayoutEntry {
+                            binding: i as u32 * 2,
+                            visibility: ShaderStages::VERTEX_FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: i as u32 * 2 + 1,
+                            visibility: ShaderStages::VERTEX_FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ]
+                })
+                .collect::<Vec<_>>()
         };
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Texture Bind Group Layout"),
@@ -102,16 +106,22 @@ impl Material {
         let bind_group_entries = if views.is_empty() {
             Vec::new()
         } else {
-            vec![
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureViewArray(&views),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::SamplerArray(&samplers),
-                },
-            ]
+            views_and_samplers
+                .iter()
+                .enumerate()
+                .flat_map(|(i, (view, sampler))| {
+                    [
+                        BindGroupEntry {
+                            binding: i as u32 * 2,
+                            resource: BindingResource::TextureView(view),
+                        },
+                        BindGroupEntry {
+                            binding: i as u32 * 2 + 1,
+                            resource: BindingResource::Sampler(sampler),
+                        },
+                    ]
+                })
+                .collect::<Vec<_>>()
         };
 
         device.create_bind_group(&wgpu::BindGroupDescriptor {
