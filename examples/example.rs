@@ -271,7 +271,7 @@ async fn main() {
         queue.clone(),
         "examples/shaders/compute_texture.wgsl",
         (200, 200, 1),
-        ComputePipelineType::<f32> {
+        ComputePipelineType {
             input_data: vec![
                 ComputeData::TextureData((ComputeTextureData::Dimensions((1000, 1000)), true)),
                 ComputeData::TextureData((ComputeTextureData::Dimensions((200, 200)), true)),

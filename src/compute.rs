@@ -13,8 +13,8 @@ pub enum ComputeError {
 }
 
 #[derive(Debug)]
-pub struct ComputePipelineType<'a, T: bytemuck::Pod + bytemuck::Zeroable> {
-    pub input_data: Vec<ComputeData<'a, T>>,
+pub struct ComputePipelineType<'a> {
+    pub input_data: Vec<ComputeData<'a>>,
     pub output_data_type: Vec<ComputeOutput>,
 }
 
@@ -25,8 +25,8 @@ pub enum ComputeOutput {
 }
 
 #[derive(Debug, EnumAsInner)]
-pub enum ComputeData<'a, T: bytemuck::Pod + bytemuck::Zeroable> {
-    ArrayData(&'a [T]),
+pub enum ComputeData<'a> {
+    ArrayData(&'a [u8]),
     TextureData((ComputeTextureData, bool)),
 }
 
@@ -53,11 +53,11 @@ pub struct ComputePipeline {
 }
 
 impl ComputePipeline {
-    pub fn new<T: bytemuck::Pod + bytemuck::Zeroable + Debug>(
+    pub fn new(
         device: Arc<Device>,
         queue: Arc<Queue>,
         shader_module_descriptor: wgpu::ShaderModuleDescriptor,
-        pipeline_type: ComputePipelineType<T>,
+        pipeline_type: ComputePipelineType,
         compute_shader_index: usize,
         workgroup_counts: (u32, u32, u32),
     ) -> Self {
@@ -98,10 +98,10 @@ impl ComputePipeline {
         }
     }
 
-    fn create_bind_group_layout_and_pipeline<T: bytemuck::Pod + bytemuck::Zeroable + Debug>(
+    fn create_bind_group_layout_and_pipeline(
         device: Arc<Device>,
         shader_module: wgpu::ShaderModule,
-        pipeline_type: &ComputePipelineType<T>,
+        pipeline_type: &ComputePipelineType,
         compute_shader_index: usize,
     ) -> (wgpu::BindGroupLayout, wgpu::ComputePipeline) {
         let input_data = &pipeline_type.input_data;
@@ -157,10 +157,10 @@ impl ComputePipeline {
         (pipeline_bind_group_layouts, pipeline)
     }
 
-    fn create_pipeline_assets<T: bytemuck::Pod + bytemuck::Zeroable + Debug>(
+    fn create_pipeline_assets(
         device: Arc<Device>,
         queue: Arc<Queue>,
-        pipeline_type: &ComputePipelineType<T>,
+        pipeline_type: &ComputePipelineType,
         compute_shader_index: usize,
     ) -> Vec<ComputePackagedData> {
         let input_data = &pipeline_type.input_data;
@@ -312,9 +312,9 @@ impl ComputePipeline {
         }
     }
 
-    fn create_array_buffer<T: bytemuck::Pod + bytemuck::Zeroable>(
+    fn create_array_buffer(
         device: Arc<Device>,
-        arr: &[T],
+        arr: &[u8],
         compute_shader_index: usize,
         buffer_id: usize,
     ) -> wgpu::Buffer {
@@ -323,7 +323,7 @@ impl ComputePipeline {
                 format!("Compute shader #{compute_shader_index} input array buffer #{buffer_id}",)
                     .as_str(),
             ),
-            contents: bytemuck::cast_slice(arr),
+            contents: arr,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,

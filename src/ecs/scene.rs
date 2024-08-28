@@ -510,13 +510,13 @@ impl Scene {
         self.concept_manager.clone()
     }
 
-    pub fn create_compute_pipeline<T: bytemuck::Pod + bytemuck::Zeroable + Debug>(
+    pub fn create_compute_pipeline(
         &mut self,
         device: Arc<Device>,
         queue: Arc<Queue>,
         shader_path: &str,
         workgroup_size: (u32, u32, u32),
-        pipeline_type: ComputePipelineType<T>,
+        pipeline_type: ComputePipelineType,
     ) -> Result<usize, PipelineError> {
         let this_compute_index = self.compute_pipelines.len();
         let shader_module_descriptor = Pipeline::load_shader_module_descriptor(shader_path)?;
