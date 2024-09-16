@@ -10,9 +10,7 @@ use wgpu::{
 
 use nalgebra as na;
 
-use crate::{
-    ecs::component::Component, model::VertexData, new_component, ui_manager::UiManager,
-};
+use crate::{ecs::component::Component, model::VertexData, new_component, ui_manager::UiManager};
 
 new_component!(
     TransformComponent {
@@ -59,9 +57,6 @@ impl TransformComponent {
         concept_manager: Rc<Mutex<ConceptManager>>,
         position: na::Vector3<f32>,
         rotation: Rotor3,
-        /* roll: f32,
-        pitch: f32,
-        yaw: f32, */
         scale: na::Vector3<f32>,
     ) -> TransformComponent {
         let mut component = TransformComponent {
@@ -70,13 +65,6 @@ impl TransformComponent {
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
             buf: Arc::new(None),
         };
-
-        /* #[rustfmt::skip]
-        let rotation_matrix = na::Matrix3::new(
-            yaw.cos() * pitch.cos(), yaw.cos() * pitch.sin() * roll.sin() - yaw.sin() * roll.cos(), yaw.cos() * pitch.sin() * roll.cos() + yaw.sin() * roll.sin(),
-            yaw.sin() * pitch.cos(), yaw.sin() * pitch.sin() * roll.sin() + yaw.cos() * roll.cos(), yaw.sin() * pitch.sin() * roll.cos() - yaw.cos() * roll.sin(),
-            -1.0 * pitch.sin(), pitch.cos() * roll.sin(), pitch.cos() * roll.cos()
-        ).to_homogeneous(); */
 
         let rotated_x = (rotation * Vector3::x_axis().xyz()).to_homogeneous();
         let rotated_y = (rotation * Vector3::y_axis().xyz()).to_homogeneous();
@@ -88,8 +76,7 @@ impl TransformComponent {
             rotated_z,
             Vector4::new(0.0, 0.0, 0.0, 1.0),
         ]);
-        // println!("Rotor: {rotation:?}, Rotation: {rotation_matrix}");
-        // let rotation_matrix = Matrix4::identity();
+
         let translation_matrix = na::Translation3::from(position).to_homogeneous();
         let scale_matrix = na::Scale3::from(scale).to_homogeneous();
         let transform_matrix = scale_matrix * rotation_matrix * translation_matrix;
@@ -99,9 +86,6 @@ impl TransformComponent {
         concepts.insert("matrix".to_string(), Box::new(transform_matrix));
         concepts.insert("position".to_string(), Box::new(position));
         concepts.insert("rotation".to_string(), Box::new(rotation));
-        /* concepts.insert("roll".to_string(), Box::new(roll));
-        concepts.insert("pitch".to_string(), Box::new(pitch));
-        concepts.insert("yaw".to_string(), Box::new(yaw)); */
         concepts.insert("scale".to_string(), Box::new(scale));
 
         component.register_component(concept_manager, concepts);
@@ -126,9 +110,7 @@ impl TransformComponent {
             "position".to_string(),
             Box::new(na::Vector3::<f32>::zeros()),
         );
-        /* concepts.insert("roll".to_string(), Box::new(0.0));
-        concepts.insert("pitch".to_string(), Box::new(0.0));
-        concepts.insert("yaw".to_string(), Box::new(0.0)); */
+
         concepts.insert("rotation".to_string(), Box::<Rotor3>::default());
         concepts.insert(
             "scale".to_string(),
@@ -154,8 +136,10 @@ impl TransformComponent {
             .get_concept::<na::Vector3<f32>>(self.id, "scale".to_string())
             .unwrap();
 
+        let rot_matrix = self.create_rotation_matrix(&concept_manager);
+
         let matrix = na::Matrix4::<f32>::new_translation(position)
-            // * self.create_rotation_matrix(&concept_manager)
+            * rot_matrix
             * na::Matrix4::<f32>::new_nonuniform_scaling(scale);
         let matrix_as_arr: [[f32; 4]; 4] = matrix.into();
 
@@ -205,17 +189,17 @@ impl ComponentSystem for TransformComponent {
     }
 
     fn update(
-        & mut self,
+        &mut self,
         device: Arc<Device>,
         _queue: Arc<Queue>,
-        _component_map: & mut AllComponents,
+        _component_map: &mut AllComponents,
         _engine_details: Rc<Mutex<EngineDetails>>,
         _engine_systems: Rc<Mutex<EngineSystems>>,
         concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
-        _entities: & mut Vec<Entity>,
-        _materials: Option<& mut (Vec<Material>, usize)>,
-        _compute_pipelines: & mut [ComputePipeline],
+        _entities: &mut Vec<Entity>,
+        _materials: Option<&mut (Vec<Material>, usize)>,
+        _compute_pipelines: &mut [ComputePipeline],
     ) {
         self.update_buffer(concept_manager, device);
     }
