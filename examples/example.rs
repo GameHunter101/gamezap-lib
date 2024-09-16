@@ -131,7 +131,7 @@ async fn main() {
     );
 
     let sword_mesh =
-        MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\blade.obj", false)
+        MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\basic_cube.obj", false)
             .unwrap();
 
     let sword_transform = TransformComponent::new(

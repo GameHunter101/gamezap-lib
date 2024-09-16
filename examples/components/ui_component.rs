@@ -44,7 +44,7 @@ impl ComponentSystem for UiComponent {
         );
         let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
         let details = Texture::load_ui_image(&device, &queue,
-            &mut renderer, "C:\\Users\\liors\\Documents\\Coding projects\\Rust\\gamezap-lib\\assets\\testing_textures\\dude.png".to_string());
+            &mut renderer, "assets\\testing_textures\\dude.png".to_string());
         self.image_details = Some(details);
     }
 

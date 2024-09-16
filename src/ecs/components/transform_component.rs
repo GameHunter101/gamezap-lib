@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::MutexGuard};
 
-use na::{Matrix4, Vector3, Vector4};
+use na::{Matrix3, Matrix4, Vector3, Vector4};
 // use ultraviolet::{Rotor3, Vec3};
 use algoe::rotor::Rotor3;
 use wgpu::{
@@ -122,13 +122,68 @@ impl TransformComponent {
         component
     }
 
+    pub fn apply_translation(
+        &self,
+        concept_manager: Rc<Mutex<ConceptManager>>,
+        translation: Vector3<f32>,
+    ) {
+        let mut concept_manager = concept_manager.lock().unwrap();
+        let current_position = concept_manager
+            .get_concept_mut::<Vector3<f32>>(self.id, String::from("position"))
+            .unwrap();
+        *current_position += translation;
+
+        let new_matrix = na::Translation3::from(translation);
+
+        let transform = concept_manager
+            .get_concept_mut::<Matrix4<f32>>(self.id, String::from("matrix"))
+            .unwrap();
+
+        *transform *= new_matrix.to_homogeneous();
+    }
+
+    pub fn apply_rotation(&self, concept_manager: Rc<Mutex<ConceptManager>>, rotation: Rotor3) {
+        let mut concept_manager = concept_manager.lock().unwrap();
+        let current_rotation = concept_manager
+            .get_concept_mut::<Rotor3>(self.id, String::from("rotation"))
+            .unwrap();
+        *current_rotation = *current_rotation * rotation;
+
+        let new_matrix = Matrix3::from_columns(&[
+            rotation * Vector3::x_axis().xyz(),
+            rotation * Vector3::y_axis().xyz(),
+            rotation * Vector3::z_axis().xyz(),
+        ]);
+
+        let transform = concept_manager
+            .get_concept_mut::<Matrix4<f32>>(self.id, String::from("matrix"))
+            .unwrap();
+
+        *transform *= new_matrix.to_homogeneous();
+    }
+
+    pub fn apply_scale(&self, concept_manager: Rc<Mutex<ConceptManager>>, dilation: Vector3<f32>) {
+        let mut concept_manager = concept_manager.lock().unwrap();
+        let current_scale = concept_manager
+            .get_concept_mut::<Vector3<f32>>(self.id, String::from("scale"))
+            .unwrap();
+        *current_scale += dilation;
+
+        let new_matrix = Matrix4::new_nonuniform_scaling(&dilation);
+        let transform = concept_manager
+            .get_concept_mut::<Matrix4<f32>>(self.id, String::from("matrix"))
+            .unwrap();
+
+        *transform *= new_matrix;
+    }
+
     pub fn update_buffer(
         &mut self,
         concept_manager: Rc<Mutex<ConceptManager>>,
         device: Arc<Device>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
-        let position = concept_manager
+        /* let position = concept_manager
             .get_concept::<na::Vector3<f32>>(self.id, "position".to_string())
             .unwrap();
 
@@ -140,7 +195,10 @@ impl TransformComponent {
 
         let matrix = na::Matrix4::<f32>::new_translation(position)
             * rot_matrix
-            * na::Matrix4::<f32>::new_nonuniform_scaling(scale);
+            * na::Matrix4::<f32>::new_nonuniform_scaling(scale); */
+        let matrix = *concept_manager
+            .get_concept::<Matrix4<f32>>(self.id, "matrix".to_string())
+            .unwrap();
         let matrix_as_arr: [[f32; 4]; 4] = matrix.into();
 
         let new_buffer = device.create_buffer_init(&BufferInitDescriptor {
