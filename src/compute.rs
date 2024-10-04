@@ -152,6 +152,8 @@ impl ComputePipeline {
             ),
             module: &shader_module,
             entry_point: "main",
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
         });
 
         (pipeline_bind_group_layouts, pipeline)
@@ -395,6 +397,7 @@ impl ComputePipeline {
                     "Compute shader #{} compute pass",
                     self.compute_shader_index
                 )),
+                timestamp_writes: None,
             });
 
             compute_pass.set_pipeline(&self.pipeline);

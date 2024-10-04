@@ -8,7 +8,7 @@ use std::{
 };
 
 use imgui::{Context, FontId};
-use imgui_sdl2::ImguiSdl2;
+use imgui_sdl2_support::SdlPlatform;
 use imgui_wgpu::{Renderer, RendererConfig};
 use sdl2::video::Window;
 use wgpu::{Device, Queue, TextureFormat};
@@ -22,7 +22,7 @@ pub enum UiError {
 pub struct UiManager {
     pub imgui_context: Rc<Mutex<Context>>,
     pub imgui_renderer: Rc<Mutex<Renderer>>,
-    pub imgui_platform: Rc<Mutex<ImguiSdl2>>,
+    pub imgui_platform: Rc<Mutex<SdlPlatform>>,
 
     pub font_ids: HashMap<String, FontId>,
 }
@@ -48,7 +48,7 @@ impl UiManager {
 
         let imgui_renderer = Renderer::new(&mut imgui_context, &device, &queue, config);
 
-        let imgui_platform = ImguiSdl2::new(&mut imgui_context, window);
+        let imgui_platform = SdlPlatform::new(&mut imgui_context);
 
         UiManager {
             imgui_context: Rc::new(Mutex::new(imgui_context)),

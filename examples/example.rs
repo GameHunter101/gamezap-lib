@@ -14,7 +14,7 @@ use gamezap::{
             physics_component::PhysicsComponent, transform_component::TransformComponent,
         },
         material::Material,
-        scene::Scene,
+        scene::{Scene, TextParams},
     },
     model::Vertex,
     texture::Texture,
@@ -130,9 +130,12 @@ async fn main() {
         Some((vec![test_material], 0)),
     );
 
-    let sword_mesh =
-        MeshComponent::from_obj(concept_manager.clone(), "assets\\models\\basic_cube.obj", false)
-            .unwrap();
+    let sword_mesh = MeshComponent::from_obj(
+        concept_manager.clone(),
+        "assets\\models\\basic_cube.obj",
+        false,
+    )
+    .unwrap();
 
     let sword_transform = TransformComponent::new(
         concept_manager.clone(),
@@ -251,7 +254,7 @@ async fn main() {
         na::Vector3::new(1.0, 1.0, 1.0),
     );
 
-    let camera_keyboard_controller = KeyboardInputComponent::default();
+    let camera_keyboard_controller = KeyboardInputComponent::new(concept_manager.clone());
     let camera_mouse_controller = MouseInputComponent::default();
 
     let camera = scene.create_entity(
@@ -348,6 +351,25 @@ async fn main() {
     let ui_component = UiComponent::new("assets/fonts/inter.ttf");
 
     let _ui_entity = scene.create_entity(0, true, vec![Box::new(ui_component)], None);
+
+    scene.initialize_text(
+        vec![TextParams {
+            metrics: glyphon::Metrics {
+                font_size: 20.0,
+                line_height: 30.0,
+            },
+            text: "Hello world! :)",
+            color: glyphon::Color::rgb(255, 0, 0),
+            family: glyphon::Family::SansSerif,
+            weight: glyphon::Weight(500),
+            fancy_render: true,
+            top_left_position: (0.0, 20.0),
+            text_scale: 1.0,
+            bounds: glyphon::TextBounds { left: 0, top: 0, right: 500, bottom: 500 },
+            default_color: glyphon::Color::rgb(255, 255, 255),
+        }],
+        window_size,
+    );
 
     engine.create_scene(scene);
 

@@ -15,6 +15,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use glyphon::{FontSystem, SwashCache, TextAtlas, TextRenderer};
 use wgpu::{BindGroup, CommandEncoderDescriptor, Device, Queue, TextureFormat};
 
 use crate::pipeline::Pipeline;
@@ -29,8 +30,45 @@ use super::{
 pub type AllComponents = HashMap<EntityId, Vec<Component>>;
 pub type Materials = HashMap<EntityId, (Vec<Material>, usize)>;
 
+// #[derive(Debug)]
+pub struct TextState<'a> {
+    pub font_system: glyphon::FontSystem,
+    pub swash_cache: glyphon::SwashCache,
+    pub text_viewport: Option<glyphon::Viewport>,
+    pub atlas: Option<glyphon::TextAtlas>,
+    pub text_renderer: Option<glyphon::TextRenderer>,
+    pub text_areas: Vec<(glyphon::Buffer, TextParams<'a>)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TextParams<'a> {
+    pub metrics: glyphon::Metrics,
+    pub text: &'a str,
+    pub color: glyphon::Color,
+    pub family: glyphon::Family<'a>,
+    pub weight: glyphon::Weight,
+    pub fancy_render: bool,
+    pub top_left_position: (f32, f32),
+    pub text_scale: f32,
+    pub bounds: glyphon::TextBounds,
+    pub default_color: glyphon::Color,
+}
+
+impl<'a> Debug for TextState<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TextState")
+            .field("font_system", &self.font_system)
+            .field("swash_cache", &self.swash_cache)
+            .field("text_viewport", &self.text_viewport)
+            .field("atlas", &"Text atlas".to_string())
+            .field("text_renderer", &"Text renderer".to_string())
+            .field("text_areas", &"Text areas".to_string())
+            .finish()
+    }
+}
+
 #[derive(Debug)]
-pub struct Scene {
+pub struct Scene<'a> {
     entities: Arc<Mutex<Vec<Entity>>>,
     total_entities_created: u32,
     pipelines: HashMap<MaterialId, Pipeline>,
@@ -39,10 +77,12 @@ pub struct Scene {
     materials: Materials,
     active_camera_id: Option<EntityId>,
     concept_manager: Rc<Mutex<ConceptManager>>,
+
+    pub text_state: TextState<'a>,
 }
 
 #[allow(clippy::too_many_arguments)]
-impl Scene {
+impl<'a> Scene<'a> {
     pub fn create_entity(
         &mut self,
         parent: EntityId,
@@ -128,6 +168,18 @@ impl Scene {
             .collect::<HashMap<EntityId, Vec<Component>>>();
 
         self.components = new_components;
+
+        let cache = glyphon::Cache::new(&device);
+        self.text_state.text_viewport = Some(glyphon::Viewport::new(&device, &cache));
+        let mut atlas =
+            TextAtlas::new(&device, &queue, &cache, wgpu::TextureFormat::Bgra8UnormSrgb);
+        self.text_state.text_renderer = Some(TextRenderer::new(
+            &mut atlas,
+            &device,
+            wgpu::MultisampleState::default(),
+            None,
+        ));
+        self.text_state.atlas = Some(atlas);
     }
 
     pub fn update(
@@ -300,17 +352,19 @@ impl Scene {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(clear_color),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
 
             if let Some(mask) = &engine_details.render_mask {
@@ -378,6 +432,38 @@ impl Scene {
         }
         smaa_frame.resolve();
 
+        if let Some(text_renderer) = &mut self.text_state.text_renderer {
+            self.text_state.text_viewport.as_mut().unwrap().update(
+                &queue,
+                glyphon::Resolution {
+                    width: window_size.0,
+                    height: window_size.1,
+                },
+            );
+            text_renderer
+                .prepare(
+                    &device,
+                    &queue,
+                    &mut self.text_state.font_system,
+                    self.text_state.atlas.as_mut().unwrap(),
+                    self.text_state.text_viewport.as_ref().unwrap(),
+                    self.text_state
+                    .text_areas
+                    .iter()
+                    .map(|(buf, params)| glyphon::TextArea {
+                        buffer: buf,
+                        left: params.top_left_position.0,
+                        top: params.top_left_position.1,
+                        scale: params.text_scale,
+                        bounds: params.bounds,
+                        default_color: params.default_color,
+                        custom_glyphs: &[],
+                    }),
+                    &mut self.text_state.swash_cache,
+                )
+                .unwrap();
+        }
+
         let ui_manager = ui_manager.lock().unwrap();
         let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
         let mut context = ui_manager.imgui_context.lock().unwrap();
@@ -388,17 +474,29 @@ impl Scene {
 
         {
             let mut ui_render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
+                label: Some("UI Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             });
+
+            if let Some(text_renderer) = self.text_state.text_renderer.as_ref() {
+                text_renderer
+                    .render(
+                        self.text_state.atlas.as_ref().unwrap(),
+                        self.text_state.text_viewport.as_ref().unwrap(),
+                        &mut ui_render_pass,
+                    )
+                    .unwrap();
+            }
 
             self.render_ui(
                 device,
@@ -414,6 +512,8 @@ impl Scene {
 
         queue.submit(std::iter::once(encoder.finish()));
         output.present();
+
+        self.text_state.atlas.as_mut().unwrap().trim();
     }
 
     fn get_component_render_order(components: &[Component]) -> Vec<&Component> {
@@ -468,6 +568,40 @@ impl Scene {
             ui_manager,
         );
         cam.create_camera_bind_group(device)
+    }
+
+    pub fn initialize_text(&mut self, texts: Vec<TextParams<'a>>, window_size: (u32, u32)) {
+        self.text_state.text_areas = texts
+            .iter()
+            .map(|params| {
+                let mut buffer =
+                    glyphon::Buffer::new(&mut self.text_state.font_system, params.metrics);
+
+                buffer.set_size(
+                    &mut self.text_state.font_system,
+                    Some(window_size.0 as f32),
+                    Some(window_size.1 as f32),
+                );
+
+                buffer.set_text(
+                    &mut self.text_state.font_system,
+                    params.text,
+                    glyphon::Attrs::new()
+                        .color(params.color)
+                        .family(params.family)
+                        .weight(params.weight),
+                    if params.fancy_render {
+                        glyphon::Shaping::Advanced
+                    } else {
+                        glyphon::Shaping::Basic
+                    },
+                );
+
+                buffer.shape_until_scroll(&mut self.text_state.font_system, false);
+
+                (buffer, *params)
+            })
+            .collect();
     }
 
     pub fn get_component<T: ComponentSystem + Any>(components: &[Component]) -> Option<&T> {
@@ -533,7 +667,7 @@ impl Scene {
     }
 }
 
-impl Default for Scene {
+impl<'a> Default for Scene<'a> {
     fn default() -> Self {
         Self {
             entities: Arc::new(Mutex::new(Vec::new())),
@@ -544,6 +678,15 @@ impl Default for Scene {
             materials: HashMap::new(),
             active_camera_id: None,
             concept_manager: Rc::new(Mutex::new(ConceptManager::default())),
+
+            text_state: TextState {
+                font_system: FontSystem::new(),
+                swash_cache: SwashCache::new(),
+                text_viewport: None,
+                atlas: None,
+                text_renderer: None,
+                text_areas: Vec::new(),
+            },
         }
     }
 }

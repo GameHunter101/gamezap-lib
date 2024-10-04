@@ -15,18 +15,41 @@ use sdl2::{
     keyboard::{Keycode, Scancode},
 };
 
-new_component!(KeyboardInputComponent {});
+new_component!(KeyboardInputComponent {
+    concept_ids: Vec<String>
+});
 
-impl Default for KeyboardInputComponent {
-    fn default() -> Self {
-        KeyboardInputComponent {
+impl KeyboardInputComponent {
+    pub fn new(concept_manager: Rc<Mutex<ConceptManager>>) -> Self {
+        let mut component = KeyboardInputComponent {
             parent: EntityId::MAX,
             id: (EntityId::MAX, TypeId::of::<Self>(), 0),
-        }
+            concept_ids: Vec::new(),
+        };
+
+        let mut concepts: HashMap<String, Box<dyn Any>> = HashMap::new();
+        concepts.insert("is_cursor_visible".to_string(), Box::new(false));
+
+        component.register_component(concept_manager, concepts);
+
+        component
     }
 }
 
 impl ComponentSystem for KeyboardInputComponent {
+    fn register_component(
+        &mut self,
+        concept_manager: Rc<Mutex<ConceptManager>>,
+        data: HashMap<String, Box<dyn Any>>,
+    ) {
+        self.concept_ids = data.keys().cloned().collect();
+
+        concept_manager
+            .lock()
+            .unwrap()
+            .register_component_concepts(self.id, data);
+    }
+
     fn update(
         &mut self,
         _device: Arc<Device>,
@@ -48,8 +71,8 @@ impl ComponentSystem for KeyboardInputComponent {
             None => na::Matrix4::identity(),
         };
         let physics_component =
-            Scene::get_component_mut::<PhysicsComponent>(component_map.get_mut(&1).unwrap())
-                .unwrap();
+        Scene::get_component_mut::<PhysicsComponent>(component_map.get_mut(&1).unwrap())
+            .unwrap();
 
         let position_concept = concept_manager
             .get_concept_mut::<na::Vector3<f32>>(
@@ -104,20 +127,27 @@ impl ComponentSystem for KeyboardInputComponent {
         &self,
         event: &Event,
         _component_map: &HashMap<EntityId, Vec<Component>>,
-        _concept_manager: Rc<Mutex<ConceptManager>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
         _active_camera_id: Option<EntityId>,
         _engine_details: &EngineDetails,
         engine_systems: &EngineSystems,
     ) {
         let context = &engine_systems.sdl_context;
         if let Event::KeyDown {
-            keycode: Some(Keycode::Escape),
+            keycode: Some(Keycode::ESCAPE),
             ..
         } = event
         {
-            let is_cursor_visible = context.mouse().is_cursor_showing();
-            context.mouse().set_relative_mouse_mode(is_cursor_visible);
-            context.mouse().show_cursor(!is_cursor_visible);
+            let mut concept_manager = concept_manager.lock().unwrap();
+
+            let is_cursor_visible = concept_manager
+                .get_concept_mut::<bool>(self.id, "is_cursor_visible".to_string())
+                .unwrap();
+            context.mouse().set_relative_mouse_mode(*is_cursor_visible);
+            context.mouse().show_cursor(!*is_cursor_visible);
+            *is_cursor_visible = !*is_cursor_visible;
+            // println!("Cursor: {}", context.mouse().is_cursor_showing());
+            // dbg!(&event);
         }
     }
 }

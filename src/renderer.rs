@@ -2,11 +2,12 @@ use std::sync::{Arc, Mutex};
 
 use sdl2::video::Window;
 use smaa::SmaaTarget;
+use wgpu::rwh::{HasDisplayHandle, HasWindowHandle};
 
 use crate::texture::Texture;
 
 pub struct Renderer {
-    pub surface: Arc<wgpu::Surface>,
+    pub surface: Arc<wgpu::Surface<'static>>,
     pub surface_format: wgpu::TextureFormat,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
@@ -22,16 +23,25 @@ impl Renderer {
         window: &Window,
         clear_color: wgpu::Color,
         antialiasing: bool,
-        limits: wgpu::Limits,
+        required_limits: wgpu::Limits,
     ) -> Renderer {
         let size = window.size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             dx12_shader_compiler: Default::default(),
+            ..Default::default()
         });
 
-        let surface = Arc::new(unsafe { instance.create_surface(window) }.unwrap());
+        let surface = Arc::new(
+            unsafe {
+                instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: window.display_handle().unwrap().into(),
+                    raw_window_handle: window.window_handle().unwrap().into(),
+                })
+            }
+            .unwrap(),
+        );
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptionsBase {
@@ -45,11 +55,12 @@ impl Renderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
+                    label: Some("Renderer device descriptor"),
+                    required_features: wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
                         | wgpu::Features::TEXTURE_BINDING_ARRAY
                         | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                    limits,
-                    label: None,
+                    required_limits,
+                    memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
             )
@@ -76,6 +87,7 @@ impl Renderer {
             present_mode: wgpu::PresentMode::AutoNoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
 
@@ -98,6 +110,7 @@ impl Renderer {
             },
         )));
 
+
         Renderer {
             surface,
             surface_format,
@@ -111,7 +124,7 @@ impl Renderer {
         }
     }
 
-    pub fn resize(&mut self, new_size: (u32, u32)) {
+    pub fn resize(&mut self, new_size: (u32, u32), text_viewport: Option<&mut glyphon::Viewport>) {
         if new_size.0 > 0 && new_size.1 > 0 {
             self.size = new_size;
             self.config.width = new_size.0;
@@ -127,6 +140,16 @@ impl Renderer {
                 .lock()
                 .unwrap()
                 .resize(&self.device, new_size.0, new_size.1);
+
+            if let Some(viewport) = text_viewport {
+                viewport.update(
+                    &self.queue,
+                    glyphon::Resolution {
+                        width: new_size.0,
+                        height: new_size.1,
+                    },
+                );
+            }
         }
     }
 }

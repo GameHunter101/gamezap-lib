@@ -1,5 +1,5 @@
 #![allow(clippy::too_many_arguments)]
-use std::{fmt::Debug, num::NonZeroU32, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 use wgpu::{Device, PipelineLayout, RenderPipeline, ShaderStages};
 
 use crate::{
@@ -46,6 +46,7 @@ impl Pipeline {
                 module: &vertex_shader,
                 entry_point: "main",
                 buffers: vertex_layouts,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fragment_shader,
@@ -55,6 +56,7 @@ impl Pipeline {
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -78,6 +80,7 @@ impl Pipeline {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
+            cache: None,
         });
 
         Pipeline {

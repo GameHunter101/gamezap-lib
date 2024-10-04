@@ -43,8 +43,12 @@ impl ComponentSystem for UiComponent {
                 .unwrap(),
         );
         let mut renderer = ui_manager.imgui_renderer.lock().unwrap();
-        let details = Texture::load_ui_image(&device, &queue,
-            &mut renderer, "assets\\testing_textures\\dude.png".to_string());
+        let details = Texture::load_ui_image(
+            &device,
+            &queue,
+            &mut renderer,
+            "assets\\testing_textures\\dude.png".to_string(),
+        );
         self.image_details = Some(details);
     }
 
@@ -54,24 +58,26 @@ impl ComponentSystem for UiComponent {
         _queue: Arc<Queue>,
         _component_map: &mut AllComponents,
         _engine_details: Rc<Mutex<EngineDetails>>,
-        engine_systems: Rc<Mutex<EngineSystems>>,
-        _concept_manager: Rc<Mutex<ConceptManager>>,
-        _active_camera_id: Option<EntityId>,
+        _engine_systems: Rc<Mutex<EngineSystems>>,
+        concept_manager: Rc<Mutex<ConceptManager>>,
+        active_camera_id: Option<EntityId>,
         entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &mut [ComputePipeline],
     ) {
-        if engine_systems
-            .lock()
-            .unwrap()
-            .sdl_context
-            .mouse()
-            .is_cursor_showing()
-            != self.picture_enabled
-        {
-            entities[0].enabled = !self.picture_enabled;
-        }
-        self.picture_enabled = !self.picture_enabled;
+        // println!("cursor: {}", engine_systems.lock().unwrap().sdl_context.mouse().is_cursor_showing());
+        let concept_manager = concept_manager.lock().unwrap();
+        let is_cursor_visible = *concept_manager
+            .get_concept::<bool>(
+                (
+                    active_camera_id.unwrap(),
+                    TypeId::of::<super::keyboard_input_component::KeyboardInputComponent>(),
+                    0,
+                ),
+                "is_cursor_visible".to_string(),
+            )
+            .unwrap();
+        entities[self.id.0 as usize].enabled = is_cursor_visible;
     }
 
     fn ui_draw(

@@ -29,7 +29,7 @@ impl ComponentSystem for ComputeMonitorComponent {
         compute_pipelines: &mut [ComputePipeline],
     ) {
         match compute_pipelines[self.pipeline_index].grab_array_data::<f32>(device.clone(), 2) {
-            Ok(res) => println!("Compute result: {:?}", res),
+            Ok(res) => {},// println!("Compute result: {:?}", res),
             Err(err) => println!("ERROR: {:?}", err),
         };
 

@@ -18,12 +18,12 @@ use ui_manager::UiManager;
 use crate::renderer::Renderer;
 
 // pub mod compute;
+pub mod compute;
 pub mod model;
 pub mod pipeline;
 pub mod renderer;
 pub mod texture;
 pub mod ui_manager;
-pub mod compute;
 pub mod ecs {
     pub mod component;
     pub mod concepts;
@@ -38,7 +38,7 @@ pub mod ecs {
     }
 }
 
-pub struct GameZap {
+pub struct GameZap<'a> {
     pub systems: Rc<Mutex<EngineSystems>>,
     pub renderer: Renderer,
     pub clear_color: wgpu::Color,
@@ -47,7 +47,7 @@ pub struct GameZap {
     pub details: Rc<Mutex<EngineDetails>>,
     pub ui_manager: Rc<Mutex<UiManager>>,
 
-    scenes: Vec<Scene>,
+    scenes: Vec<Scene<'a>>,
     active_scene_index: usize,
 }
 
@@ -65,6 +65,7 @@ pub struct EngineDetails {
     pub pressed_scancodes: Vec<Scancode>,
     pub window_aspect_ratio: f32,
     pub render_mask: Option<RenderMask>,
+    pub is_cursor_showing: bool,
 }
 
 pub struct EngineSystems {
@@ -113,7 +114,7 @@ impl EngineDetails {
     }
 }
 
-impl GameZap {
+impl<'a> GameZap<'a> {
     /// Initialize certain fields, be sure to call [GameZapBuilder::build()] to build the struct
     pub fn builder() -> GameZapBuilder {
         GameZapBuilder::init()
@@ -130,6 +131,7 @@ impl GameZap {
 
         'running: loop {
             let active_scene_opt = self.scenes.get_mut(self.active_scene_index);
+            let mut window_size = (u32::MAX, u32::MAX);
             {
                 let systems = self.systems.lock().unwrap();
 
@@ -141,9 +143,6 @@ impl GameZap {
 
                 for event in event_pump.poll_iter() {
                     imgui_platform.handle_event(&mut imgui_context, &event);
-                    if imgui_platform.ignore_event(&event) {
-                        continue;
-                    }
 
                     if let Some(active_scene) = &active_scene_opt {
                         let component_map = active_scene.get_components();
@@ -165,33 +164,41 @@ impl GameZap {
                             win_event: WindowEvent::Resized(width, height),
                             ..
                         } => {
-                            self.renderer.resize((width as u32, height as u32));
-                            self.details.lock().unwrap().window_aspect_ratio =
-                                width as f32 / height as f32;
+                            window_size = (width as u32, height as u32);
                         }
                         _ => {}
                     }
                 }
 
-                imgui_platform.prepare_frame(
-                    imgui_context.io_mut(),
-                    &self.window,
-                    &event_pump.mouse_state(),
-                );
+                imgui_platform.prepare_frame(&mut imgui_context, &self.window, &event_pump);
             }
 
             {
-                let renderer = &self.renderer;
+                let renderer = &mut self.renderer;
 
                 let output = renderer.surface.get_current_texture().unwrap();
                 let view = output
                     .texture
                     .create_view(&wgpu::TextureViewDescriptor::default());
 
+
+                if let Some(active_scene) = active_scene_opt {
+                    {
+                        if window_size != (u32::MAX, u32::MAX) {
+                            self.window_size = window_size;
+
+                            renderer.resize(
+                                window_size,
+                                active_scene.text_state.text_viewport.as_mut(),
+                            );
+                            self.details.lock().unwrap().window_aspect_ratio =
+                                window_size.0 as f32 / window_size.1 as f32;
+                        }
+                    }
+
                 let mut smaa_binding = renderer.smaa_target.lock().unwrap();
                 let smaa_frame = smaa_binding.start_frame(&renderer.device, &renderer.queue, &view);
 
-                if let Some(active_scene) = active_scene_opt {
                     if self.details.lock().unwrap().frame_number == 0 {
                         active_scene.initialize(
                             renderer.device.clone(),
@@ -242,7 +249,7 @@ impl GameZap {
         }
     }
 
-    pub fn create_scene(&mut self, scene: Scene) {
+    pub fn create_scene(&mut self, scene: Scene<'a>) {
         self.scenes.push(scene);
     }
 }
@@ -269,6 +276,7 @@ pub struct GameZapBuilder {
     render_mask: Option<RenderMask>,
 
     limits: wgpu::Limits,
+    is_cursor_showing: bool,
 }
 
 impl<'a> GameZapBuilder {
@@ -296,8 +304,10 @@ impl<'a> GameZapBuilder {
             active_scene_index: 0,
 
             render_mask: None,
-            
+
             limits: wgpu::Limits::default(),
+
+            is_cursor_showing: true,
         }
     }
     /// Pass in a [sdl2::video::Window] object, generates a [Renderer] with a [wgpu::Surface] corresponding to the window
@@ -329,6 +339,7 @@ impl<'a> GameZapBuilder {
             sdl_context.mouse().show_cursor(false);
             sdl_context.mouse().set_relative_mouse_mode(true);
         }
+        self.is_cursor_showing = false;
         self
     }
 
@@ -343,7 +354,7 @@ impl<'a> GameZapBuilder {
     }
 
     /// Build the [GameZapBuilder] builder struct into the original [GameZap] struct
-    pub async fn build(self) -> GameZap {
+    pub async fn build(self) -> GameZap<'a> {
         let sdl_context = if let Some(context) = self.sdl_context {
             context
         } else {
@@ -362,7 +373,8 @@ impl<'a> GameZapBuilder {
 
         let window = self.window.unwrap();
 
-        let renderer = Renderer::new(&window, self.clear_color, self.antialiasing, self.limits).await;
+        let renderer =
+            Renderer::new(&window, self.clear_color, self.antialiasing, self.limits).await;
 
         let ui_manager = Rc::new(Mutex::new(UiManager::new(
             renderer.surface_format,
@@ -396,6 +408,7 @@ impl<'a> GameZapBuilder {
                 window_aspect_ratio: self.window_size.unwrap().0 as f32
                     / self.window_size.unwrap().1 as f32,
                 render_mask: self.render_mask,
+                is_cursor_showing: self.is_cursor_showing,
             })),
             ui_manager,
             scenes: Vec::new(),
