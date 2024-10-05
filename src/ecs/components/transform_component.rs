@@ -10,7 +10,7 @@ use wgpu::{
 
 use nalgebra as na;
 
-use crate::{ecs::component::Component, model::VertexData, new_component, ui_manager::UiManager};
+use crate::{ecs::{component::Component, scene::TextParams}, model::VertexData, new_component, ui_manager::UiManager};
 
 new_component!(
     TransformComponent {
@@ -233,6 +233,7 @@ impl ComponentSystem for TransformComponent {
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
         _ui_manager: Rc<Mutex<UiManager>>,
+        _text_items: &mut Vec<TextParams>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let matrix = concept_manager
@@ -258,6 +259,7 @@ impl ComponentSystem for TransformComponent {
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         self.update_buffer(concept_manager, device);
     }

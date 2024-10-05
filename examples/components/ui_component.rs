@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use gamezap::{new_component, texture::Texture, ui_manager::UiManager};
+use gamezap::{new_component, texture::Texture, ui_manager::UiManager, ecs::scene::TextParams};
 use imgui::Ui;
 
 new_component!(
@@ -35,6 +35,7 @@ impl ComponentSystem for UiComponent {
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
         ui_manager: Rc<Mutex<UiManager>>,
+        _text_items: &mut Vec<TextParams>,
     ) {
         let mut ui_manager = ui_manager.lock().unwrap();
         self.font_id = Some(
@@ -64,6 +65,7 @@ impl ComponentSystem for UiComponent {
         entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         // println!("cursor: {}", engine_systems.lock().unwrap().sdl_context.mouse().is_cursor_showing());
         let concept_manager = concept_manager.lock().unwrap();

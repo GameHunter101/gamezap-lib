@@ -4,7 +4,7 @@ use gamezap::{
         components::{
             physics_component::PhysicsComponent, transform_component::TransformComponent,
         },
-        scene::Scene,
+        scene::{Scene, TextParams},
     },
     new_component,
 };
@@ -62,6 +62,7 @@ impl ComponentSystem for KeyboardInputComponent {
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let transform_component =

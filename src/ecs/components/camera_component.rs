@@ -9,7 +9,7 @@ use wgpu::{
 
 use nalgebra as na;
 
-use crate::{ecs::scene::Scene, new_component, ui_manager::UiManager};
+use crate::{ecs::scene::{Scene, TextParams}, new_component, ui_manager::UiManager};
 
 use super::transform_component::TransformComponent;
 
@@ -168,6 +168,7 @@ impl ComponentSystem for CameraComponent {
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
         _ui_manager: Rc<Mutex<UiManager>>,
+        _text_items: &mut Vec<TextParams>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let position_concept = concept_manager.get_concept::<na::Vector3<f32>>(
@@ -194,6 +195,7 @@ impl ComponentSystem for CameraComponent {
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let aspect_ratio = concept_manager

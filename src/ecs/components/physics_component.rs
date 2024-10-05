@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 // use ultraviolet::{Rotor3, Bivec3};
 use algoe::{bivector::Bivector, rotor::Rotor3};
 
-use crate::{ecs::scene::Scene, new_component, ui_manager::UiManager};
+use crate::{ecs::scene::{Scene, TextParams}, new_component, ui_manager::UiManager};
 
 use super::transform_component::TransformComponent;
 
@@ -118,6 +118,7 @@ impl ComponentSystem for PhysicsComponent {
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
         _ui_manager: Rc<Mutex<UiManager>>,
+        _text_items: &mut Vec<TextParams>,
     ) {
         let _transform_component =
             Scene::get_component::<TransformComponent>(&component_map[&self.parent])
@@ -136,6 +137,7 @@ impl ComponentSystem for PhysicsComponent {
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         let engine_details = engine_details.lock().unwrap();

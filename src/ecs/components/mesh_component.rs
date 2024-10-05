@@ -9,7 +9,7 @@ use wgpu::{
 use crate::{
     model::Vertex,
     new_component,
-    ui_manager::UiManager,
+    ui_manager::UiManager, ecs::scene::TextParams,
 };
 
 #[derive(Debug)]
@@ -137,6 +137,7 @@ impl ComponentSystem for MeshComponent {
         _engine_details: Option<Rc<Mutex<EngineDetails>>>,
         _engine_systems: Option<Rc<Mutex<EngineSystems>>>,
         _ui_manager: Rc<Mutex<UiManager>>,
+        _text_items: &mut Vec<TextParams>,
     ) {
         let concept_manager = concept_manager.lock().unwrap();
         let vertices = concept_manager

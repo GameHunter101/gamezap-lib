@@ -11,7 +11,7 @@ use gamezap::{
     ecs::{
         components::{
             camera_component::CameraComponent, mesh_component::MeshComponent,
-            physics_component::PhysicsComponent, transform_component::TransformComponent,
+            physics_component::PhysicsComponent, transform_component::TransformComponent, text_component::TextComponent,
         },
         material::Material,
         scene::{Scene, TextParams},
@@ -352,24 +352,30 @@ async fn main() {
 
     let _ui_entity = scene.create_entity(0, true, vec![Box::new(ui_component)], None);
 
-    scene.initialize_text(
-        vec![TextParams {
-            metrics: glyphon::Metrics {
-                font_size: 20.0,
-                line_height: 30.0,
-            },
-            text: "Hello world! :)",
-            color: glyphon::Color::rgb(255, 0, 0),
-            family: glyphon::Family::SansSerif,
-            weight: glyphon::Weight(500),
-            fancy_render: true,
-            top_left_position: (0.0, 20.0),
-            text_scale: 1.0,
-            bounds: glyphon::TextBounds { left: 0, top: 0, right: 500, bottom: 500 },
-            default_color: glyphon::Color::rgb(255, 255, 255),
-        }],
-        window_size,
-    );
+    let params = TextParams {
+        metrics: glyphon::Metrics {
+            font_size: 30.0,
+            line_height: 40.0,
+        },
+        text: "Custom text component\nnew line".to_string(),
+        color: glyphon::Color::rgb(255, 0, 0),
+        family: glyphon::Family::SansSerif,
+        weight: glyphon::Weight(200),
+        fancy_render: true,
+        top_left_position: (0.0, 20.0),
+        text_scale: 1.0,
+        bounds: glyphon::TextBounds {
+            left: 0,
+            top: 0,
+            right: 500,
+            bottom: 500,
+        },
+        default_color: glyphon::Color::rgb(255, 255, 255),
+    };
+
+    let text_component = TextComponent::new(params);
+    let _ = scene.create_entity(0, true, vec![Box::new(text_component)], None);
+
 
     engine.create_scene(scene);
 

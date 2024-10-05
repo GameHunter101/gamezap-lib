@@ -1,4 +1,4 @@
-use gamezap::{ecs::components::transform_component::TransformComponent, new_component};
+use gamezap::{ecs::{components::transform_component::TransformComponent, scene::TextParams}, new_component};
 
 // use ultraviolet::{Rotor3, Vec3, Bivec3};
 use algoe::{bivector::Bivector, rotor::Rotor3, vector::GeometricOperations};
@@ -28,6 +28,7 @@ impl ComponentSystem for MouseInputComponent {
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         _compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         let mut concept_manager = concept_manager.lock().unwrap();
         /* let pitch = *concept_manager

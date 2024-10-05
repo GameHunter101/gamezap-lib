@@ -1,4 +1,4 @@
-use gamezap::{compute::ComputePackagedData, new_component, texture::Texture};
+use gamezap::{compute::ComputePackagedData, new_component, texture::Texture, ecs::scene::TextParams};
 
 new_component!(ComputeMonitorComponent {
     pipeline_index: usize
@@ -27,6 +27,7 @@ impl ComponentSystem for ComputeMonitorComponent {
         _entities: &mut Vec<Entity>,
         _materials: Option<&mut (Vec<Material>, usize)>,
         compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         match compute_pipelines[self.pipeline_index].grab_array_data::<f32>(device.clone(), 2) {
             Ok(res) => {},// println!("Compute result: {:?}", res),

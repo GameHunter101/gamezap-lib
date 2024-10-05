@@ -1,5 +1,5 @@
 use algoe::bivector::Bivector;
-use gamezap::{new_component, ecs::components::transform_component::TransformComponent};
+use gamezap::{new_component, ecs::{components::transform_component::TransformComponent, scene::TextParams}};
 use nalgebra::Vector3;
 
 new_component!(TransparencyComponent {});
@@ -26,6 +26,7 @@ impl ComponentSystem for TransparencyComponent {
         _entities: &mut Vec<Entity>,
         materials: Option<&mut (Vec<Material>, usize)>,
         compute_pipelines: &mut [ComputePipeline],
+        _text_items: &mut Vec<TextParams>,
     ) {
         let details = engine_details.lock().unwrap();
         let time = details.time_elapsed.as_secs_f32();

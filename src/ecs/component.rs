@@ -16,7 +16,7 @@ use super::{
     concepts::ConceptManager,
     entity::{Entity, EntityId},
     material::Material,
-    scene::AllComponents,
+    scene::{AllComponents, TextParams},
 };
 
 pub type ComponentId = (EntityId, TypeId, u32);
@@ -41,6 +41,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + ComponentSystemCore {
         engine_details: Option<Rc<Mutex<EngineDetails>>>,
         engine_systems: Option<Rc<Mutex<EngineSystems>>>,
         ui_manager: Rc<Mutex<UiManager>>,
+        text_items: &mut Vec<TextParams>,
     ) {
     }
 
@@ -56,6 +57,7 @@ pub trait ComponentSystem: Debug + dyn_clone::DynClone + ComponentSystemCore {
         entities: &mut Vec<Entity>,
         materials: Option<&mut (Vec<Material>, usize)>,
         compute_pipelines: &mut [ComputePipeline],
+        text_items: &mut Vec<TextParams>,
     ) {
     }
 
@@ -112,7 +114,8 @@ pub trait ComponentSystemCore {
 
 #[macro_export]
 macro_rules! new_component {
-    ($(#[$($doc:tt)*])? $name:ident {$($field:ident : $field_type:ty),*}$(, render_order: $render_order: expr)?) => {
+    ($(#[$($doc:tt)*])? $name:ident $(<$($lifetimes:tt),*>)? {$($field:ident : $field_type:ty),*}$(, render_order: $render_order: expr)?) => {
+        #[allow(unused_imports)]
         use std::{
             any::{Any, TypeId},
             rc::Rc,
@@ -120,6 +123,7 @@ macro_rules! new_component {
             collections::HashMap,
         };
 
+        #[allow(unused_imports)]
         use $crate::{
             ecs::{
                 component::{ComponentSystem,ComponentId, ComponentSystemCore},
@@ -136,13 +140,13 @@ macro_rules! new_component {
 
         $(#[$($doc)*])?
         #[derive(Debug, Clone)]
-        pub struct $name {
+        pub struct $name $(<$($lifetimes),*>)? {
             $(pub $field:$field_type,)*
             pub parent: EntityId,
             pub id: ComponentId,
         }
 
-        impl ComponentSystemCore for $name {
+        impl $(<$($lifetimes),*>)? ComponentSystemCore for $name $(<$($lifetimes),*>)? {
             fn as_any(&self) -> &dyn Any {
                 self
             }
