@@ -1,6 +1,6 @@
 [package]
 name = "gamezap"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -16,7 +16,9 @@ tokio = {version = "1.40.0", features = ["full"]}
 imgui = {version = "0.12.0", features = ["tables-api"]}
 imgui-wgpu = {git = "https://github.com/GameHunter101/imgui-wgpu-rs"}
 imgui-sdl2-support = "0.13.0"
-winit = "0.30.5"
+glfw = "0.58.0"
+pollster = "0.3.0"
+log = "0.4.22"
 
 [dependencies.image]
 version = "0.25.2"

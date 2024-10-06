@@ -1,47 +1,47 @@
-use winit::{
-    application::ApplicationHandler,
-    window::{Window, WindowAttributes},
-};
+use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
+use log::error;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 /// Seperation of the windowing and basic event management
 pub struct WindowAndEventManager {
-    window_attributes: WindowAttributes,
-    window: Option<Window>,
+    pub glfw_context: Glfw,
+    pub window: PWindow,
+    pub events: GlfwReceiver<(f64, WindowEvent)>,
+}
+
+impl Default for WindowAndEventManager {
+    fn default() -> Self {
+        Self::from_window_attributes(800, 600, "GameZap Project", glfw::WindowMode::Windowed)
+    }
 }
 
 impl WindowAndEventManager {
-    pub fn from_window_attributes(window_attributes: WindowAttributes) -> Self {
+    pub fn from_window_attributes(
+        width: u32,
+        height: u32,
+        title: &str,
+        mode: glfw::WindowMode,
+    ) -> Self {
+        let mut glfw_context =
+            glfw::init(Self::glfw_error_callback).expect("Failed to initialize GLFW context");
+        let (mut window, events) = glfw_context
+            .create_window(width, height, title, mode)
+            .expect("Failed to create GLFW window");
+
+        window.make_current();
+        window.set_key_polling(true);
+        window.set_mouse_button_polling(true);
+        window.set_framebuffer_size_polling(true);
+
         Self {
-            window_attributes,
-            window: None,
+            glfw_context,
+            window,
+            events,
         }
     }
-}
 
-impl ApplicationHandler for WindowAndEventManager {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        self.window = Some(
-            event_loop
-                .create_window(self.window_attributes.clone())
-                .unwrap(),
-        );
+    fn glfw_error_callback(err: glfw::Error, description: String) {
+        error!("GLFW error {:?}: {:?}", err, description);
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
-    ) {
-        match event {
-            winit::event::WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            winit::event::WindowEvent::RedrawRequested => {
-                self.window.as_ref().unwrap().request_redraw();
-            }
-            _ => {}
-        }
-    }
 }
