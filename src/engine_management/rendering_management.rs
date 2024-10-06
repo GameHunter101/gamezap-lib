@@ -74,11 +74,13 @@ impl<'a> RenderingManager {
             format,
             width: window_size.0 as u32,
             height: window_size.1 as u32,
-            present_mode: wgpu::PresentMode::AutoNoVsync,
+            present_mode: surface_caps.present_modes[0],
             desired_maximum_frame_latency: 2,
-            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+            alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
         };
+
+        surface.configure(&device, &config);
 
         let depth_texture = texture_support::Texture::create_depth_texture(&device, &config);
 
@@ -154,6 +156,16 @@ impl<'a> RenderingManager {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+        self.config.width = width;
+        self.config.height = height;
+        self.surface.configure(&self.device, &self.config);
+        self.depth_texture = texture_support::Texture::create_depth_texture(&self.device, &self.config);
+        self.smaa_target.resize(&self.device, width, height);
     }
 }
 

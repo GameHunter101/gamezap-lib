@@ -1,7 +1,7 @@
 use engine_management::{
     rendering_management::RenderingManager, window_and_event_management::WindowAndEventManager,
 };
-use glfw::{Context, WindowEvent};
+use glfw::Context;
 
 pub mod engine_management {
     pub mod rendering_management;
@@ -12,7 +12,7 @@ pub mod engine_support {
     pub mod texture_support;
 }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 /// The main engine struct. Contains the state for the whole engine.
 pub struct Gamezap {
     window_and_event_manager: WindowAndEventManager,
@@ -28,28 +28,18 @@ impl Gamezap {
         while !self.window_and_event_manager.window.should_close() {
             self.window_and_event_manager.glfw_context.poll_events();
             for (_, event) in glfw::flush_messages(&self.window_and_event_manager.events) {
-                match event {
-                    glfw::WindowEvent::MouseButton(
-                        glfw::MouseButton::Button1,
-                        glfw::Action::Press,
-                        _,
-                    ) => {
-                        println!("pressed, {event:?}");
-                    }
-                    _ => {}
+                if let glfw::WindowEvent::FramebufferSize(width, height) = event {
+                    self.rendering_manager.resize(width as u32, height as u32);
                 }
             }
-        }
 
-        tokio::task::spawn(async move {
             self.rendering_manager.render();
             self.window_and_event_manager.window.swap_buffers();
-        });
-
+        }
     }
 }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 pub struct GamezapBuilder {
     window_and_event_manager: WindowAndEventManager,
     antialiasing_enabled: bool,
@@ -92,7 +82,12 @@ impl GamezapBuilder {
     pub async fn build(self) -> Gamezap {
         let window_and_event_manager = self.window_and_event_manager;
 
-        let rendering_manager = RenderingManager::new(&window_and_event_manager.window, self.antialiasing_enabled, self.clear_color).await;
+        let rendering_manager = RenderingManager::new(
+            &window_and_event_manager.window,
+            self.antialiasing_enabled,
+            self.clear_color,
+        )
+        .await;
 
         Gamezap {
             rendering_manager,
