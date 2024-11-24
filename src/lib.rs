@@ -67,8 +67,8 @@ impl Debug for Gamezap {
             .field("window", &self.window)
             .field("input_manager", &"Input Manager")
             .finish()
+        }
     }
-}
 
 #[derive(Debug)]
 pub struct GamezapBuilder {
