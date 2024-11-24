@@ -20,7 +20,7 @@ pub struct RenderingManager {
 
 impl<'a> RenderingManager {
     pub async fn new(
-        window: &'a glfw::Window,
+        window: &'a winit::window::Window,
         antialiasing_enabled: bool,
         clear_color: wgpu::Color,
     ) -> Self {
@@ -29,7 +29,7 @@ impl<'a> RenderingManager {
             ..Default::default()
         });
 
-        let window_size = window.get_size();
+        let window_size = window.inner_size();
 
         let surface = unsafe {
             instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
@@ -72,8 +72,8 @@ impl<'a> RenderingManager {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
-            width: window_size.0 as u32,
-            height: window_size.1 as u32,
+            width: window_size.width,
+            height: window_size.height,
             present_mode: surface_caps.present_modes[0],
             desired_maximum_frame_latency: 2,
             alpha_mode: surface_caps.alpha_modes[0],
@@ -87,8 +87,8 @@ impl<'a> RenderingManager {
         let smaa_target = SmaaTarget::new(
             &device,
             &queue,
-            window_size.0 as u32,
-            window_size.1 as u32,
+            window_size.width,
+            window_size.height,
             config.format,
             if antialiasing_enabled {
                 smaa::SmaaMode::Smaa1X
@@ -103,8 +103,8 @@ impl<'a> RenderingManager {
             device,
             queue,
             config,
-            width: window_size.0 as u32,
-            height: window_size.1 as u32,
+            width: window_size.width,
+            height: window_size.height,
             depth_texture,
             clear_color,
             smaa_target,
