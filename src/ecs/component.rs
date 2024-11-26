@@ -3,10 +3,22 @@ use winit_input_helper::WinitInputHelper;
 
 pub type ComponentId = u32;
 
-pub type Component = Box<dyn ComponentSystem>;
+pub type Component = Box<dyn ComponentSystem + Send>;
 
-pub trait ComponentSystem {
+#[async_trait::async_trait]
+pub trait ComponentSystem: ComponentDetails {
     fn initialize(&self) {}
-    fn update(&mut self, device: &Device, queue: &Queue, input_manager: &WinitInputHelper) {}
+    async fn update(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        input_manager: &WinitInputHelper,
+        other_components: &[&mut Component],
+    ) {
+    }
     fn render(&self, device: &Device, queue: &Queue) {}
+}
+
+pub trait ComponentDetails {
+    fn is_initialized(&self);
 }

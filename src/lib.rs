@@ -1,3 +1,4 @@
+use ecs::scene::Scene;
 use engine_management::rendering_management::RenderingManager;
 use std::fmt::Debug;
 
@@ -17,25 +18,35 @@ pub mod engine_support {
 }
 
 pub mod ecs {
-    pub mod scene;
     pub mod component;
+    pub mod entity;
+    pub mod material;
+    pub mod pipeline;
+    pub mod scene;
+    pub mod actions;
+    pub mod builtin_actions {
+        pub mod workload_action;
+    }
 }
-
 
 /// The main engine struct. Contains the state for the whole engine.
-pub struct Gamezap {
+pub struct Gamezap<'a> {
     event_loop: EventLoop<()>,
-    window: Window,
     input_manager: WinitInputHelper,
     rendering_manager: RenderingManager,
+    scenes: Vec<Scene<'a>>,
+    active_scene: usize,
+    initialized_scene: bool,
+    window: Window,
 }
 
-impl Gamezap {
+impl<'a> Gamezap<'a> {
     pub fn builder() -> GamezapBuilder {
         GamezapBuilder::default()
     }
 
     pub async fn main_loop(mut self) {
+        let mut last_active_scene_index = self.active_scene;
         self.event_loop
             .run(move |event, elwt| {
                 match &event {
@@ -44,11 +55,35 @@ impl Gamezap {
                             self.rendering_manager
                                 .resize(new_size.width, new_size.height);
                         }
-                        winit::event::WindowEvent::CloseRequested => elwt.exit(),
+                        winit::event::WindowEvent::CloseRequested => {
+                            elwt.exit();
+                        }
                         _ => {}
                     },
                     winit::event::Event::AboutToWait => {
                         self.rendering_manager.render();
+                        if self.scenes.is_empty() {
+                            return;
+                        }
+                        if !self.initialized_scene {
+                            self.scenes[self.active_scene].initialize();
+                            self.initialized_scene = true;
+                        }
+                        if self.active_scene != last_active_scene_index {
+                            self.initialized_scene = false;
+                            last_active_scene_index = self.active_scene;
+                            return;
+                        }
+                        let device = self.rendering_manager.get_device();
+                        let queue = self.rendering_manager.get_queue();
+                        let scene = &mut self.scenes[self.active_scene];
+                        scene.render(device, queue);
+                        async_scoped::TokioScope::scope_and_block(|scope| {
+                            let proc = async {
+                                scene.update(device, queue, &self.input_manager).await;
+                            };
+                            scope.spawn(proc);
+                        });
                     }
                     _ => {}
                 }
@@ -58,17 +93,33 @@ impl Gamezap {
             })
             .expect("An error occured in the main loop.");
     }
+
+    pub fn create_scene(&'a mut self) -> (usize, &'a mut Scene) {
+        let index = self.scenes.len();
+        self.scenes.push(Scene::new(
+            self.rendering_manager.get_device(),
+            self.rendering_manager.get_queue(),
+            self.rendering_manager.get_format(),
+        ));
+
+        (
+            index,
+            self.scenes
+                .last_mut()
+                .expect("An error occured while creating the scene."),
+        )
+    }
 }
 
-impl Debug for Gamezap {
+impl<'a> Debug for Gamezap<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WindowAndEventManager")
             .field("event_loop", &self.event_loop)
             .field("window", &self.window)
             .field("input_manager", &"Input Manager")
             .finish()
-        }
     }
+}
 
 #[derive(Debug)]
 pub struct GamezapBuilder {
@@ -93,7 +144,7 @@ impl Default for GamezapBuilder {
     }
 }
 
-impl GamezapBuilder {
+impl<'a> GamezapBuilder {
     pub fn window_settings(
         mut self,
         width: u32,
@@ -118,7 +169,7 @@ impl GamezapBuilder {
         self
     }
 
-    pub async fn build(self) -> Gamezap {
+    pub async fn build(self) -> Gamezap<'a> {
         let event_loop = EventLoop::new().expect("Failed to create event loop.");
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
         let window = WindowBuilder::new()
@@ -136,6 +187,9 @@ impl GamezapBuilder {
             rendering_manager,
             event_loop,
             input_manager,
+            scenes: Vec::new(),
+            active_scene: 0,
+            initialized_scene: false,
             window,
         }
     }

@@ -5,7 +5,7 @@
 ```Rust
 #[derive(Debug)]
 pub trait Action {
-	fn execute(&self, &mut Scene)
+	fn execute(&self, scene: &mut Scene)
 }
 ```
 
@@ -16,7 +16,7 @@ pub struct ActionQueue {
 }
 
 impl ActionQueue {
-	pub fn execute_events(&self, current_scene: &mut Scene) -> {
+	pub fn execute_events(&self, current_scene: &mut Scene) {
 		for event in self.actions {
 			event.execute(current_scene);
 		}

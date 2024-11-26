@@ -1,15 +1,126 @@
 use std::{collections::HashMap, fmt::Debug};
 
-use super::component::{Component, ComponentId};
+use glyphon::{FontSystem, SwashCache, TextAtlas, TextRenderer, Viewport};
+use wgpu::{Device, Queue, RenderPipeline, TextureFormat};
+use winit_input_helper::WinitInputHelper;
 
-pub struct Scene {
-    components: HashMap<ComponentId, Component>,
+use super::{
+    actions::Action, builtin_actions::workload_action::Workload, component::{Component, ComponentId}, entity::Entity, material::{Material, MaterialId}
+};
+
+pub struct Scene<'a> {
+    components: Vec<Component>,
+    entities: Vec<Entity>,
+    materials: Vec<Material>,
+    ui_components: Vec<ComponentId>,
+    pipelines_and_materials: Vec<(RenderPipeline, MaterialId)>,
+
+    active_camera_id: Option<ComponentId>,
+    total_entities_created: u32,
+    font_state: FontState,
+    action_queue: Vec<Box<dyn Action<'a> + Send>>,
+    workloads: HashMap<ComponentId, &'a mut Workload>,
 }
 
-impl Debug for Scene {
+pub struct FontState {
+    pub font_system: FontSystem,
+    pub swash_cache: SwashCache,
+    pub viewport: glyphon::Viewport,
+    pub atlas: TextAtlas,
+    pub text_renderer: TextRenderer,
+    pub text_buffers: Vec<glyphon::Buffer>,
+}
+
+impl<'a> Debug for Scene<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Scene")
             .field("components", &self.components.len())
             .finish()
+    }
+}
+
+impl<'a> Scene<'a> {
+    pub fn new(device: &Device, queue: &Queue, format: TextureFormat) -> Self {
+        let font_system = FontSystem::new();
+        let swash_cache = SwashCache::new();
+        let cache = glyphon::Cache::new(device);
+        let viewport = Viewport::new(device, &cache);
+        let mut atlas = TextAtlas::new(device, queue, &cache, format);
+        let text_renderer =
+            TextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
+
+        let font_state = FontState {
+            font_system,
+            swash_cache,
+            viewport,
+            atlas,
+            text_renderer,
+            text_buffers: Vec::new(),
+        };
+
+        Scene {
+            components: Vec::new(),
+            entities: Vec::new(),
+            materials: Vec::new(),
+            ui_components: Vec::new(),
+            pipelines_and_materials: Vec::new(),
+            active_camera_id: None,
+            total_entities_created: 0,
+            font_state,
+            action_queue: Vec::new(),
+            workloads: HashMap::new(),
+        }
+    }
+
+    pub fn initialize(&self) {
+        for component in &self.components {
+            component.initialize();
+        }
+    }
+
+    pub async fn update(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        input_manager: &WinitInputHelper,
+    ) {
+        let all_components = &mut self.components;
+        for i in 0..all_components.len() {
+            async_scoped::TokioScope::scope_and_block(|scope| {
+                let (components_before, components_after_and_this) = all_components.split_at_mut(i);
+                let proc = async move {
+                    if let Some((component, components_after)) =
+                        components_after_and_this.split_first_mut()
+                    {
+                        let chain: Vec<&mut Component> = components_before
+                            .iter_mut()
+                            .chain(components_after.iter_mut())
+                            .collect();
+                        component.update(device, queue, input_manager, &chain).await;
+                    }
+                };
+                scope.spawn(proc)
+            });
+        }
+    }
+
+    pub fn render(&self, device: &Device, queue: &Queue) {
+    }
+
+    pub fn attach_workload(&mut self, component: ComponentId, workload: &'a mut Workload) {
+        self.workloads.insert(component, workload);
+    }
+
+    #[tokio::main]
+    pub async fn run_workloads(&mut self) {
+        let workloads = &mut self.workloads;
+        async_scoped::TokioScope::scope_and_block(|scope| {
+            for (component, workload) in workloads {
+                let proc = async move {
+                    (*component, workload.await)
+                };
+                scope.spawn(proc);
+            }
+        });
     }
 }

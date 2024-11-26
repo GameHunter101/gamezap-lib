@@ -3,12 +3,7 @@ use gamezap::Gamezap;
 #[tokio::main]
 async fn main() {
     let engine = Gamezap::builder()
-        .window_settings(
-            600,
-            600,
-            "Example Gamezap Project",
-            None,
-        )
+        .window_settings(600, 600, "Example Gamezap Project", None)
         .clear_color(wgpu::Color {
             r: 0.8,
             g: 0.15,
@@ -18,7 +13,13 @@ async fn main() {
         .build()
         .await;
 
-    let all_items: Vec<Box<dyn ItemTrait + Send>> = [Item { field: -1.0 }; 10]
+    std::thread::spawn(|| {
+        async_test();
+    });
+
+    // futures::future::join_all(tasks).await;
+
+    /* let all_items: Vec<Box<dyn ItemTrait + Send>> = [Item { field: -1.0 }; 10]
         .iter()
         .cloned()
         .map(|item| Box::new(item) as Box<dyn ItemTrait + Send>)
@@ -38,12 +39,28 @@ async fn main() {
 
     actions
         .iter_mut()
-        .for_each(|action| action.execute(&mut item_colllection));
+        .for_each(|action| action.execute(&mut item_colllection)); */
 
     engine.main_loop().await;
 }
 
-trait TestAction {
+#[tokio::main]
+async fn async_test() {
+    unsafe {
+        async_scoped::TokioScope::scope_and_collect(|scope| {
+            (0..100).for_each(|i| {
+                let task = async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    println!("{i} finished");
+                };
+                scope.spawn(task);
+            });
+        })
+        .await;
+    }
+}
+
+/* trait TestAction {
     fn execute(&self, items: &mut ItemCollection);
 }
 
@@ -130,4 +147,4 @@ impl Stuff {
         }
     }
 
-}
+} */

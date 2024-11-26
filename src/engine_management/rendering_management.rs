@@ -167,6 +167,18 @@ impl<'a> RenderingManager {
         self.depth_texture = texture_support::Texture::create_depth_texture(&self.device, &self.config);
         self.smaa_target.resize(&self.device, width, height);
     }
+
+    pub fn get_device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    pub fn get_queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    pub fn get_format(&self) -> wgpu::TextureFormat {
+        self.format
+    }
 }
 
 impl Debug for RenderingManager {

@@ -15,7 +15,7 @@
 	- Separation of concerns
 ```Rust
 pub trait Action {
-	fn execute(&self, &mut Scene);
+	fn execute(&self, scene: &mut Scene);
 }
 ```
 ## **What Actions Are There?**
@@ -74,3 +74,8 @@ pub trait Action {
 - Setting the active [[Camera]]
 	- Data:
 		- The camera component's ID
+- Execute workload
+	- Data:
+		- Some async block
+	- Note:
+		- Some asynchronous block to be executed in the background through multiple iterations of the main loop

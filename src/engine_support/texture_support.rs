@@ -1,34 +1,36 @@
+use wgpu::{Sampler, Texture as WgpuTexture, TextureView};
+
 #[derive(Debug)]
 pub struct Texture {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
+    texture: WgpuTexture,
+    view: TextureView,
+    sampler: Sampler,
 }
 
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    pub fn texture_ref(&self) -> &wgpu::Texture {
+    pub fn texture_ref(&self) -> &WgpuTexture {
         &self.texture
     }
 
-    pub fn texture(self) -> wgpu::Texture {
+    pub fn texture(self) -> WgpuTexture {
         self.texture
     }
 
-    pub fn view_ref(&self) -> &wgpu::TextureView {
+    pub fn view_ref(&self) -> &TextureView {
         &self.view
     }
 
-    pub fn view(self) -> wgpu::TextureView {
+    pub fn view(self) -> TextureView {
         self.view
     }
 
-    pub fn sampler_ref(&self) -> &wgpu::Sampler {
+    pub fn sampler_ref(&self) -> &Sampler {
         &self.sampler
     }
 
-    pub fn sampler(self) -> wgpu::Sampler {
+    pub fn sampler(self) -> Sampler {
         self.sampler
     }
 

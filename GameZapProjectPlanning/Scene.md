@@ -3,9 +3,10 @@
 - A collection of everything that needs to happen every frame
 ## **What Does It Store**
 - Hash maps of:
-	- Component IDs to [[Component|Components]]
+	- Component ID to enum of workload future or its output
 - Vectors of:
 	- [[Entity|Entities]]
+	- [[Component|Components]]
 	- [[Material|Materials]]
 	- Component IDs of all UI components
 	- [[Pipeline|Pipelines]] and [[Material]] ID vectors

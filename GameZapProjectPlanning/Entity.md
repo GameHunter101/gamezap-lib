@@ -15,6 +15,5 @@
 	- Updated at the end of the current [[update]] iteration
 - `active_material`
 	- An integer representing the index of the active material
-	- REPRESENTS THE GLOBAL MATERIAL INDEX, NOT A LOCAL INDEX
+	- REPRESENTS THE LOCAL MATERIAL INDEX, NOT A GLOBAL INDEX
 	- Updated at the end of the current [[update]] iteration
-- 
