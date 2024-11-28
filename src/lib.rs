@@ -87,9 +87,6 @@ impl<'a> Gamezap<'a> {
                     }
                     _ => {}
                 }
-                /* if self.input_manager.update(&event) {
-                } */
-                // println!("Keys pressed: {:?}", self.pressed_keys);
             })
             .expect("An error occured in the main loop.");
     }

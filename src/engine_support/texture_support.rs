@@ -1,7 +1,8 @@
-use wgpu::{Sampler, Texture as WgpuTexture, TextureView};
+use wgpu::{Sampler, Texture as WgpuTexture, TextureFormat, TextureView};
 
 #[derive(Debug)]
 pub struct Texture {
+    format: TextureFormat,
     texture: WgpuTexture,
     view: TextureView,
     sampler: Sampler,
@@ -70,6 +71,7 @@ impl Texture {
         });
 
         Self {
+            format: texture.format(),
             texture,
             view,
             sampler,

@@ -5,16 +5,21 @@ use wgpu::{Device, Queue, RenderPipeline, TextureFormat};
 use winit_input_helper::WinitInputHelper;
 
 use super::{
-    actions::Action, builtin_actions::workload_action::Workload, component::{Component, ComponentId}, entity::Entity, material::{Material, MaterialId}
+    actions::Action,
+    builtin_actions::workload_action::Workload,
+    component::{Component, ComponentId},
+    entity::Entity,
+    material::{Material, MaterialAttachment, MaterialId},
+    pipeline::{create_render_pipeline, PipelineDetails, PipelineId},
 };
 
 pub struct Scene<'a> {
     components: Vec<Component>,
     entities: Vec<Entity>,
-    materials: Vec<Material>,
     ui_components: Vec<ComponentId>,
-    pipelines_and_materials: Vec<(RenderPipeline, MaterialId)>,
-
+    pipelines: HashMap<PipelineId, RenderPipeline>,
+    materials: Vec<Material>,
+    pipeline_material_sets: HashMap<PipelineId, Vec<MaterialId>>,
     active_camera_id: Option<ComponentId>,
     total_entities_created: u32,
     font_state: FontState,
@@ -61,9 +66,10 @@ impl<'a> Scene<'a> {
         Scene {
             components: Vec::new(),
             entities: Vec::new(),
-            materials: Vec::new(),
             ui_components: Vec::new(),
-            pipelines_and_materials: Vec::new(),
+            pipelines: HashMap::new(),
+            materials: Vec::new(),
+            pipeline_material_sets: HashMap::new(),
             active_camera_id: None,
             total_entities_created: 0,
             font_state,
@@ -104,8 +110,7 @@ impl<'a> Scene<'a> {
         }
     }
 
-    pub fn render(&self, device: &Device, queue: &Queue) {
-    }
+    pub fn render(&self, device: &Device, queue: &Queue) {}
 
     pub fn attach_workload(&mut self, component: ComponentId, workload: &'a mut Workload) {
         self.workloads.insert(component, workload);
@@ -116,11 +121,55 @@ impl<'a> Scene<'a> {
         let workloads = &mut self.workloads;
         async_scoped::TokioScope::scope_and_block(|scope| {
             for (component, workload) in workloads {
-                let proc = async move {
-                    (*component, workload.await)
-                };
+                let proc = async move { (*component, workload.await) };
                 scope.spawn(proc);
             }
         });
+    }
+
+    pub fn create_material(
+        &mut self,
+        device: &Device,
+        render_format: TextureFormat,
+        vertex_shader_path: &'static str,
+        fragment_shader_path: &'static str,
+        attachments: Vec<MaterialAttachment>,
+        pipeline_details: PipelineDetails,
+    ) -> &Material {
+        let new_material = Material::new(
+            device,
+            self.materials.len(),
+            vertex_shader_path,
+            fragment_shader_path,
+            attachments,
+        );
+        if let std::collections::hash_map::Entry::Vacant(e) = self
+            .pipelines
+            .entry((vertex_shader_path, fragment_shader_path))
+        {
+            e.insert(create_render_pipeline(
+                device,
+                vertex_shader_path,
+                fragment_shader_path,
+                new_material.bind_group_layouts(),
+                render_format,
+                pipeline_details,
+            ));
+        }
+
+        let id = new_material.id();
+
+        self.materials.push(new_material);
+
+        if let Some(indices) = self
+            .pipeline_material_sets
+            .get_mut(&(vertex_shader_path, fragment_shader_path))
+        {
+            indices.push(id);
+        }
+
+        self.materials
+            .last()
+            .expect("Failed to retrieve the newly created material")
     }
 }
