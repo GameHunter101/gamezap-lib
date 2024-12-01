@@ -6,7 +6,34 @@ pub type EntityId = u32;
 pub struct Entity {
     id: EntityId,
     children_ids: Vec<EntityId>,
+    /// If this is set to 0 the entity is top-level and does not have a parent
+    parent_entity_id: EntityId,
     is_enabled: bool,
-    materials: Vec<MaterialId>,
     active_material: MaterialId,
+}
+
+impl Entity {
+    pub fn new(
+        id: EntityId,
+        children_ids: Vec<EntityId>,
+        parent_entity_id: EntityId,
+        is_enabled: bool,
+        active_material: MaterialId,
+    ) -> Self {
+        Self {
+            id,
+            children_ids,
+            parent_entity_id,
+            is_enabled,
+            active_material,
+        }
+    }
+
+    pub fn active_material(&self) -> usize {
+        self.active_material
+    }
+
+    pub fn id(&self) -> u32 {
+        self.id
+    }
 }

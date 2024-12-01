@@ -143,4 +143,12 @@ impl Material {
     pub fn id(&self) -> usize {
         self.id
     }
+
+    pub fn bind_groups(&self) -> &[BindGroup] {
+        self.bind_groups.as_ref()
+    }
+
+    pub fn attachments(&self) -> &[MaterialAttachment] {
+        self.attachments.as_ref()
+    }
 }

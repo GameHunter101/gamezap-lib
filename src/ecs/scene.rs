@@ -8,14 +8,14 @@ use super::{
     actions::Action,
     builtin_actions::workload_action::Workload,
     component::{Component, ComponentId},
-    entity::Entity,
+    entity::{Entity, EntityId},
     material::{Material, MaterialAttachment, MaterialId},
     pipeline::{create_render_pipeline, PipelineDetails, PipelineId},
 };
 
 pub struct Scene<'a> {
     components: Vec<Component>,
-    entities: Vec<Entity>,
+    entities: HashMap<EntityId, Entity>,
     ui_components: Vec<ComponentId>,
     pipelines: HashMap<PipelineId, RenderPipeline>,
     materials: Vec<Material>,
@@ -65,7 +65,7 @@ impl<'a> Scene<'a> {
 
         Scene {
             components: Vec::new(),
-            entities: Vec::new(),
+            entities: HashMap::new(),
             ui_components: Vec::new(),
             pipelines: HashMap::new(),
             materials: Vec::new(),
@@ -109,8 +109,6 @@ impl<'a> Scene<'a> {
             });
         }
     }
-
-    pub fn render(&self, device: &Device, queue: &Queue) {}
 
     pub fn attach_workload(&mut self, component: ComponentId, workload: &'a mut Workload) {
         self.workloads.insert(component, workload);
@@ -171,5 +169,73 @@ impl<'a> Scene<'a> {
         self.materials
             .last()
             .expect("Failed to retrieve the newly created material")
+    }
+
+    pub fn pipelines(&self) -> &HashMap<PipelineId, RenderPipeline> {
+        &self.pipelines
+    }
+
+    pub fn get_pipeline_materials(&self, pipeline_id: PipelineId) -> Vec<&Material> {
+        let material_ids = self.pipeline_material_sets.get(&pipeline_id);
+        match material_ids {
+            Some(material_ids) => self
+                .materials
+                .iter()
+                .filter(|mat| material_ids.contains(&mat.id()))
+                .collect(),
+            None => Vec::new(),
+        }
+    }
+
+    pub fn get_components_per_material(&self) -> HashMap<MaterialId, Vec<&Component>> {
+        let mut output: HashMap<MaterialId, Vec<&Component>> = self
+            .materials
+            .iter()
+            .map(|mat| (mat.id(), Vec::new()))
+            .collect();
+
+        for component in &self.components {
+            let component_parent_entity_id = component.parent_entity();
+            let parent_entity_material_id =
+                self.entities[&component_parent_entity_id].active_material();
+            output
+                .get_mut(&parent_entity_material_id)
+                .unwrap()
+                .push(component);
+        }
+
+        output
+    }
+
+    pub fn create_entity(
+        &mut self,
+        parent: Option<EntityId>,
+        components: Vec<Component>,
+        material: MaterialId,
+        is_enabled: bool,
+    ) -> EntityId {
+        let entity = Entity::new(
+            self.total_entities_created + 1,
+            Vec::new(),
+            parent.unwrap_or(0),
+            is_enabled,
+            material,
+        );
+        let id = entity.id();
+
+        self.entities.insert(id, entity);
+        self.total_entities_created += 1;
+
+        for component in components {
+            let insert_index = self
+                .components
+                .iter()
+                .position(|comp| comp.rendering_order() >= component.rendering_order())
+                .unwrap_or(self.components.len());
+            self.components.insert(insert_index, component);
+            self.components.last_mut().unwrap().set_parent_entity(id);
+        }
+
+        id
     }
 }

@@ -18,12 +18,12 @@ pub mod engine_support {
 }
 
 pub mod ecs {
+    pub mod actions;
     pub mod component;
     pub mod entity;
     pub mod material;
     pub mod pipeline;
     pub mod scene;
-    pub mod actions;
     pub mod builtin_actions {
         pub mod workload_action;
     }
@@ -48,45 +48,44 @@ impl<'a> Gamezap<'a> {
     pub async fn main_loop(mut self) {
         let mut last_active_scene_index = self.active_scene;
         self.event_loop
-            .run(move |event, elwt| {
-                match &event {
-                    WindowEvent { event, .. } => match event {
-                        winit::event::WindowEvent::Resized(new_size) => {
-                            self.rendering_manager
-                                .resize(new_size.width, new_size.height);
-                        }
-                        winit::event::WindowEvent::CloseRequested => {
-                            elwt.exit();
-                        }
-                        _ => {}
-                    },
-                    winit::event::Event::AboutToWait => {
-                        self.rendering_manager.render();
-                        if self.scenes.is_empty() {
-                            return;
-                        }
-                        if !self.initialized_scene {
-                            self.scenes[self.active_scene].initialize();
-                            self.initialized_scene = true;
-                        }
-                        if self.active_scene != last_active_scene_index {
-                            self.initialized_scene = false;
-                            last_active_scene_index = self.active_scene;
-                            return;
-                        }
-                        let device = self.rendering_manager.get_device();
-                        let queue = self.rendering_manager.get_queue();
-                        let scene = &mut self.scenes[self.active_scene];
-                        scene.render(device, queue);
-                        async_scoped::TokioScope::scope_and_block(|scope| {
-                            let proc = async {
-                                scene.update(device, queue, &self.input_manager).await;
-                            };
-                            scope.spawn(proc);
-                        });
+            .run(move |event, elwt| match &event {
+                WindowEvent { event, .. } => match event {
+                    winit::event::WindowEvent::Resized(new_size) => {
+                        self.rendering_manager
+                            .resize(new_size.width, new_size.height);
+                    }
+                    winit::event::WindowEvent::CloseRequested => {
+                        elwt.exit();
                     }
                     _ => {}
+                },
+                winit::event::Event::AboutToWait => {
+                    if self.scenes.is_empty() {
+                        return;
+                    }
+                    if !self.initialized_scene {
+                        self.scenes[self.active_scene].initialize();
+                        self.initialized_scene = true;
+                    }
+                    if self.active_scene != last_active_scene_index {
+                        self.initialized_scene = false;
+                        last_active_scene_index = self.active_scene;
+                        return;
+                    }
+                    let scene = &mut self.scenes[self.active_scene];
+                    self.rendering_manager.render(scene);
+                    let device = self.rendering_manager.get_device();
+                    let queue = self.rendering_manager.get_queue();
+                    // let smaa_target = self.rendering_manager.smaa_target_mut();
+                    // scene.render(device, queue, output, smaa_target);
+                    async_scoped::TokioScope::scope_and_block(|scope| {
+                        let proc = async {
+                            scene.update(device, queue, &self.input_manager).await;
+                        };
+                        scope.spawn(proc);
+                    });
                 }
+                _ => {}
             })
             .expect("An error occured in the main loop.");
     }
