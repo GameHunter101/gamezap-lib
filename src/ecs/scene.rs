@@ -19,7 +19,7 @@ pub struct Scene<'a> {
     ui_components: Vec<ComponentId>,
     pipelines: HashMap<PipelineId, RenderPipeline>,
     materials: Vec<Material>,
-    pipeline_material_sets: HashMap<PipelineId, Vec<MaterialId>>,
+    pipeline_to_corresponding_materials: HashMap<PipelineId, Vec<MaterialId>>,
     active_camera_id: Option<ComponentId>,
     total_entities_created: u32,
     font_state: FontState,
@@ -69,7 +69,7 @@ impl<'a> Scene<'a> {
             ui_components: Vec::new(),
             pipelines: HashMap::new(),
             materials: Vec::new(),
-            pipeline_material_sets: HashMap::new(),
+            pipeline_to_corresponding_materials: HashMap::new(),
             active_camera_id: None,
             total_entities_created: 0,
             font_state,
@@ -133,7 +133,7 @@ impl<'a> Scene<'a> {
         fragment_shader_path: &'static str,
         attachments: Vec<MaterialAttachment>,
         pipeline_details: PipelineDetails,
-    ) -> &Material {
+    ) -> MaterialId {
         let new_material = Material::new(
             device,
             self.materials.len(),
@@ -160,15 +160,13 @@ impl<'a> Scene<'a> {
         self.materials.push(new_material);
 
         if let Some(indices) = self
-            .pipeline_material_sets
+            .pipeline_to_corresponding_materials
             .get_mut(&(vertex_shader_path, fragment_shader_path))
         {
             indices.push(id);
         }
 
-        self.materials
-            .last()
-            .expect("Failed to retrieve the newly created material")
+        id
     }
 
     pub fn pipelines(&self) -> &HashMap<PipelineId, RenderPipeline> {
@@ -176,7 +174,7 @@ impl<'a> Scene<'a> {
     }
 
     pub fn get_pipeline_materials(&self, pipeline_id: PipelineId) -> Vec<&Material> {
-        let material_ids = self.pipeline_material_sets.get(&pipeline_id);
+        let material_ids = self.pipeline_to_corresponding_materials.get(&pipeline_id);
         match material_ids {
             Some(material_ids) => self
                 .materials
@@ -198,10 +196,12 @@ impl<'a> Scene<'a> {
             let component_parent_entity_id = component.parent_entity();
             let parent_entity_material_id =
                 self.entities[&component_parent_entity_id].active_material();
-            output
-                .get_mut(&parent_entity_material_id)
-                .unwrap()
-                .push(component);
+            if let Some(parent_entity_material_id) = parent_entity_material_id {
+                output
+                    .get_mut(&parent_entity_material_id)
+                    .unwrap()
+                    .push(component);
+            }
         }
 
         output
@@ -211,7 +211,7 @@ impl<'a> Scene<'a> {
         &mut self,
         parent: Option<EntityId>,
         components: Vec<Component>,
-        material: MaterialId,
+        material: Option<MaterialId>,
         is_enabled: bool,
     ) -> EntityId {
         let entity = Entity::new(

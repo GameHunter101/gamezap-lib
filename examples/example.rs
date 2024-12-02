@@ -1,8 +1,11 @@
-use gamezap::Gamezap;
+use gamezap::{
+    ecs::{pipeline::{GeometryDetails, PipelineDetails}, scene::Scene},
+    Gamezap,
+};
 
 #[tokio::main]
 async fn main() {
-    let engine = Gamezap::builder()
+    let mut engine = Gamezap::builder()
         .window_settings(600, 600, "Example Gamezap Project", None)
         .clear_color(wgpu::Color {
             r: 0.8,
@@ -16,6 +19,30 @@ async fn main() {
     std::thread::spawn(|| {
         async_test();
     });
+
+    let rendering_manager = engine.rendering_manager();
+    let device = rendering_manager.get_device();
+    let queue = rendering_manager.get_queue();
+    let render_format = rendering_manager.get_format();
+
+    let mut scene = Scene::new(device, queue, render_format);
+    let material = scene.create_material(
+        device,
+        render_format,
+        "examples/assets/shaders/vertex.wgsl",
+        "examples/assets/shaders/fragment.wgsl",
+        Vec::new(),
+        PipelineDetails {
+            vertex_layouts: &[],
+            geometry_details: GeometryDetails::default(),
+        },
+    );
+    scene.create_entity(None, Vec::new(), Some(material), true);
+
+    engine.attach_scene(scene);
+
+
+    // drop(scene);
 
     // futures::future::join_all(tasks).await;
 

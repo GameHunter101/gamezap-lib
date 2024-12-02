@@ -5,6 +5,9 @@
 - Updates buffers
 - Updates textures
 ## **What Does it Store?**
-- All current textures
+- All current attachments
+	- Attachments are either textures or buffers
 - An ID
+- Paths to its corresponding shaders
+- Bind group layouts
 - Bind groups and buffers

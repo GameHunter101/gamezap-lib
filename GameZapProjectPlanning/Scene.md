@@ -4,8 +4,9 @@
 ## **What Does It Store**
 - Hash maps of:
 	- Component ID to enum of workload future or its output
+	- Entity ID to [[Entity]]
+	- Pipeline ID to vector of material IDs corresponding to each pipeline
 - Vectors of:
-	- [[Entity|Entities]]
 	- [[Component|Components]]
 	- [[Material|Materials]]
 	- Component IDs of all UI components

@@ -90,20 +90,15 @@ impl<'a> Gamezap<'a> {
             .expect("An error occured in the main loop.");
     }
 
-    pub fn create_scene(&'a mut self) -> (usize, &'a mut Scene) {
+    pub fn attach_scene(&mut self, scene: Scene<'a>) -> usize {
         let index = self.scenes.len();
-        self.scenes.push(Scene::new(
-            self.rendering_manager.get_device(),
-            self.rendering_manager.get_queue(),
-            self.rendering_manager.get_format(),
-        ));
+        self.scenes.push(scene);
 
-        (
-            index,
-            self.scenes
-                .last_mut()
-                .expect("An error occured while creating the scene."),
-        )
+        index
+    }
+
+    pub fn rendering_manager(&self) -> &RenderingManager {
+        &self.rendering_manager
     }
 }
 

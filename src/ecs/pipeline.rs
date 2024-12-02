@@ -28,8 +28,8 @@ impl Default for GeometryDetails {
 }
 
 pub struct PipelineDetails<'a> {
-    vertex_layouts: &'a [wgpu::VertexBufferLayout<'a>],
-    geometry_details: GeometryDetails,
+    pub vertex_layouts: &'a [wgpu::VertexBufferLayout<'a>],
+    pub geometry_details: GeometryDetails,
 }
 
 impl<'a> PipelineDetails<'a> {
@@ -60,13 +60,13 @@ pub fn create_render_pipeline(
 
     let vertex_shader_module = load_shader_module_descriptor(device, vertex_shader_path);
     if let Err(error) = vertex_shader_module {
-        panic!("Vertex shader error: {}", error);
+        panic!("Vertex shader error for shader {vertex_shader_path}: {error}");
     }
     let vertex_shader_module = vertex_shader_module.unwrap();
 
     let fragment_shader_module = load_shader_module_descriptor(device, fragment_shader_path);
     if let Err(error) = fragment_shader_module {
-        panic!("Fragment shader error: {}", error);
+        panic!("Fragment shader error for shader {fragment_shader_path}: {error}");
     }
     let fragment_shader_module = fragment_shader_module.unwrap();
 

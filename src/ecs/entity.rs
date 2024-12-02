@@ -9,7 +9,7 @@ pub struct Entity {
     /// If this is set to 0 the entity is top-level and does not have a parent
     parent_entity_id: EntityId,
     is_enabled: bool,
-    active_material: MaterialId,
+    active_material: Option<MaterialId>,
 }
 
 impl Entity {
@@ -18,7 +18,7 @@ impl Entity {
         children_ids: Vec<EntityId>,
         parent_entity_id: EntityId,
         is_enabled: bool,
-        active_material: MaterialId,
+        active_material: Option<MaterialId>,
     ) -> Self {
         Self {
             id,
@@ -29,11 +29,11 @@ impl Entity {
         }
     }
 
-    pub fn active_material(&self) -> usize {
+    pub fn active_material(&self) -> Option<MaterialId> {
         self.active_material
     }
 
-    pub fn id(&self) -> u32 {
+    pub fn id(&self) -> EntityId {
         self.id
     }
 }
