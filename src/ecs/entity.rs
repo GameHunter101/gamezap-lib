@@ -36,4 +36,16 @@ impl Entity {
     pub fn id(&self) -> EntityId {
         self.id
     }
+
+    pub fn toggle_enabled_state(&mut self) {
+        self.is_enabled = !self.is_enabled;
+    }
+
+    pub fn set_enabled_state(&mut self, desired_state: bool) {
+        self.is_enabled = desired_state;
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.is_enabled
+    }
 }

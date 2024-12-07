@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
 use gamezap::{
-    ecs::{pipeline::{GeometryDetails, PipelineDetails}, scene::Scene},
+    ecs::{
+        pipeline::{GeometryDetails, PipelineDetails},
+        scene::Scene,
+    },
     Gamezap,
 };
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() {
@@ -16,14 +22,16 @@ async fn main() {
         .build()
         .await;
 
-    std::thread::spawn(|| {
-        async_test();
+    let results = Arc::new(Mutex::new(Vec::new()));
+    let clone = results.clone();
+    std::thread::spawn(move || {
+        async_test(clone);
     });
 
     let rendering_manager = engine.rendering_manager();
-    let device = rendering_manager.get_device();
-    let queue = rendering_manager.get_queue();
-    let render_format = rendering_manager.get_format();
+    let device = rendering_manager.device();
+    let queue = rendering_manager.queue();
+    let render_format = rendering_manager.format();
 
     let mut scene = Scene::new(device, queue, render_format);
     let material = scene.create_material(
@@ -40,7 +48,6 @@ async fn main() {
     scene.create_entity(None, Vec::new(), Some(material), true);
 
     engine.attach_scene(scene);
-
 
     // drop(scene);
 
@@ -72,19 +79,19 @@ async fn main() {
 }
 
 #[tokio::main]
-async fn async_test() {
-    unsafe {
-        async_scoped::TokioScope::scope_and_collect(|scope| {
-            (0..100).for_each(|i| {
-                let task = async move {
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                    println!("{i} finished");
-                };
-                scope.spawn(task);
-            });
-        })
-        .await;
-    }
+async fn async_test(results: Arc<Mutex<Vec<u64>>>) {
+    async_scoped::TokioScope::scope_and_block(|scope| {
+        (0..100).for_each(|i| {
+            let res = results.clone();
+            let task = async move {
+                tokio::time::sleep(std::time::Duration::from_millis(i * 100)).await;
+                res.lock().await.push(i);
+                // println!("{i} finished");
+                i
+            };
+            scope.spawn(task);
+        });
+    });
 }
 
 /* trait TestAction {

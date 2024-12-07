@@ -79,3 +79,4 @@ pub trait Action {
 		- Some async block
 	- Note:
 		- Some asynchronous block to be executed in the background through multiple iterations of the main loop
+		- The component should constantly poll to see if the workload has finished executing. If it has, it should receive back the result of the workload (i.e. the poll function should return an `Option` where the `Some` value is the returned value)

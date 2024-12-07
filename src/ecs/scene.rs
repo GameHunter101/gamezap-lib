@@ -1,19 +1,26 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    sync::Arc,
+};
 
 use glyphon::{FontSystem, SwashCache, TextAtlas, TextRenderer, Viewport};
+use tokio::sync::Mutex;
 use wgpu::{Device, Queue, RenderPipeline, TextureFormat};
 use winit_input_helper::WinitInputHelper;
 
+use crate::EngineDetails;
+
 use super::{
-    actions::Action,
-    builtin_actions::workload_action::Workload,
+    actions::ActionQueue,
+    builtin_actions::{Workload, WorkloadOutput},
     component::{Component, ComponentId},
     entity::{Entity, EntityId},
     material::{Material, MaterialAttachment, MaterialId},
     pipeline::{create_render_pipeline, PipelineDetails, PipelineId},
 };
 
-pub struct Scene<'a> {
+pub struct Scene {
     components: Vec<Component>,
     entities: HashMap<EntityId, Entity>,
     ui_components: Vec<ComponentId>,
@@ -23,8 +30,8 @@ pub struct Scene<'a> {
     active_camera_id: Option<ComponentId>,
     total_entities_created: u32,
     font_state: FontState,
-    action_queue: Vec<Box<dyn Action<'a> + Send>>,
-    workloads: HashMap<ComponentId, &'a mut Workload>,
+    workloads: HashMap<ComponentId, Workload>,
+    workload_outputs: Arc<Mutex<HashMap<ComponentId, WorkloadOutput>>>,
 }
 
 pub struct FontState {
@@ -33,10 +40,25 @@ pub struct FontState {
     pub viewport: glyphon::Viewport,
     pub atlas: TextAtlas,
     pub text_renderer: TextRenderer,
-    pub text_buffers: Vec<glyphon::Buffer>,
+    pub text_buffers: HashMap<ComponentId, TextRenderInfo>,
 }
 
-impl<'a> Debug for Scene<'a> {
+#[derive(Debug)]
+pub struct TextDisplayInfo {
+    on_screen_width: f32,
+    on_screen_height: f32,
+    top_left_pos: [f32; 2],
+    scale: f32,
+}
+
+pub struct TextRenderInfo {
+    pub buffer: glyphon::Buffer,
+    pub top_left_pos: [f32; 2],
+    pub scale: f32,
+    pub bounds: glyphon::TextBounds,
+}
+
+impl Debug for Scene {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Scene")
             .field("components", &self.components.len())
@@ -44,7 +66,7 @@ impl<'a> Debug for Scene<'a> {
     }
 }
 
-impl<'a> Scene<'a> {
+impl Scene {
     pub fn new(device: &Device, queue: &Queue, format: TextureFormat) -> Self {
         let font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
@@ -60,7 +82,7 @@ impl<'a> Scene<'a> {
             viewport,
             atlas,
             text_renderer,
-            text_buffers: Vec::new(),
+            text_buffers: HashMap::new(),
         };
 
         Scene {
@@ -73,8 +95,8 @@ impl<'a> Scene<'a> {
             active_camera_id: None,
             total_entities_created: 0,
             font_state,
-            action_queue: Vec::new(),
             workloads: HashMap::new(),
+            workload_outputs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -89,7 +111,9 @@ impl<'a> Scene<'a> {
         device: &Device,
         queue: &Queue,
         input_manager: &WinitInputHelper,
+        engine_details: &EngineDetails,
     ) {
+        let active_camera_id = self.active_camera_id;
         let all_components = &mut self.components;
         for i in 0..all_components.len() {
             async_scoped::TokioScope::scope_and_block(|scope| {
@@ -102,7 +126,7 @@ impl<'a> Scene<'a> {
                             .iter_mut()
                             .chain(components_after.iter_mut())
                             .collect();
-                        component.update(device, queue, input_manager, &chain).await;
+                        component.update(device, queue, input_manager, &chain, active_camera_id, engine_details).await;
                     }
                 };
                 scope.spawn(proc)
@@ -110,16 +134,22 @@ impl<'a> Scene<'a> {
         }
     }
 
-    pub fn attach_workload(&mut self, component: ComponentId, workload: &'a mut Workload) {
-        self.workloads.insert(component, workload);
+    pub fn attach_workload(&mut self, component_id: ComponentId, workload: Workload) {
+        self.workloads.insert(component_id, workload);
     }
 
     #[tokio::main]
     pub async fn run_workloads(&mut self) {
-        let workloads = &mut self.workloads;
+        let keys: Vec<ComponentId> = self.workloads.keys().cloned().collect();
+        let workloads = self.workload_outputs.clone();
+
         async_scoped::TokioScope::scope_and_block(|scope| {
-            for (component, workload) in workloads {
-                let proc = async move { (*component, workload.await) };
+            for component_id in keys {
+                let workload = self.workloads.remove(&component_id).unwrap();
+                let workloads = workloads.clone();
+                let proc = async move {
+                    workloads.lock().await.insert(component_id, workload.await);
+                };
                 scope.spawn(proc);
             }
         });
@@ -193,14 +223,18 @@ impl<'a> Scene<'a> {
             .collect();
 
         for component in &self.components {
-            let component_parent_entity_id = component.parent_entity();
+            let component_parent_entity_id = component.parent_entity_id();
             let parent_entity_material_id =
                 self.entities[&component_parent_entity_id].active_material();
             if let Some(parent_entity_material_id) = parent_entity_material_id {
-                output
-                    .get_mut(&parent_entity_material_id)
-                    .unwrap()
-                    .push(component);
+                if self.entities[&(parent_entity_material_id as u32)].is_enabled()
+                    && component.is_enabled()
+                {
+                    output
+                        .get_mut(&parent_entity_material_id)
+                        .unwrap()
+                        .push(component);
+                }
             }
         }
 
@@ -237,5 +271,105 @@ impl<'a> Scene<'a> {
         }
 
         id
+    }
+
+    pub fn get_entity(&self, entity_id: EntityId) -> Option<&Entity> {
+        self.entities.get(&entity_id)
+    }
+
+    pub fn get_entity_mut(&mut self, entity_id: EntityId) -> Option<&mut Entity> {
+        self.entities.get_mut(&entity_id)
+    }
+
+    pub fn get_component(&self, component_id: ComponentId) -> Option<&Component> {
+        self.components
+            .iter()
+            .find(|&comp| comp.id() == component_id)
+    }
+
+    pub fn get_component_mut(&mut self, component_id: ComponentId) -> Option<&mut Component> {
+        self.components
+            .iter_mut()
+            .find(|comp| comp.id() == component_id)
+    }
+
+    pub fn create_text_buffer(
+        &mut self,
+        component_id: ComponentId,
+        text: &str,
+        text_attributes: glyphon::Attrs,
+        text_metrics: glyphon::Metrics,
+        text_display_info: TextDisplayInfo,
+        advanced_rendering: bool,
+    ) {
+        let font_system = &mut self.font_state.font_system;
+        let mut text_buffer = glyphon::Buffer::new(font_system, text_metrics);
+        text_buffer.set_size(
+            font_system,
+            Some(text_display_info.on_screen_height),
+            Some(text_display_info.on_screen_height),
+        );
+        text_buffer.set_text(
+            font_system,
+            text,
+            text_attributes,
+            if advanced_rendering {
+                glyphon::Shaping::Advanced
+            } else {
+                glyphon::Shaping::Basic
+            },
+        );
+
+        self.font_state.text_buffers.insert(
+            component_id,
+            TextRenderInfo {
+                buffer: text_buffer,
+                top_left_pos: text_display_info.top_left_pos,
+                bounds: glyphon::TextBounds {
+                    left: text_display_info.top_left_pos[0] as i32,
+                    top: text_display_info.top_left_pos[1] as i32,
+                    right: (text_display_info.top_left_pos[0] + text_display_info.on_screen_width)
+                        as i32,
+                    bottom: (text_display_info.top_left_pos[1] + text_display_info.on_screen_height)
+                        as i32,
+                },
+                scale: text_display_info.scale,
+            },
+        );
+    }
+
+    pub fn update_text_viewport(&mut self, queue: &Queue, new_size: (u32, u32)) {
+        self.font_state.viewport.update(
+            queue,
+            glyphon::Resolution {
+                width: new_size.0,
+                height: new_size.1,
+            },
+        );
+    }
+
+    pub fn font_state_mut(&mut self) -> &mut FontState {
+        &mut self.font_state
+    }
+
+    pub fn enabled_ui_components(&self) -> HashSet<ComponentId> {
+        self.components
+            .iter()
+            .map(|comp| (comp.id(), comp.is_enabled()))
+            .filter_map(|(comp_id, is_enabled)| {
+                if is_enabled && self.ui_components.contains(&comp_id) {
+                    Some(comp_id)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn execute_action_queue(&mut self, action_queue: ActionQueue) {
+        // self.action_queue.iter_mut().for_each(|action| action.execute(self));
+        for action in action_queue {
+            action.execute(self);
+        }
     }
 }
